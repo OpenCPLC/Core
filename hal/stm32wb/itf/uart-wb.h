@@ -1,0 +1,25 @@
+#ifndef UART_WB_H_
+#define UART_WB_H_
+
+#include "gpio.h"
+
+#define DMAMUX_REQ_USART1_TX  24
+#define DMAMUX_REQ_LPUART1_TX 26
+
+typedef enum {
+  UART1_TX_PA9, UART1_TX_PB6,
+  LPUART1_TX_PA2, LPUART1_TX_PA9, LPUART1_TX_PB5,
+  LPUART1_TX_PC1, LPUART1_TX_PC4, LPUART1_TX_PC10
+} UART_TX_e;
+
+typedef enum {
+  UART1_RX_PA10, UART1_RX_PB7,
+  LPUART1_RX_PA3, LPUART1_RX_PA10, LPUART1_RX_PB10,
+  LPUART1_RX_PC0, LPUART1_RX_PC5, LPUART1_RX_PC11
+} UART_RX_e;
+
+
+extern const GPIO_Map_t UART_TX_MAP[];
+extern const GPIO_Map_t UART_RX_MAP[];
+
+#endif
