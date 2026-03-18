@@ -8,7 +8,7 @@ opencplc -n myapp -b Uno  # new project for Uno
 make run                  # build & flash
 ```
 
-Technically closest to [**🪁Zephyr**](https://www.zephyrproject.org/), but simpler and closer to native solutions: plain **C** and **Makefile**, abstraction layers, mapping and configuration all in C. No external files or formats, no magic macros, no build systems that silently break IntelliSense. With a working 🐞debugger! More focused on automation than IoT. C/C++ has never gotten its own `pip` or `npm` despite decades of attempts, so we're not going that route. The framework grows steadily with semantic versioning across the whole ecosystem. One workspace, many projects, each on its own framework version, no conflicts, full reproducibility.
+Technically closest to [🪁Zephyr](https://www.zephyrproject.org/), but simpler and closer to native solutions: plain **C** and **Makefile**, abstraction layers, mapping and configuration all in C. No external files or formats, no magic macros, no build systems that silently break IntelliSense. With a working 🐞debugger! More focused on automation than IoT. C/C++ has never gotten its own `pip` or `npm` despite decades of attempts, so we're not going that route. The framework grows steadily with semantic versioning across the whole ecosystem. One workspace, many projects, each on its own framework version, no conflicts, full reproducibility.
 
 ## C👩🏻‍❤️‍👨🏻PLC 🤔Why?
 
