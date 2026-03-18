@@ -1,10 +1,13 @@
+// plc/per/max31865.c
+
 #include "max31865.h"
 
 //-------------------------------------------------------------------------------------------------
 
 /**
  * @brief Inicjalizuje moduł MAX31865 do pracy z czujnikiem RTD.
- * @param rtd Wskaźnik do struktury reprezentującej układ MAX31865.
+ * @param rtd Wskaźnik do struktury reprezentuj�
+cej układ MAX31865.
  */
 void MAX31865_Init(MAX31865_t *rtd)
 {
@@ -38,9 +41,12 @@ static status_t MAX31865_SetConfig(MAX31865_t *rtd, uint8_t config)
 }
 
 /**
- * @brief Pętla obsługująca pomiar temperatury za pomocą czujnika RTD.
+ * @brief Pętla obsługuj�
+ca pomiar temperatury za pomoc�
+ czujnika RTD.
  * Wykonuje konfigurację, dokonuje pomiarów oraz oblicza temperaturę.
- * @param rtd Wskaźnik do struktury reprezentującej układ MAX31865.
+ * @param rtd Wskaźnik do struktury reprezentuj�
+cej układ MAX31865.
  * @return Status wykonanej operacji {OK/ERR/BUSY}
 */
 status_t MAX31865_Loop(MAX31865_t *rtd)
@@ -49,7 +55,7 @@ status_t MAX31865_Loop(MAX31865_t *rtd)
   if(tick_over(&rtd->expiry_tick)) {
     rtd->raw_float = NaN;
   }
-  if(rtd->cs) rtd->spi->cs_gpio = rtd->cs;
+  if(rtd->cs) rtd->spi->cs = rtd->cs;
   uint8_t cfg = (rtd->wire << 4) | rtd->reject;
   if(SPI_Master_IsBusy(rtd->spi)) return BUSY;
   if(MAX31865_SetConfig(rtd, MAX31865_CFG_BIAS | cfg)) return ERR;
@@ -85,7 +91,8 @@ status_t MAX31865_Loop(MAX31865_t *rtd)
 
 /**
  * @brief Oblicza rezystancję [Ω] na podstawie surowej wartości pomiarowej.
- * @param rtd Wskaźnik do struktury MAX31865_t zawierającej konfigurację czujnika RTD
+ * @param rtd Wskaźnik do struktury MAX31865_t zawieraj�
+cej konfigurację czujnika RTD
  * @return Wartość rezystancji [Ω] czujnika RTD.
  */
 float RTD_Resistance_Ohm(MAX31865_t *rtd)
@@ -96,8 +103,10 @@ float RTD_Resistance_Ohm(MAX31865_t *rtd)
 
 /**
  * @brief Oblicza temperaturę w stopniach Celsjusza [°C] na podstawie
- * rezystancji termometru oporowego RTD za pomocą obliczeń rezystancji.
- * @param rtd Wskaźnik do struktury MAX31865_t zawierającej konfigurację czujnika RTD
+ * rezystancji termometru oporowego RTD za pomoc�
+ obliczeń rezystancji.
+ * @param rtd Wskaźnik do struktury MAX31865_t zawieraj�
+cej konfigurację czujnika RTD
  * @return Wartość temperatury [°C]
  */
 float RTD_Temperature_C(MAX31865_t *rtd)

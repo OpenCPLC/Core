@@ -1,3 +1,5 @@
+/** @file lib/ext/xstring.c */
+
 #include "xstring.h"
 
 //-------------------------------------------------------------------------------------------------
@@ -282,7 +284,7 @@ uint32_t str_to_int(const char *str)
   }
   char *endptr;
   uint32_t result = strtol(str, &endptr, base);
-  return is_negative ? -(int32_t)result : result;
+  return is_negative ? -(int32_t)result : (int32_t)result;
 }
 
 /**
@@ -391,7 +393,7 @@ uint64_t str_to_int64(const char *str)
   }
   char *endptr;
   uint64_t result = strtoull(str, &endptr, base); // use strtoull for uint64_t
-  return is_negative ? -(int64_t)result : result;
+  return is_negative ? -(int64_t)result : (int64_t)result;
 }
 
 /**

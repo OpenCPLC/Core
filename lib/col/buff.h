@@ -1,3 +1,5 @@
+/** @file lib/col/buff.h */
+
 #ifndef BUFF_H_
 #define BUFF_H_
 

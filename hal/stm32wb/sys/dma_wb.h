@@ -1,0 +1,72 @@
+// hal/stm32wb/sys/dma_wb.h
+
+#ifndef DMA_WB_H_
+#define DMA_WB_H_
+
+//------------------------------------------------------------------------------------------------- DMA Channel Numbers
+
+typedef enum {
+  DMA_None = 0,
+  DMA_CH1 = 1,
+  DMA_CH2 = 2,
+  DMA_CH3 = 3,
+  DMA_CH4 = 4,
+  DMA_CH5 = 5,
+  DMA_CH6 = 6,
+  DMA_CH7 = 7,
+  DMA_CH8 = 8,
+  DMA_CH9 = 9,
+  DMA_CH10 = 10,
+  DMA_CH11 = 11,
+  DMA_CH12 = 12,
+  DMA_CH13 = 13,
+  DMA_CH14 = 14,
+} DMA_CHx_t;
+
+//------------------------------------------------------------------------------------------------- DMAMUX Requests
+
+typedef enum {
+  DMAMUX_REQ_MEM2MEM = 0,
+  DMAMUX_REQ_GENERATOR0 = 1,
+  DMAMUX_REQ_GENERATOR1 = 2,
+  DMAMUX_REQ_GENERATOR2 = 3,
+  DMAMUX_REQ_GENERATOR3 = 4,
+  DMAMUX_REQ_ADC = 5,
+  DMAMUX_REQ_SPI1_RX = 6,
+  DMAMUX_REQ_SPI1_TX = 7,
+  DMAMUX_REQ_SPI2_RX = 8,
+  DMAMUX_REQ_SPI2_TX = 9,
+  DMAMUX_REQ_I2C1_RX = 10,
+  DMAMUX_REQ_I2C1_TX = 11,
+  DMAMUX_REQ_I2C3_RX = 12,
+  DMAMUX_REQ_I2C3_TX = 13,
+  DMAMUX_REQ_USART1_RX = 14,
+  DMAMUX_REQ_USART1_TX = 15,
+  DMAMUX_REQ_LPUART1_RX = 16,
+  DMAMUX_REQ_LPUART1_TX = 17,
+  DMAMUX_REQ_SAI1_A = 18,
+  DMAMUX_REQ_SAI1_B = 19,
+  DMAMUX_REQ_QUADSPI = 20,
+  DMAMUX_REQ_TIM1_CH1 = 21,
+  DMAMUX_REQ_TIM1_CH2 = 22,
+  DMAMUX_REQ_TIM1_CH3 = 23,
+  DMAMUX_REQ_TIM1_CH4 = 24,
+  DMAMUX_REQ_TIM1_UP = 25,
+  DMAMUX_REQ_TIM1_TRIG = 26,
+  DMAMUX_REQ_TIM1_COM = 27,
+  DMAMUX_REQ_TIM2_CH1 = 28,
+  DMAMUX_REQ_TIM2_CH2 = 29,
+  DMAMUX_REQ_TIM2_CH3 = 30,
+  DMAMUX_REQ_TIM2_CH4 = 31,
+  DMAMUX_REQ_TIM2_UP = 32,
+  DMAMUX_REQ_TIM16_CH1 = 33,
+  DMAMUX_REQ_TIM16_UP = 34,
+  DMAMUX_REQ_TIM17_CH1 = 35,
+  DMAMUX_REQ_TIM17_UP = 36,
+  DMAMUX_REQ_AES1_IN = 37,
+  DMAMUX_REQ_AES1_OUT = 38,
+  DMAMUX_REQ_AES2_IN = 39,
+  DMAMUX_REQ_AES2_OUT = 40
+} DMAMUX_REQ_t;
+
+#endif

@@ -1,3 +1,5 @@
+/** @file lib/sh/stream.c */
+
 #include "stream.h"
 
 //-------------------------------------------------------------------------------------------------
@@ -10,20 +12,20 @@ uint16_t STREAM_Read(STREAM_t *stream, char ***argv)
   if(length) {
     char *buffer = stream->Read();
     #if(STREAM_ADDRESS)
-      uint8_t address = *buffer;
-      if(address != stream->address) return 0;
-      buffer++;
-      length--;
+    uint8_t address = *buffer;
+    if(address != stream->address) return 0;
+    buffer++;
+    length--;
     #endif
     #if(STREAM_CRC)
       if(CRC_Error(stream->crc, buffer, length)) return 0;
-      length -= stream_crc->width / 8;
+      length -= stream->crc->width / 8;
     #endif
-    if(stream->data_mode) {
+    if(stream->_data_mode) {
       char **file;
       char *loc;
-      file = heap_new(sizeof(char*) + (length * sizeof(char)));
-      loc = (char*)file + sizeof(char*);
+      file = heap_new(sizeof(char *) + (length * sizeof(char)));
+      loc = (char *)file + sizeof(char *);
       memcpy(loc, buffer, length);
       file[0] = loc;
       *argv = file;
@@ -46,14 +48,14 @@ uint16_t STREAM_Read(STREAM_t *stream, char ***argv)
 
 void STREAM_DataMode(STREAM_t *stream)
 {
-  stream->data_mode = true;
-  if(stream->SwitchMode) stream->SwitchMode(stream->data_mode);
+  stream->_data_mode = true;
+  if(stream->SwitchMode) stream->SwitchMode(stream->_data_mode);
 }
 
 void STREAM_ArgsMode(STREAM_t *stream)
 {
-  stream->data_mode = false;
-  if(stream->SwitchMode) stream->SwitchMode(stream->data_mode);
+  stream->_data_mode = false;
+  if(stream->SwitchMode) stream->SwitchMode(stream->_data_mode);
 }
 
 //-------------------------------------------------------------------------------------------------

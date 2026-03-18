@@ -1,14 +1,17 @@
+/** @file lib/sh/cmd.h */
+
 #ifndef CMD_H_
 #define CMD_H_
 
 #include "log.h"
 #include "stream.h"
+#include "pwr.h"
 #include "main.h"
 
 //-------------------------------------------------------------------------------------------------
 
-#ifndef CMD_FILE_LIMIT
-  #define CMD_FILE_LIMIT 8
+#ifndef CMD_MBB_LIMIT
+  #define CMD_MBB_LIMIT 8
 #endif
 
 #ifndef CMD_CALLBACK_LIMIT
@@ -20,6 +23,8 @@
 #define CMD_ArgcGet(_1, _2, NAME, ...) NAME
 #define CMD_Argc(...) CMD_ArgcGet(__VA_ARGS__, CMD_ArgcMinMax, CMD_ArgcCount)(__VA_ARGS__)
 #define CMD_ArgvExit(nbr) { CMD_WrongArgv(argv[0], argv[nbr], nbr); return; }
+
+//-------------------------------------------------------------------------------------------------
 
 typedef enum {
   HASH_Ping = 2090616627,
@@ -79,7 +84,7 @@ typedef enum {
   HASH_7 = 177628,
   HASH_8 = 177629,
   HASH_9 = 177630
-} HASH_e;
+} HASH_t;
 
 #ifdef RTC_H_
 typedef enum {
@@ -99,7 +104,7 @@ typedef enum {
   RTC_Hash_Fri = 193491942,
   RTC_Hash_Sat = 193505549,
   RTC_Hash_Sun = 193506203
-} RTC_Hash_e;
+} RTC_Hash_t;
 #endif
 
 typedef enum {
@@ -110,18 +115,83 @@ typedef enum {
   PWR_Hash_Standbysram = 1332813965,
   PWR_Hash_Standby = 2916655642,
   PWR_Hash_Shutdown = 4232446817,
-} PWR_Hash_e;
+} PWR_Hash_t;
 
-void CMD_AddFile(FILE_t *file);
+//-------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Register file with command processor.
+ * @param[in] file File to register
+ */
+void CMD_AddFile(MBB_t *file);
+
+/**
+ * @brief Register command callback.
+ * @param[in] callback Command handler function
+ * @param[in] argv0 Command name (NULL for default handler)
+ */
 void CMD_AddCallback(void (*callback)(char **, uint16_t), char *argv0);
+
+/**
+ * @brief Enable/disable automatic flash save after file operations.
+ * @param[in] autosave Enable flag
+ */
 void CMD_FlashAutosave(bool autosave);
+
+/**
+ * @brief Set custom sleep handler for `pwr sleep` command.
+ * @param[in] Sleep Sleep function (NULL to use default PWR_Sleep)
+ */
+void CMD_SetSleep(void (*Sleep)(PWR_SleepMode_t));
+
+/**
+ * @brief Set custom reset handler for `pwr reset` command.
+ * @param[in] Reset Reset function (NULL to use default DbgReset flag)
+ */
+void CMD_SetReset(void (*Reset)(void));
+
+/**
+ * @brief Report wrong argument count error.
+ * @param[in] cmd Command name
+ * @param[in] argc Actual argument count
+ */
 void CMD_WrongArgc(char *cmd, uint16_t argc);
+
+/**
+ * @brief Report invalid argument error.
+ * @param[in] cmd Command name
+ * @param[in] argv Argument value
+ * @param[in] pos Argument position
+ */
 void CMD_WrongArgv(char *cmd, char *argv, uint16_t pos);
+
+/**
+ * @brief Process commands from stream.
+ * @param[in,out] stream Input stream
+ * @return `true` if command was processed
+ */
 bool CMD_Loop(STREAM_t *stream);
 
+//-------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Get and clear trigger event.
+ * @return Trigger code or `0` if none
+ */
 uint16_t TRIG_Event(void);
+
+/**
+ * @brief Wait for any trigger (cooperative).
+ * @return Trigger code
+ */
 uint16_t TRIG_Wait(void);
+
+/**
+ * @brief Wait for specific trigger code (cooperative).
+ * @param[in] code Expected trigger code
+ */
 void TRIG_WaitFor(uint16_t code);
 
 //-------------------------------------------------------------------------------------------------
+
 #endif

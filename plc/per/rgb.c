@@ -1,5 +1,7 @@
+// plc/per/rgb.c
+
 #include "rgb.h"
-#include "bash.h"
+#include "cmd.h"
 #include "dbg.h"
 
 const char *rgb_color_name[] = { "off", "red", "green", "blue", "yellow", "cyan", "magenta", "white" };
@@ -136,7 +138,7 @@ void LED_Bash(char **argv, uint16_t argc)
         if(sw == RGB_Hash_On && argc == 4) {
           if(!str_is_u16(argv[3])) {
             LOG_ErrorParse(argv[3], "uint16_t");
-            BASH_ArgvExit(3);
+            CMD_ArgvExit(3);
           }
           uint16_t blink_ms = str_to_int(argv[3]);
           LED_Blink_ON(blink_ms);
@@ -151,7 +153,7 @@ void LED_Bash(char **argv, uint16_t argc)
         if(argc >= 4) {
           if(!str_is_u16(argv[3])) {
             LOG_ErrorParse(argv[3], "uint16_t");
-            BASH_ArgvExit(3);
+            CMD_ArgvExit(3);
           }
           shot_ms = str_to_int(argv[3]);
         }

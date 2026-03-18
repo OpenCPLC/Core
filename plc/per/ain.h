@@ -1,9 +1,11 @@
+// plc/per/ain.h
+
 #ifndef AIN_H_
 #define AIN_H_
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "extmath.h"
+#include <xmath.h>
 #include "vrts.h"
 #include "adc.h"
 #include "log.h"

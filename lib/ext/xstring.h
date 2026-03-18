@@ -1,3 +1,5 @@
+/** @file lib/ext/xstring.h */
+
 #ifndef XSTRING_H_
 #define XSTRING_H_
 

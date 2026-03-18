@@ -1,80 +1,84 @@
+// hal/stm32wb/sys/startup.h
+
 #ifndef STARTUP_H_
 #define STARTUP_H_
 
 #include <stdint.h>
-
-/**
- * @file  startup.h
- * @brief IRQ callback declarations for STM32WBxx
- */
+#include "system_stm32wbxx.h"
+#include "stm32wbxx.h"
 
 //------------------------------------------------------------------------------------------------- ADC
 
-extern void (* volatile ADC_IRQFnc)(void *);
-extern void * volatile ADC_IRQSrc;
+extern void (* volatile ADC_Cb)(void *);
+extern void * volatile ADC_CbArg;
 
 //------------------------------------------------------------------------------------------------- EXTI
 
-extern void (* volatile EXTI0_IRQFnc)(void *);  extern void * volatile EXTI0_IRQSrc;
-extern void (* volatile EXTI1_IRQFnc)(void *);  extern void * volatile EXTI1_IRQSrc;
-extern void (* volatile EXTI2_IRQFnc)(void *);  extern void * volatile EXTI2_IRQSrc;
-extern void (* volatile EXTI3_IRQFnc)(void *);  extern void * volatile EXTI3_IRQSrc;
-extern void (* volatile EXTI4_IRQFnc)(void *);  extern void * volatile EXTI4_IRQSrc;
-extern void (* volatile EXTI5_IRQFnc)(void *);  extern void * volatile EXTI5_IRQSrc;
-extern void (* volatile EXTI6_IRQFnc)(void *);  extern void * volatile EXTI6_IRQSrc;
-extern void (* volatile EXTI7_IRQFnc)(void *);  extern void * volatile EXTI7_IRQSrc;
-extern void (* volatile EXTI8_IRQFnc)(void *);  extern void * volatile EXTI8_IRQSrc;
-extern void (* volatile EXTI9_IRQFnc)(void *);  extern void * volatile EXTI9_IRQSrc;
-extern void (* volatile EXTI10_IRQFnc)(void *); extern void * volatile EXTI10_IRQSrc;
-extern void (* volatile EXTI11_IRQFnc)(void *); extern void * volatile EXTI11_IRQSrc;
-extern void (* volatile EXTI12_IRQFnc)(void *); extern void * volatile EXTI12_IRQSrc;
-extern void (* volatile EXTI13_IRQFnc)(void *); extern void * volatile EXTI13_IRQSrc;
-extern void (* volatile EXTI14_IRQFnc)(void *); extern void * volatile EXTI14_IRQSrc;
-extern void (* volatile EXTI15_IRQFnc)(void *); extern void * volatile EXTI15_IRQSrc;
+extern void (* volatile EXTI0_Cb)(void *);  extern void * volatile EXTI0_CbArg;
+extern void (* volatile EXTI1_Cb)(void *);  extern void * volatile EXTI1_CbArg;
+extern void (* volatile EXTI2_Cb)(void *);  extern void * volatile EXTI2_CbArg;
+extern void (* volatile EXTI3_Cb)(void *);  extern void * volatile EXTI3_CbArg;
+extern void (* volatile EXTI4_Cb)(void *);  extern void * volatile EXTI4_CbArg;
+extern void (* volatile EXTI5_Cb)(void *);  extern void * volatile EXTI5_CbArg;
+extern void (* volatile EXTI6_Cb)(void *);  extern void * volatile EXTI6_CbArg;
+extern void (* volatile EXTI7_Cb)(void *);  extern void * volatile EXTI7_CbArg;
+extern void (* volatile EXTI8_Cb)(void *);  extern void * volatile EXTI8_CbArg;
+extern void (* volatile EXTI9_Cb)(void *);  extern void * volatile EXTI9_CbArg;
+extern void (* volatile EXTI10_Cb)(void *); extern void * volatile EXTI10_CbArg;
+extern void (* volatile EXTI11_Cb)(void *); extern void * volatile EXTI11_CbArg;
+extern void (* volatile EXTI12_Cb)(void *); extern void * volatile EXTI12_CbArg;
+extern void (* volatile EXTI13_Cb)(void *); extern void * volatile EXTI13_CbArg;
+extern void (* volatile EXTI14_Cb)(void *); extern void * volatile EXTI14_CbArg;
+extern void (* volatile EXTI15_Cb)(void *); extern void * volatile EXTI15_CbArg;
 
 //------------------------------------------------------------------------------------------------- DMA1
 
-extern void (* volatile DMA1_CH1_IRQFnc)(void *); extern void * volatile DMA1_CH1_IRQSrc;
-extern void (* volatile DMA1_CH2_IRQFnc)(void *); extern void * volatile DMA1_CH2_IRQSrc;
-extern void (* volatile DMA1_CH3_IRQFnc)(void *); extern void * volatile DMA1_CH3_IRQSrc;
-extern void (* volatile DMA1_CH4_IRQFnc)(void *); extern void * volatile DMA1_CH4_IRQSrc;
-extern void (* volatile DMA1_CH5_IRQFnc)(void *); extern void * volatile DMA1_CH5_IRQSrc;
-extern void (* volatile DMA1_CH6_IRQFnc)(void *); extern void * volatile DMA1_CH6_IRQSrc;
-extern void (* volatile DMA1_CH7_IRQFnc)(void *); extern void * volatile DMA1_CH7_IRQSrc;
+extern void (* volatile DMA_CH1_Cb)(void *);  extern void * volatile DMA_CH1_CbArg;
+extern void (* volatile DMA_CH2_Cb)(void *);  extern void * volatile DMA_CH2_CbArg;
+extern void (* volatile DMA_CH3_Cb)(void *);  extern void * volatile DMA_CH3_CbArg;
+extern void (* volatile DMA_CH4_Cb)(void *);  extern void * volatile DMA_CH4_CbArg;
+extern void (* volatile DMA_CH5_Cb)(void *);  extern void * volatile DMA_CH5_CbArg;
+extern void (* volatile DMA_CH6_Cb)(void *);  extern void * volatile DMA_CH6_CbArg;
+extern void (* volatile DMA_CH7_Cb)(void *);  extern void * volatile DMA_CH7_CbArg;
 
 //------------------------------------------------------------------------------------------------- DMA2
 
-extern void (* volatile DMA2_CH1_IRQFnc)(void *); extern void * volatile DMA2_CH1_IRQSrc;
-extern void (* volatile DMA2_CH2_IRQFnc)(void *); extern void * volatile DMA2_CH2_IRQSrc;
-extern void (* volatile DMA2_CH3_IRQFnc)(void *); extern void * volatile DMA2_CH3_IRQSrc;
-extern void (* volatile DMA2_CH4_IRQFnc)(void *); extern void * volatile DMA2_CH4_IRQSrc;
-extern void (* volatile DMA2_CH5_IRQFnc)(void *); extern void * volatile DMA2_CH5_IRQSrc;
-extern void (* volatile DMA2_CH6_IRQFnc)(void *); extern void * volatile DMA2_CH6_IRQSrc;
-extern void (* volatile DMA2_CH7_IRQFnc)(void *); extern void * volatile DMA2_CH7_IRQSrc;
+extern void (* volatile DMA_CH8_Cb)(void *);  extern void * volatile DMA_CH8_CbArg;
+extern void (* volatile DMA_CH9_Cb)(void *);  extern void * volatile DMA_CH9_CbArg;
+extern void (* volatile DMA_CH10_Cb)(void *); extern void * volatile DMA_CH10_CbArg;
+extern void (* volatile DMA_CH11_Cb)(void *); extern void * volatile DMA_CH11_CbArg;
+extern void (* volatile DMA_CH12_Cb)(void *); extern void * volatile DMA_CH12_CbArg;
+extern void (* volatile DMA_CH13_Cb)(void *); extern void * volatile DMA_CH13_CbArg;
+extern void (* volatile DMA_CH14_Cb)(void *); extern void * volatile DMA_CH14_CbArg;
 
 //------------------------------------------------------------------------------------------------- TIM
 
-extern void (* volatile TIM1_IRQFnc)(void *);  extern void * volatile TIM1_IRQSrc;
-extern void (* volatile TIM2_IRQFnc)(void *);  extern void * volatile TIM2_IRQSrc;
-extern void (* volatile TIM16_IRQFnc)(void *); extern void * volatile TIM16_IRQSrc;
-extern void (* volatile TIM17_IRQFnc)(void *); extern void * volatile TIM17_IRQSrc;
+extern void (* volatile TIM1_Cb)(void *);  extern void * volatile TIM1_CbArg;
+extern void (* volatile TIM2_Cb)(void *);  extern void * volatile TIM2_CbArg;
+extern void (* volatile TIM16_Cb)(void *); extern void * volatile TIM16_CbArg;
+extern void (* volatile TIM17_Cb)(void *); extern void * volatile TIM17_CbArg;
 
 //------------------------------------------------------------------------------------------------- LPTIM
 
-extern void (* volatile LPTIM1_IRQFnc)(void *); extern void * volatile LPTIM1_IRQSrc;
-extern void (* volatile LPTIM2_IRQFnc)(void *); extern void * volatile LPTIM2_IRQSrc;
+extern void (* volatile LPTIM1_Cb)(void *); extern void * volatile LPTIM1_CbArg;
+extern void (* volatile LPTIM2_Cb)(void *); extern void * volatile LPTIM2_CbArg;
 
 //------------------------------------------------------------------------------------------------- I2C
 
-extern void (* volatile I2C1_Event_IRQFnc)(void *); extern void * volatile I2C1_IRQSrc;
-extern void (* volatile I2C1_Error_IRQFnc)(void *);
-extern void (* volatile I2C3_Event_IRQFnc)(void *); extern void * volatile I2C3_IRQSrc;
-extern void (* volatile I2C3_Error_IRQFnc)(void *);
+extern void (* volatile I2C1_EventCallback)(void *); extern void * volatile I2C1_CbArg;
+extern void (* volatile I2C1_ErrorCallback)(void *);
+extern void (* volatile I2C3_EventCallback)(void *); extern void * volatile I2C3_CbArg;
+extern void (* volatile I2C3_ErrorCallback)(void *);
+
+//------------------------------------------------------------------------------------------------- SPI
+
+extern void (* volatile SPI1_Cb)(void *); extern void * volatile SPI1_CbArg;
+extern void (* volatile SPI2_Cb)(void *); extern void * volatile SPI2_CbArg;
 
 //------------------------------------------------------------------------------------------------- UART
 
-extern void (* volatile USART1_IRQFnc)(void *);  extern void * volatile USART1_IRQSrc;
-extern void (* volatile LPUART1_IRQFnc)(void *); extern void * volatile LPUART1_IRQSrc;
+extern void (* volatile USART1_Cb)(void *);  extern void * volatile USART1_CbArg;
+extern void (* volatile LPUART1_Cb)(void *); extern void * volatile LPUART1_CbArg;
 
 //-------------------------------------------------------------------------------------------------
 

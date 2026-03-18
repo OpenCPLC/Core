@@ -1,3 +1,5 @@
+/** @file lib/col/heap.h */
+
 #ifndef HEAP_H_
 #define HEAP_H_
 
@@ -52,7 +54,16 @@ typedef struct {
   uint16_t limit;
 } heap_new_t;
 
+/**
+ * @brief Allocates memory tracked by garbage-collector.
+ * @param size Number of bytes to allocate
+ * @return Pointer to allocated memory, or `NULL` if allocation failed
+ */
 void *heap_new(size_t size);
+
+/**
+ * @brief Frees all garbage-collector memory for active thread.
+ */
 void heap_clear(void);
 
 //-------------------------------------------------------------------------------------------------

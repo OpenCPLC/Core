@@ -1,11 +1,13 @@
+// plc/per/max31865.h
+
 #ifndef MAX31865_H_
 #define MAX31865_H_
 
 //-------------------------------------------------------------------------------------------------
 
-#include "spi-master.h"
+#include "spi_master.h"
 #include "log.h"
-#include "extmath.h"
+#include "xmath.h"
 
 #define MAX31865_CFG_BIAS  (1 << 7)
 #define MAX31865_CFG_AUTO  (1 << 6)

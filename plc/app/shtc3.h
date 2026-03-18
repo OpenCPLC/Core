@@ -1,8 +1,10 @@
+// plc/app/shtc3.h
+
 #ifndef SHTC3_H_
 #define SHTC3_H_
 
 #include <stdint.h>
-#include "extmath.h"
+#include <xmath.h>
 #include "twi.h"
 
 //-------------------------------------------------------------------------------------------------
@@ -26,7 +28,8 @@ typedef struct {
 typedef struct {
 	uint16_t mode;          // Tryb pracy: Normal|Low-Power, Clock Enable|Disable
 	uint16_t oversampling;  // Liczba próbek do nadpróbkowania software'owego
-	SHTC3_Raw_t raw;        // Wartości pomiarowe przed konwersją
+	SHTC3_Raw_t raw;        // Wartości pomiarowe przed konwersj�
+
 	float humidity;         // Wilgotność po konwersji
 	float temperature;      // Temperatura po konwersji
 	uint16_t expiry_ms;     // Czas, po którym brak odpowiedzi od czujnika skutkuje ustawieniem NaN

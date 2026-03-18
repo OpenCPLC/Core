@@ -1,16 +1,26 @@
-# 💡 OpenC𝐏𝐋𝐂
+# 💡 OpenCPLC
 
-Projekt to warstwa abstrakcji między aplikacją a peryferiami mikrokontrolera. Podobnie jak **Arduino**, ale ukierunkowana na automatykę. Bez własnego IDE i C++. Wielowątkowość zapewnia [**🔀VRTS**](https://github.com/Xaeian/VRTS), eliminując typowe problemy **RTOS**. System ma wbudowaną konsolę CMD jak **🐧Linux**, a [🔮Wizard](https://github.com/OpenCPLC/Wizard) upraszcza programowanie mikrokontrolerów do poziomu znanego z [**🐍Python**'a](https://www.python.org/). Technologicznie najbliżej mu do [**🪁Zephyr**'a](https://www.zephyrproject.org/), ale jest prostszy, bliższy natywnym rozwiązaniom, z działającym debuggerem i skupiony na automatyce zamiast IoT.
+A hardware abstraction layer between your application and microcontroller peripherals. Like **Arduino**, but built for industrial automation. No proprietary IDE, no C++. Multithreading is handled by [**🔀VRTS**](https://github.com/Xaeian/VRTS), cutting out the typical **RTOS** headaches. The system has a built-in CMD console like **🐧Linux**, and [**⚒️ Forge**](https://github.com/OpenCPLC/Forge) brings the workflow down to something as approachable as [**🐍Python**](https://www.python.org/): install via `pip`, clone projects with a single command.
 
-W świecie technologii, programowanie staje się coraz bardziej złożone _(często na życzenie samych programistów)_. Niekiedy poziom skomplikowania aplikacji jest nieproporcjonalny do problemu, który rozwiązuje lub wartości, jaką dostarcza. Chcemy, aby nasze rozwiązanie były możliwie proste, interfejs intuicyjny, a nakład technologiczny minimalny. Wykorzystujemy dobrze znane narzędzia, takie jak [**Visual Studio Code**](https://code.visualstudio.com/), system kontroli wersji [**Git**](https://git-scm.com/) oraz język [**C**](https://www.learn-c.org/pl/), który pomimo swojego wieku nadal jest [numerem jeden](https://www.geeksforgeeks.org/blogs/embedded-systems-programming-languages/) wśród programistów Embedded. Nic nie stoi więc na przeszkodzie, aby pojawiło się go trochę więcej w automatyce, co pozwoli iść branży z duchem 🌐IT!
+```bash
+pip install opencplc      # install Forge
+opencplc -n myapp -b Uno  # new project for Uno
+make run                  # build & flash
+```
 
-Zapotrzebowanie na automatyków było, jest i będzie bardzo duże. W przeszłości, kiedy programistów było niewielu, a za automatykę brali się głównie elektrycy, zaprojektowanie języka drabinkowego ladder logic **🪜LAD** było strzałem w dziesiątkę! Opierał się bowiem na logice znanej z układów elektrycznych. Dziś sytuacja się odwróciła: kod w języku **C** jest często bardziej czytelny dla absolwentów kierunków technicznych niż drzewo logiczne ze styków i cewek. Nie zapominajmy, że język [**C**](<https://pl.wikipedia.org/wiki/C_(j%C4%99zyk_programowania)>) powstał jako język ogólnego przeznaczenia, dlatego charakteryzuje się dużą uniwersalnością, szczególnie w porównaniu do sandbox'ów dostarczanych przez producentów sterowników PLC.
+Technically closest to [**🪁Zephyr**](https://www.zephyrproject.org/), but simpler and closer to native solutions: plain **C** and **Makefile**, abstraction layers, mapping and configuration all in C. No external files or formats, no magic macros, no build systems that silently break IntelliSense. With a working 🐞debugger! More focused on automation than IoT. C/C++ has never gotten its own `pip` or `npm` despite decades of attempts, so we're not going that route. The framework grows steadily with semantic versioning across the whole ecosystem. One workspace, many projects, each on its own framework version, no conflicts, full reproducibility.
 
-_Praktyczne porównanie języków LAD, ST i ANSI C można zobaczyć na przykładzie systemu [**🟢start🔴stop**](https://github.com/OpenCPLC/Framework/wiki/Start-Stop-Lang-Comparison)._   
+## C👩🏻‍❤️‍👨🏻PLC 🤔Why?
+
+Software is getting more complex by the day, often by developers' own choice. Sometimes the complexity of an application is completely out of proportion to the problem it solves or the value it delivers. We want our solution to be as simple as possible, the interface intuitive, and the technology overhead minimal. We use well-known tools: [**Visual Studio Code**](https://code.visualstudio.com/), [**Git**](https://git-scm.com/), and [**C**](https://www.learn-c.org/), which despite its age is still [number one](https://www.geeksforgeeks.org/blogs/embedded-systems-programming-languages/) among embedded developers. There's no reason it can't show up more in industrial automation and help the industry keep pace with 🌐IT.
+
+Demand for automation engineers has always been high and won't change. Back when programmers were scarce and automation was largely done by electricians, ladder logic **🪜LAD** was a brilliant solution, it was based on circuit logic they already understood. Today the tables have turned: C code is often more readable for technical graduates than a tree of contacts and coils. And let's not forget that [**C**](https://en.wikipedia.org/wiki/C_(programming_language)) was designed as a general-purpose language, which makes it far more versatile than the sandboxed environments shipped by PLC vendors.
+
+_A practical comparison of LAD, ST and ANSI C can be found in the [**🟢start🔴stop**](https://github.com/OpenCPLC/Framework/wiki/Start-Stop-Lang-Comparison) example._
 
 ## 🖥️ Our Controllers
 
-Wszystkie sterowniki bazują na rodzinie [**STM32G0**](https://www.st.com/en/microcontrollers-microprocessors/stm32g0-series.html) i zostały zaprojektowane tak, aby w pełni wykorzystać potencjał mikrokontrolera. Mają ustandaryzowane wymiary dopasowane do montażu na szynie **DIN**. Wyposażono je w rozłączne terminale **5.0mm**, co ułatwia instalacje oraz serwis. Cała linia została pomyślana jako spójna platforma, gdzie różne modele uzupełniają się funkcjonalnie, dzięki czemu można je łatwo łączyć w większe systemy.
+All controllers are based on the [**STM32G0**](https://www.st.com/en/microcontrollers-microprocessors/stm32g0-series.html) family and designed to make full use of the microcontroller's capabilities. They share standardized dimensions for **DIN** rail mounting and feature detachable **5.0mm** terminals for easy installation and servicing. The entire lineup is designed as a coherent platform where different models complement each other, making it easy to combine them into larger systems.
 
 <table>
   <tr>
@@ -23,10 +33,10 @@ Wszystkie sterowniki bazują na rodzinie [**STM32G0**](https://www.st.com/en/mic
   </tr>
   <tr>
     <td align="center">
-      Pierwszy sterownik z rodziny OpenCPLC. Cechuje się wszechstronnością ze względu na różnorodność peryferii. Choć pełni funkcję demonstracyjno-edukacyjną, z powodzeniem sprawdzi się również w małych projektach.
+      The first controller in the OpenCPLC family. Versatile thanks to its wide range of peripherals. Primarily educational and demo-oriented, but perfectly capable in small production projects.
     </td>
     <td align="center">
-      Mały i tani sterownik do pracy autonomicznej, szczególnie w maszynach budowlanych. Wyposażony w wiele potencjometrów dla konfiguracji bez komputera oraz napięcie referencyjne <code>10V</code> do obsługi joysticków i bezpośredniego pomiaru na wejściach analogowych.
+      Small and affordable controller for autonomous operation, especially in construction machinery. Packed with potentiometers for config without a PC, and a <code>10V</code> reference voltage for joysticks and direct analog input measurement.
     </td>
   </tr>
 <table>
@@ -40,64 +50,64 @@ Wszystkie sterowniki bazują na rodzinie [**STM32G0**](https://www.st.com/en/mic
   </tr>
   <tr>
     <td align="center">
-      Sterownik do średnich i dużych projektów, jako moduł rozszerzeń <i>(jedna magistrala komunikacyjna)</i>. Wyposażony w liczne wejścia i wyjścia cyfrowe, z drugą grupą wyjść tranzystorowych zasilanych niezależnie od głównego. Ma też kilka wejść analogowych, przydatnych w mniejszych projektach.
+      Controller for medium and large projects, used as an expansion module <i>(single communication bus)</i>. Loaded with digital I/O, a second group of transistor outputs with independent power supply, and a few analog inputs for smaller setups.
     </td>
     <td align="center">
-      Sterownik do średnich i dużych projektów. Jako jednostka główna lub moduł rozszerzeń, gdy potrzebne są dodatkowe kanały analogowe. Posiada wiele wejść i wyjść analogowych, stabilne zasilanie oraz napięcie ujemne dla dokładniejszych pomiarów i generacji sygnałów.
+      Controller for medium and large projects, as a main unit or expansion module when extra analog channels are needed. Plenty of analog I/O, stable power supply, and a negative voltage rail for precise measurements and signal generation.
     </td>
   </tr>
 </table>
 
-Framework udostępnia warstwę abstrakcji typową dla automatyki. Zamiast znanych z embedded GPIO _(general purpose input output)_ czy ADC _(analog digital converter)_ pracujemy z **TO**, **RO**, **DI** oraz **AI**, **AO**. Sprzęt jest mapowany do tej warstwy, więc każdy nowy sterownik wymaga tylko nowej mapy peryferiów, aby działać w ekosystemie.
+The framework exposes an abstraction layer typical for industrial automation. Instead of embedded-style GPIO _(general purpose input output)_ or ADC _(analog digital converter)_, you work with **TO**, **RO**, **DI**, **AI**, **AO**. Hardware is mapped to this layer, so adding a new controller only requires a new peripheral map to work within the ecosystem.
 
-|   Układ   | Opis                                                                                                  |  Uno  |  Eco  |  Dio   |  Aio   |
+|   Module  | Description                                                                                           |  Uno  |  Eco  |  Dio   |  Aio   |
 | :-------: | :---------------------------------------------------------------------------------------------------- | :---: | :---: | :----: | :----: |
-| **`RO`**  | Wyjścia przekaźnikowe: **5A** 230VAC, 7A 30VDC. Licznik przełączeń.                                   |   4   |   2   |   -    |   -    |
-| **`TO`**  | Wyjścia tranzystorowe: **4A**. Sterowane napięciem zasilania. Wszystkie mogą pracować w trybie PWM.   |   4   |   5   | **12** |   4    |
-| **`XO`**  | Wyjście triakowe: 12-230VAC. Detekcja przejścia przez zero z wykorzystaniem wejścia cyfrowego.        |   2   |   -   |   -    |   -    |
-| **`DI`**  | Wejścia cyfrowe: od **12VDC**  stan wysoki. Obsługa **230VAC**. Większość może działać jako liczniki. |   4   |   4   | **12** |   4    |
-| **`AI`**  | Wejścia analogowe: **0-10V**, **4-20mA**, 0-20mA lub 0-10V z wtórnikiem napięciowym.                  |   2   |   4   |   4    | **10** |
-| **`AO`**  | Wyjście analogowe: **0-10V**, **0-20mA** rail-to-rail.                                                |   -   |   -   |   -    | **4**  |
-| **`RTD`** | Wejście czujników rezystancyjnych, dostosowane do **PT100** i **PT1000**.                             |   1   |   -   |   -    |   -    |
-| **`RS`**  | Interfejs komunikacyjny **RS485** z obsługą **Modbus RTU**, **BACnet** lub bare metal.                |   2   |   1   |   1    |   2    |
-| **`I2C`** | Magistra komunikacyjna z buforem **5V** i pull-up **1kΩ**.                                            |   1   |   -   |   -    |   1    |
-| **`POT`** | Potencjometr.  Działa jak wewnętrzne `AI`. Umożliwia konfigurację bez użycia komputera.               |   1   | **6** |   3    |   -    |
-| **`BTN`** | Przycisk lub przełącznik. Działa jak wewnętrzne `DI`.                                                 |   1   | **5** |   -    |   -    |
-| **`LED`** | Dioda informacyjna **RGB**.                                                                           |   1   |   1   |   1    |   1    |
-|  `FLASH`  | Pamięć nieulotna **`kB`**: program, konfiguracja, emulacja EEPROM.                                    | `512` | `128` | `512`  | `512`  |
-|   `RAM`   | Pamięć operacyjna **`kB`**: bufory i obliczenia.                                                      | `144` | `36`  | `144`  | `144`  |
-|   `RTC`   | Zegar czasu rzeczywistego: data i godzina.                                                            |   🕑   |   -   |   🕑    |   🕑    |
+| **`RO`**  | Relay outputs: **5A** 230VAC, 7A 30VDC. Switch cycle counter.                                        |   4   |   2   |   -    |   -    |
+| **`TO`**  | Transistor outputs: **4A**. Driven by supply voltage. All support PWM mode.                           |   4   |   5   | **12** |   4    |
+| **`XO`**  | Triac output: 12-230VAC. Zero-crossing detection via digital input.                                   |   2   |   -   |   -    |   -    |
+| **`DI`**  | Digital inputs: **12VDC** logic high. Supports **230VAC**. Most can work as counters.                 |   4   |   4   | **12** |   4    |
+| **`AI`**  | Analog inputs: **0-10V**, **4-20mA**, 0-20mA or 0-10V with voltage follower.                          |   2   |   4   |   4    | **10** |
+| **`AO`**  | Analog output: **0-10V**, **0-20mA** rail-to-rail.                                                    |   -   |   -   |   -    | **4**  |
+| **`RTD`** | Resistive sensor input, optimized for **PT100** and **PT1000**.                                       |   1   |   -   |   -    |   -    |
+| **`RS`**  | **RS485** communication interface with **Modbus RTU**, **BACnet** or bare metal support.              |   2   |   1   |   1    |   2    |
+| **`I2C`** | Communication bus with **5V** buffer and **1kΩ** pull-up.                                             |   1   |   -   |   -    |   1    |
+| **`POT`** | Potentiometer. Works as internal `AI`. Allows configuration without a PC.                             |   1   | **6** |   3    |   -    |
+| **`BTN`** | Button or switch. Works as internal `DI`.                                                             |   1   | **5** |   -    |   -    |
+| **`LED`** | **RGB** status LED.                                                                                   |   1   |   1   |   1    |   1    |
+|  `FLASH`  | Non-volatile memory **`kB`**: program, config, EEPROM emulation.                                      | `512` | `128` | `512`  | `512`  |
+|   `RAM`   | Working memory **`kB`**: buffers and computation.                                                     | `144` | `36`  | `144`  | `144`  |
+|   `RTC`   | Real-time clock: date and time.                                                                       |   🕑   |   -   |   🕑    |   🕑    |
 
 ## 🆚 Key Advantages
 
-Sterowniki **OpenCPLC** wyróżniają się możliwością pracy w środowiskach, gdzie typowe PLC zawodzą. Obsługują standardową automatykę **24VDC**, ale także **12VDC**, typowe dla maszyn mobilnych w przemyśle _(np. budowlanym czy rolniczym)_. Zapewniają pomiar napięcia zasilania `VCC`, co ma znaczenie przy zasilaniu sterownika bezpośrednio z akumulatora. Przyjmują bezpośrednie sygnały **230VAC** na wejściach, co eliminuje konieczność stosowania dodatkowych modułów. Wyjścia **4A** pozwalają sterować obciążeniami bezpośrednio, a firmware **`FW`** wgrywany bez systemu operacyjnego **`OS`** zapewnia szybki start i wysoką stabilność pracy. Każdy sterownik jest fabrycznie skonfigurowany jako moduł rozszerzeń, ale można go łatwo przeprogramować do pracy jako samodzielny PLC.
+**OpenCPLC** controllers stand out in environments where typical PLCs fall short. They support standard **24VDC** automation but also **12VDC**, common in mobile machinery _(construction, agriculture)_. They measure supply voltage `VCC`, important when powering directly from a battery. They accept **230VAC** signals directly on inputs, eliminating the need for extra modules. **4A** outputs handle loads directly, and firmware **`FW`** running without an operating system **`OS`** means fast startup and rock-solid stability. Every controller ships configured as an expansion module but can be easily reprogrammed as a standalone PLC.
 
-| Sterownik PLC     |    Zasilanie |    DI1️⃣ | DI 230V | Typ `TO` | Prąd `TO` | Get `VCC` | `FW`/`OS` |
-| :---------------- | -----------: | -----: | :-----: | -------- | :-------: | :-------: | :-------: |
-| Siemens S7-1200   | 20.4-28.8V ❌ | ≥15V ❌ |    ❌    | Source   |   0.5A    |     ❌     |   `FW`    |
-| Siemens S7-1500   | 19.2-28.8V ❌ | ≥15V ❌ |    ❌    | Both     |   0.5A    |     ✅     |   `FW`    |
-| Mitsubishi iQ-F   |     20-28V ❌ | ≥15V ❌ |    ❌    | Both     |   0.5A    |     ✅     |   `FW`    |
-| Beckhoff CX7000   | 20.4-28.8V ❌ | ≥11V ✅ |    ❌    | Source   |   0.5A    |     ❌     |   `OS`    |
-| WAGO PFC200       |   18-31.2V ❌ | ≥15V ❌ |    ❌    | Both     |   0.5A    |     ❌     |   `OS`    |
-| Allen-Bradley     |   10-28.8V ✅ | ≥11V ✅ |    ❌    | Source   |   0.5A    |     ❌     |   `FW`    |
-| Schneider Modicon | 20.4-28.8V ❌ | ≥15V ❌ |    ❌    | Source   |   0.5A    |     ❌     |   `FW`    |
-| Phoenix Contact   |   19.2-30V ❌ | ≥11V ✅ |    ❌    | Both     |   0.5A    |     ❌     |   `OS`    |
-| B&R X20           | 20.4-28.8V ❌ | ≥15V ❌ |    ❌    | Sink 💀   |   0.5A    |     ✅     |   `FW`    |
-| Delta DVP-SS2     | 20.4-28.8V ❌ | ≥15V ❌ |    ❌    | Both     |   0.5A    |     ❌     |   `FW`    |
-| Eaton easyE4      | 12.2-28.8V ✅ |  ≥9V ✅ |    ✅    | Both     |   0.5A    |     ❌     |   `FW`    |
-| ABB AC500         |     20-30V ❌ | ≥15V ❌ |    ❌    | Both     |   0.5A    |     ✅     |   `FW`    |
-| Bosch Rexroth     |     18-30V ❌ | ≥15V ❌ |    ❌    | Both     |   0.5A    |     ✅     |   `FW`    |
-| Unitronics        | 10.2-28.8V ✅ | ≥15V ❌ |    ❌    | Both     |   0.5A    |     ❌     |   `FW`    |
-| Turck TX500       |     10-32V ✅ | ≥12V ✅ |    ❌    | Source   |   0.5A    |     ❌     |   `OS`    |
-| **OpenCPLC**      |     11-32V ✅ |  ≥9V ✅ |    ✅    | Source   |  **4A**   |     ✅     |   `FW`    |
+| PLC                |      Power supply |     DI1️⃣ | DI 230V | `TO` type | `TO` current | Get `VCC` | `FW`/`OS` |
+| :----------------- | ----------------: | -------: | :-----: | --------- | :----------: | :-------: | :-------: |
+| Siemens S7-1200    |  20.4-28.8V ❌    | ≥15V ❌  |    ❌    | Source    |    0.5A      |     ❌     |   `FW`    |
+| Siemens S7-1500    |  19.2-28.8V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ✅     |   `FW`    |
+| Mitsubishi iQ-F    |      20-28V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ✅     |   `FW`    |
+| Beckhoff CX7000    |  20.4-28.8V ❌    | ≥11V ✅  |    ❌    | Source    |    0.5A      |     ❌     |   `OS`    |
+| WAGO PFC200        |    18-31.2V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ❌     |   `OS`    |
+| Allen-Bradley      |    10-28.8V ✅    | ≥11V ✅  |    ❌    | Source    |    0.5A      |     ❌     |   `FW`    |
+| Schneider Modicon  |  20.4-28.8V ❌    | ≥15V ❌  |    ❌    | Source    |    0.5A      |     ❌     |   `FW`    |
+| Phoenix Contact    |    19.2-30V ❌    | ≥11V ✅  |    ❌    | Both      |    0.5A      |     ❌     |   `OS`    |
+| B&R X20            |  20.4-28.8V ❌    | ≥15V ❌  |    ❌    | Sink 💀   |    0.5A      |     ✅     |   `FW`    |
+| Delta DVP-SS2      |  20.4-28.8V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ❌     |   `FW`    |
+| Eaton easyE4       |  12.2-28.8V ✅    |  ≥9V ✅  |    ✅    | Both      |    0.5A      |     ❌     |   `FW`    |
+| ABB AC500          |      20-30V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ✅     |   `FW`    |
+| Bosch Rexroth      |      18-30V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ✅     |   `FW`    |
+| Unitronics         |  10.2-28.8V ✅    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ❌     |   `FW`    |
+| Turck TX500        |      10-32V ✅    | ≥12V ✅  |    ❌    | Source    |    0.5A      |     ❌     |   `OS`    |
+| **OpenCPLC**       |      11-32V ✅    |  ≥9V ✅  |    ✅    | Source    |   **4A**     |     ✅     |   `FW`    |
 
-_Dane w tabeli są poglądowe. Większość sterowników umożliwia rozbudowę o dodatkowe moduły, np. z wyższą wydajnością prądową lub do obsługi sygnałów 230V. Wartości odnoszą się do standardowych wejść cyfrowych i wyjść tranzystorowych._
+_Data in the table is indicative. Most PLCs support expansion modules with higher current capacity or 230V signal handling. Values refer to standard digital inputs and transistor outputs._
 
 ## 🤝 Collaboration
 
-Na rynku automatyki coraz więcej firm i inżynierów dostrzega, że własne konstrukcje mogą dać im przewagę rynkową. Takie rozwiązania można skalować wraz z rozwojem biznesu oraz dopasować do specyfiki projektu. Problemem może być brak doświadczenia w embedded, długi czas tworzenia rozwiązania od podstaw oraz ryzyko, że pomimo pochłoniętych zasobów projekt po prostu się nie uda. OpenCPLC upraszcza ten proces, oferując otwarty framework i gotową bazę sprzętową. Całość można zrealizować w przejrzystym, dwuetapowym modelu:
+More and more companies and engineers in the automation market are realizing that custom hardware can give them a competitive edge, solutions that scale with the business and fit the specific needs of each project. The challenge is often lack of embedded experience, the time it takes to build from scratch, and the risk that despite all the effort, the project simply doesn't pan out. OpenCPLC simplifies this with an open framework and ready-made hardware base. The whole thing can be done in a clean two-step model:
 
-- 1️⃣ **Wdrożenie projektu na naszych sterownikach** referencyjnych z otwartym firmware. Pozwala od razu testować pomysły i rozwijać aplikację.
-- 2️⃣ **Projekt dedykowanego hardware**. Można go rozpocząć równolegle, aby szybciej dojść do rozwiązania docelowego, później, gdy prototyp zacznie działać i chcemy ograniczyć ryzyko, lub dopiero w momencie zwiększenia nakładów.
+- 1️⃣ **Deploy on our reference controllers** with open firmware. Start testing ideas and developing the application right away.
+- 2️⃣ **Design dedicated hardware**. This can start in parallel to reach the target solution faster, or later once the prototype is working and you want to reduce risk, or only when scaling up production.
 
-W ten sposób powstają rozwiązania szybkie i dopasowane, łatwe do skalowania dzięki własnej produkcji, a stabilny framework zapewnia im wysoką niezawodność.
+The result: fast, tailored solutions, easy to scale through in-house manufacturing, backed by a stable framework that keeps them reliable.

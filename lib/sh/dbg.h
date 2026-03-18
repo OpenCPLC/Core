@@ -1,14 +1,16 @@
+/** @file lib/sh/dbg.h */
+
 #ifndef DBG_H_
 #define DBG_H_
 
 #include "uart.h"
-#include "file.h"
+#include "mbb.h"
 #include "main.h"
 
 //-------------------------------------------------------------------------------------------------
 
 #ifndef DBG_ECHO_MODE
-  #define DBG_ECHO_MODE 1
+  #define DBG_ECHO_MODE ON
 #endif
 
 #ifndef DBG_RX_SIZE
@@ -26,21 +28,66 @@
 //-------------------------------------------------------------------------------------------------
 
 extern UART_t *DbgUart;
-extern FILE_t *DbgFile;
+extern MBB_t *DbgFile;
 extern volatile bool DbgReset;
+extern bool DbgEcho;
+#ifdef HOST
+  #define DBG_PrintAndTerminate() (DbgReset = true)
+#endif
 
+/**
+ * @brief Initialize debug interface.
+ * @param[in] uart UART peripheral for debug I/O
+ */
 void DBG_Init(UART_t *uart);
-void DBG_Loop(void);
-void DBG_Wait(void);
-void DBG_WaitBlock(void);
-void DBG_Send(uint8_t *array, uint16_t length);
-void DBG_SendFile(FILE_t *file);
-void DBG_DefaultFile(void);
-void DBG_SetFile(FILE_t *file);
 
+/** @brief Main debug loop (blocking). */
+void DBG_Loop(void);
+
+/** @brief Wait for UART transmission to complete (cooperative). */
+void DBG_Wait(void);
+
+/** @brief Wait for UART transmission to complete (blocking). */
+void DBG_WaitBlock(void);
+
+/**
+ * @brief Send raw data over debug UART.
+ * @param[in] array Data buffer
+ * @param[in] length Data length
+ */
+void DBG_Send(uint8_t *array, uint16_t length);
+
+/**
+ * @brief Send file contents over debug UART.
+ * @param[in] file File to send
+ */
+void DBG_SendFile(MBB_t *file);
+
+/** @brief Reset debug file to internal buffer. */
+void DBG_DefaultFile(void);
+
+/**
+ * @brief Set custom output file.
+ * @param[in] file Output file
+ */
+void DBG_SetFile(MBB_t *file);
+
+//-------------------------------------------------------------------------------------------------
+
+/** @brief Get available data size. */
 uint16_t DBG_Size(void);
+
+/**
+ * @brief Read raw data from debug input.
+ * @param[out] array Destination buffer
+ * @return Bytes read
+ */
 uint16_t DBG_Read(uint8_t *array);
+
+/** @brief Read string from debug input. */
 char *DBG_ReadString(void);
+
+//-------------------------------------------------------------------------------------------------
 
 int32_t DBG_Char(uint8_t data);
 int32_t DBG_Char16(uint16_t data);
@@ -67,9 +114,11 @@ int32_t DBG_Time(RTC_Datetime_t *datetime);
 int32_t DBG_TimeMs(RTC_Datetime_t *datetime);
 int32_t DBG_Datetime(RTC_Datetime_t *datetime);
 int32_t DBG_DatetimeMs(RTC_Datetime_t *datetime);
-int32_t DBG_AlarmTime(RTC_Alarm_t *alarm);
-int32_t DBG_Alarm(RTC_Alarm_t *alarm);
-int32_t DBG_File(FILE_t *file);
+int32_t DBG_AlarmTime(RTC_AlarmCfg_t *alarm);
+int32_t DBG_Alarm(RTC_AlarmCfg_t *alarm);
+int32_t MBB_Print(MBB_t *mmb);
+int32_t MBB_PrintContent(MBB_t *mbb);
 
 //-------------------------------------------------------------------------------------------------
+
 #endif

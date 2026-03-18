@@ -1,3 +1,5 @@
+/** @file lib/sh/log.c */
+
 #include "log.h"
 
 bool LogPrintFlag = true;
@@ -84,8 +86,10 @@ void print_args(const char *format, va_list args)
           }
           break;
         }
-        case 'f':
+        case 'f': {
           if(default_precision) precision = 3;
+          fallthrough;
+        }
         case 'F': {
           if(default_precision) precision = 2;
           if(ary_count) {
@@ -282,46 +286,15 @@ inline static void LOG_Datetime(void)
   DBG_Char(' ');
 }
 
-void LOG_Init(const char *greeting, const char *version)
-{
-  DBG_Enter();
-  #if(LOG_COLORS)
-    DBG_String(ANSI_END);
-  #endif
-  LOG_Datetime();
-  #if(LOG_COLORS)
-    DBG_String(ANSI_CYAN "INI " ANSI_END);
-    DBG_String((char *)greeting);
-    if(version) {
-      DBG_String(ANSI_GREY" {"ANSI_BLUE);
-      DBG_String((char *)version);
-      DBG_String(ANSI_GREY"}"ANSI_END);
-    }
-  #else
-    DBG_String("INI: ");
-    DBG_String(greeting);
-    if(version) {
-      DBG_String(" {");
-      DBG_String((char *)version);
-      DBG_Char('}');
-    }
-  #endif
-  DBG_Enter();
-}
-
 void LOG_Nope(const char *message, ...)
 {
-  __NOP();
+  unused(message);
 }
 
 static void LOG_BashArgs(const char *message, va_list args)
 {
   LOG_Datetime();
-  #if(LOG_COLORS)
-    DBG_String(ANSI_GREEN "INF " ANSI_END);
-  #else
-    DBG_String("INF: ");
-  #endif
+  DBG_String(ANSI_GREEN "INF " ANSI_END);
   print_args(message, args);
   DBG_Enter();
 }
@@ -339,13 +312,12 @@ static void LOG_DebugArgs(const char *message, va_list args)
   #if(LOG_LEVEL <= LOG_LEVEL_DBG)
     if(!LogPrintFlag) return;
     LOG_Datetime();
-    #if(LOG_COLORS)
-      DBG_String(ANSI_GREEN "DBG " ANSI_END);
-    #else
-      DBG_String("DBG: ");
-    #endif
+    DBG_String(ANSI_GREEN "DBG " ANSI_END);
     print_args(message, args);
     DBG_Enter();
+  #else
+    unused(message);
+    unused(args);
   #endif
 }
 
@@ -362,13 +334,12 @@ static void LOG_InfoArgs(const char *message, va_list args)
   #if(LOG_LEVEL <= LOG_LEVEL_INF)
     if(!LogPrintFlag) return;
     LOG_Datetime();
-    #if(LOG_COLORS)
-      DBG_String(ANSI_BLUE "INF " ANSI_END);
-    #else
-      DBG_String("INF: ");
-    #endif
+    DBG_String(ANSI_BLUE "INF " ANSI_END);
     print_args(message, args);
     DBG_Enter();
+  #else
+    unused(message);
+    unused(args);
   #endif
 }
 
@@ -385,13 +356,12 @@ static void LOG_WarningArgs(const char *message, va_list args)
   #if(LOG_LEVEL <= LOG_LEVEL_WRN)
     if(!LogPrintFlag) return;
     LOG_Datetime();
-    #if(LOG_COLORS)
-      DBG_String(ANSI_YELLOW "WRN " ANSI_END);
-    #else
-      DBG_String("WRN: ");
-    #endif
+    DBG_String(ANSI_YELLOW "WRN " ANSI_END);
     print_args(message, args);
     DBG_Enter();
+  #else
+    unused(message);
+    unused(args);
   #endif
 }
 
@@ -408,13 +378,12 @@ static void LOG_ErrorArgs(const char *message, va_list args)
   #if(LOG_LEVEL <= LOG_LEVEL_ERR)
     if(!LogPrintFlag) return;
     LOG_Datetime();
-    #if(LOG_COLORS)
-      DBG_String(ANSI_RED "ERR " ANSI_END);
-    #else
-      DBG_String("ERR: ");`
-    #endif
+    DBG_String(ANSI_RED "ERR " ANSI_END);
     print_args(message, args);
     DBG_Enter();
+  #else
+    unused(message);
+    unused(args);
   #endif
 }
 
@@ -430,17 +399,14 @@ static void LOG_CriticalArgs(const char *message, va_list args)
 {
   #if(LOG_LEVEL <= LOG_LEVEL_CRT)
     LOG_Datetime();
-    #if(LOG_COLORS)
-      DBG_String(ANSI_MAGENTA "CRT " ANSI_END);
-    #else
-      DBG_String("CRT: ");
-    #endif
+    DBG_String(ANSI_MAGENTA "CRT " ANSI_END);
     print_args(message, args);
     DBG_Enter();
-    // DbgSendFlag = false;
     DBG_Send(DbgFile->buffer, DbgFile->size);
-    FILE_Clear(DbgFile);
-    // DbgSendFlag = true;
+    MBB_Clear(DbgFile);
+  #else
+    unused(message);
+    unused(args);
   #endif
 }
 
@@ -456,21 +422,19 @@ void LOG_Panic(const char *message)
 {
   #if(LOG_LEVEL <= LOG_LEVEL_PAC)
     LOG_Datetime();
-    #if(LOG_COLORS)
-      DBG_String(ANSI_MAGENTA "PNC " ANSI_END);
-    #else
-      DBG_String("PNC: ");
-    #endif
+    DBG_String(ANSI_MAGENTA "PNC " ANSI_END);
     DBG_String((char *)message);
     DBG_Enter();
     DBG_WaitBlock();
     UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
     DBG_WaitBlock();
-    FILE_Clear(DbgFile);
+    MBB_Clear(DbgFile);
+  #else
+    unused(message);
   #endif
 }
 
-void LOG_Message(LOG_Level_e lvl, char *message, ...)
+void LOG_Message(LOG_Level_t lvl, char *message, ...)
 {
   va_list args;
   va_start(args, message);
@@ -490,11 +454,7 @@ void LOG_Message(LOG_Level_e lvl, char *message, ...)
 
 void LOG_ErrorParse(const char *value, const char *type)
 {
-  #if(LOG_COLORS)
-    LOG_Error("Parse " ANSI_ORANGE "%s" ANSI_END " to " ANSI_TURQS "%s" ANSI_END " fault", value, type);
-  #else
-    LOG_Error("Parse %s to %s fault", value, type);
-  #endif
+  LOG_Error("Parse " ANSI_ORANGE "%s" ANSI_END " to " ANSI_TURQS "%s" ANSI_END " fault", value, type);
 }
 
 //-------------------------------------------------------------------------------------------------

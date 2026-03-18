@@ -1,7 +1,12 @@
+// hal/stm32/sys/sys.h
+
 #ifndef SYS_H_
 #define SYS_H_
 
+#include "log.h"
+#include "vrts.h"
 #include "tim.h"
+#include "pwr.h"
 #include "main.h"
 
 #ifndef SYS_BASETIME_ms

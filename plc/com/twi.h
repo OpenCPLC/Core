@@ -1,7 +1,9 @@
+// plc/com/twi.h
+
 #ifndef TWI_H_
 #define TWI_H_
 
-#include "i2c-master.h"
+#include "i2c_master.h"
 #include "vrts.h"
 
 void TWI_Init(I2C_Master_t *i2c);

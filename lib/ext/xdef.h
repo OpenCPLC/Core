@@ -1,3 +1,8 @@
+/** @file lib/ext/xdef.h */
+
+#define ON  1 // Enabled
+#define OFF 0 // Disables
+
 #ifndef XDEF_H_
 #define XDEF_H_
 
@@ -7,11 +12,11 @@
 //-------------------------------------------------------------------------------------------------
 
 typedef enum {
-  OK   = 0,  // Normal execution
-  FREE = 0,  // Resource free
-  IDLE = 0,  // Nothing active
-  ERR  = 1,  // Error occurred
-  BUSY = 2,  // Resource busy
+  OK   = 0, // Normal execution
+  FREE = 0, // Resource free
+  IDLE = 0, // Nothing active
+  ERR  = 1, // Error occurred
+  BUSY = 2, // Resource busy
 } status_t;
 
 #define NaN         NAN
@@ -100,7 +105,7 @@ typedef enum {
   #define ANSI_BLUE     "\x1B[38;5;69m"   /* #5F87D7 */
   #define ANSI_VIOLET   "\x1B[38;5;99m"   /* #875FD7 */
   #define ANSI_MAGENTA  "\x1B[38;5;135m"  /* #AF87D7 */
-  #define ANSI_PINK     "\x1B[38;5;181m"  /* #D787AF */
+  #define ANSI_PINK     "\x1B[38;5;175m"  /* #D787AF */
   #define ANSI_CYAN     "\x1B[38;5;44m"   /* #00D7D7 */
   #define ANSI_GREY     "\x1B[38;5;245m"  /* #8A8A8A */
   #define ANSI_DGREY    "\x1B[38;5;240m"  /* #585858 */
@@ -192,7 +197,7 @@ typedef enum {
   ); \
 })
 
-#ifndef CONFIG_ZEPHYR
+#ifndef __ZEPHYR__
 /**
  * @brief Clamp value to `[min, max]` range.
  * @param value Value to clamp.
@@ -247,6 +252,18 @@ typedef enum {
  * @param x Variable or parameter to mark as intentionally unused.
  */
 #define unused(x) ((void)(x))
+
+/**
+ * @brief Mark intentional switch-case fallthrough.
+ * @note Use as standalone statement: `fallthrough;` right before next `case`.
+ *   Silences `-Wimplicit-fallthrough` on GCC/Clang.
+ *   On other compilers becomes no-op.
+ */
+#if defined(__GNUC__) || defined(__clang__)
+  #define fallthrough __attribute__((fallthrough))
+#else
+  #define fallthrough ((void)0)
+#endif
 
 //------------------------------------------------------------------------------------------------- TRY
 

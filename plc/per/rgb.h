@@ -1,8 +1,10 @@
+// plc/per/rgb.h
+
 #ifndef RGB_H_
 #define RGB_H_
 
 #include "gpio.h"
-#include "extstr.h"
+#include "xstring.h"
 
 //-------------------------------------------------------------------------------------------------
 

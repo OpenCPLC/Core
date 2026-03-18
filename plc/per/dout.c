@@ -1,7 +1,9 @@
+// plc/per/dout.c
+
 #include "dout.h"
 #include "vrts.h"
-#include "extstr.h"
-#include "log.h"
+#include <xstring.h>
+#include <log.h>
 
 //-------------------------------------------------------------------------------------------------
 

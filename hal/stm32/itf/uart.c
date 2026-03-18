@@ -1,10 +1,8 @@
-// lib/per/uart.c
+// hal/stm32/uart.c
 
 #include "uart.h"
 
-//-------------------------------------------------------------------------------------------------
-// DMAMUX request IDs
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------- DMAMUX Requests
 
 #if defined(STM32G0)
   #ifndef DMAMUX_REQ_USART1_TX
@@ -20,21 +18,20 @@
   #define DMAMUX_REQ_LPUART1_TX 17
 #endif
 
-//-------------------------------------------------------------------------------------------------
-// Interrupt handlers
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------- IRQ Handlers
 
-static void UART_InterruptDMA(UART_t *uart)
+static void UART_DMA_IRQHandler(UART_t *uart)
 {
-  if(uart->dma.reg->ISR & DMA_ISR_TCIF(uart->dma.pos)) {
-    uart->dma.reg->IFCR = DMA_ISR_TCIF(uart->dma.pos);
+  if(uart->_dma.reg->ISR & DMA_ISR_TCIF(uart->_dma.pos)) {
+    uart->_dma.reg->IFCR = DMA_ISR_TCIF(uart->_dma.pos);
     uart->reg->CR1 |= USART_CR1_TCIE;
-    uart->tx_flag = false;
+    uart->_tx_busy = false;
   }
 }
 
-static void UART_InterruptEV(UART_t *uart)
+static void UART_IRQHandler(UART_t *uart)
 {
+  // RX not empty
   if(uart->reg->ISR & USART_ISR_RXNE_RXFNE) {
     uint8_t value = (uint8_t)uart->reg->RDR;
     BUFF_Push(uart->buff, value);
@@ -43,51 +40,50 @@ static void UART_InterruptEV(UART_t *uart)
       TIM_Enable(uart->tim);
     }
   }
+  // TX complete
   if((uart->reg->CR1 & USART_CR1_TCIE) && (uart->reg->ISR & USART_ISR_TC)) {
     uart->reg->CR1 &= ~USART_CR1_TCIE;
     uart->reg->ICR = USART_ICR_TCCF;
-    uart->tc_flag = false;
-    if(uart->gpio_direction) GPIO_Rst(uart->gpio_direction);
+    uart->_tc_pending = false;
+    if(uart->dir) GPIO_Rst(uart->dir);
   }
+  // RX timeout
   if(uart->reg->ISR & USART_ISR_RTOF) {
     uart->reg->ICR = USART_ICR_RTOCF;
     BUFF_Break(uart->buff);
   }
 }
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------- Internal
 
 static void UART_DmaSetup(UART_t *uart)
 {
-  DMA_SetRegisters(uart->dma_nbr, &uart->dma);
-  RCC_EnableDMA(uart->dma.reg);
-  uart->dma.mux->CCR &= ~0x3Fu;
+  DMA_SetRegisters(uart->dma, &uart->_dma);
+  RCC_EnableDMA(uart->_dma.reg);
+  uart->_dma.mux->CCR &= ~0x3Fu;
   switch((uint32_t)uart->reg) {
-    case (uint32_t)USART1:  uart->dma.mux->CCR |= DMAMUX_REQ_USART1_TX; break;
+    case (uint32_t)USART1:  uart->_dma.mux->CCR |= DMAMUX_REQ_USART1_TX; break;
     #ifdef USART2
-    case (uint32_t)USART2:  uart->dma.mux->CCR |= DMAMUX_REQ_USART2_TX; break;
+    case (uint32_t)USART2:  uart->_dma.mux->CCR |= DMAMUX_REQ_USART2_TX; break;
     #endif
     #ifdef USART3
-    case (uint32_t)USART3:  uart->dma.mux->CCR |= DMAMUX_REQ_USART3_TX; break;
+    case (uint32_t)USART3:  uart->_dma.mux->CCR |= DMAMUX_REQ_USART3_TX; break;
     #endif
     #ifdef USART4
-    case (uint32_t)USART4:  uart->dma.mux->CCR |= DMAMUX_REQ_USART4_TX; break;
+    case (uint32_t)USART4:  uart->_dma.mux->CCR |= DMAMUX_REQ_USART4_TX; break;
     #endif
     #ifdef UART4
-    case (uint32_t)UART4:   uart->dma.mux->CCR |= DMAMUX_REQ_USART4_TX; break;
+    case (uint32_t)UART4:   uart->_dma.mux->CCR |= DMAMUX_REQ_USART4_TX; break;
     #endif
-    #ifdef UART5
-    case (uint32_t)UART5:   uart->dma.mux->CCR |= DMAMUX_REQ_USART5_TX; break;
-    #endif
-    case (uint32_t)LPUART1: uart->dma.mux->CCR |= DMAMUX_REQ_LPUART1_TX; break;
+    case (uint32_t)LPUART1: uart->_dma.mux->CCR |= DMAMUX_REQ_LPUART1_TX; break;
     #ifdef LPUART2
-    case (uint32_t)LPUART2: uart->dma.mux->CCR |= DMAMUX_REQ_LPUART2_TX; break;
+    case (uint32_t)LPUART2: uart->_dma.mux->CCR |= DMAMUX_REQ_LPUART2_TX; break;
     #endif
   }
-  DMA_ClearFlags(&uart->dma);
-  uart->dma.cha->CCR = 0;
-  uart->dma.cha->CPAR = (uint32_t)&uart->reg->TDR;
-  uart->dma.cha->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_TCIE;
+  DMA_ClearFlags(&uart->_dma);
+  uart->_dma.cha->CCR = 0;
+  uart->_dma.cha->CPAR = (uint32_t)&uart->reg->TDR;
+  uart->_dma.cha->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_TCIE;
 }
 
 static void UART_SetBaudrate(UART_t *uart)
@@ -100,24 +96,20 @@ static void UART_SetBaudrate(UART_t *uart)
   else uart->reg->BRR = (SystemCoreClock + uart->baud / 2) / uart->baud;
 }
 
-bool UART_IsReady(UART_t *uart)
+static bool UART_IsReady(UART_t *uart)
 {
   uint32_t isr = uart->reg->ISR;
   return (isr & USART_ISR_TEACK) && (isr & USART_ISR_REACK);
 }
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------- Init
 
-/**
- * @brief Initialize UART with DMA, GPIO and optional timeout
- * @param[in] uart Pointer to `UART_t` control structure
- */
 void UART_Init(UART_t *uart)
 {
   // Direction GPIO (RS485)
-  if(uart->gpio_direction) {
-    uart->gpio_direction->mode = GPIO_Mode_Output;
-    GPIO_Init(uart->gpio_direction);
+  if(uart->dir) {
+    uart->dir->mode = GPIO_Mode_Output;
+    GPIO_Init(uart->dir);
   }
   // Buffer
   BUFF_Init(uart->buff);
@@ -126,8 +118,8 @@ void UART_Init(UART_t *uart)
   // UART clock
   RCC_EnableUART(uart->reg);
   // GPIO
-  GPIO_InitAlternate(&UART_TX_MAP[uart->tx_pin], false);
-  GPIO_InitAlternate(&UART_RX_MAP[uart->rx_pin], false);
+  GPIO_InitAlternate(&UART_TX_MAP[uart->tx], false);
+  GPIO_InitAlternate(&UART_RX_MAP[uart->rx], false);
   // Baudrate
   UART_SetBaudrate(uart);
   // Reset registers
@@ -156,8 +148,8 @@ void UART_Init(UART_t *uart)
     uart->tim->prescaler = 100;
     uint64_t nbr = ((uint64_t)SystemCoreClock / uart->tim->prescaler) * uart->timeout + uart->baud / 2;
     uart->tim->auto_reload = (uint32_t)(nbr / uart->baud);
-    uart->tim->function = (void (*)(void*))BUFF_Break;
-    uart->tim->function_struct = (void*)uart->buff;
+    uart->tim->Callback = (void (*)(void *))BUFF_Break;
+    uart->tim->callback_arg = (void *)uart->buff;
     uart->tim->irq_priority = uart->irq_priority;
     uart->tim->one_pulse_mode = true;
     if(uart->timeout) {
@@ -171,20 +163,16 @@ void UART_Init(UART_t *uart)
     uart->reg->CR1 |= USART_CR1_RTOIE;
     uart->reg->CR2 |= USART_CR2_RTOEN;
   }
-  // IRQ enable (unified API)
-  uart->init_flag = true;
-  IRQ_EnableDMA(uart->dma_nbr, uart->irq_priority, (void (*)(void*))&UART_InterruptDMA, uart);
-  IRQ_EnableUART(uart->reg, uart->irq_priority, (void (*)(void*))&UART_InterruptEV, uart);
+  // IRQ enable
+  uart->_init = true;
+  IRQ_EnableDMA(uart->dma, uart->irq_priority, (IRQ_Handler_t)UART_DMA_IRQHandler, uart);
+  IRQ_EnableUART(uart->reg, uart->irq_priority, (IRQ_Handler_t)UART_IRQHandler, uart);
   // Enable UART
   uart->reg->CR1 |= USART_CR1_RXNEIE_RXFNEIE | USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
   // Wait for ready
   while(!UART_IsReady(uart)) __NOP();
 }
 
-/**
- * @brief Reinitialize UART
- * @param[in] uart Pointer to `UART_t` control structure
- */
 void UART_ReInit(UART_t *uart)
 {
   while(UART_SendActive(uart)) __NOP();
@@ -197,11 +185,6 @@ void UART_ReInit(UART_t *uart)
   UART_Init(uart);
 }
 
-/**
- * @brief Set timeout value
- * @param[in] uart Pointer to `UART_t` control structure
- * @param[in] timeout Timeout in bit times
- */
 void UART_SetTimeout(UART_t *uart, uint16_t timeout)
 {
   uart->timeout = timeout;
@@ -230,61 +213,40 @@ void UART_SetTimeout(UART_t *uart, uint16_t timeout)
   }
 }
 
-//-------------------------------------------------------------------------------------------------
-// Status flags
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------- Status
 
-bool UART_SendCompleted(UART_t *uart) { return !uart->tc_flag; }
-bool UART_SendActive(UART_t *uart) { return uart->tc_flag; }
-bool UART_IsBusy(UART_t *uart) { return uart->tx_flag; }
-bool UART_IsFree(UART_t *uart) { return !uart->tx_flag; }
+bool UART_SendCompleted(UART_t *uart) { return !uart->_tc_pending; }
+bool UART_SendActive(UART_t *uart) { return uart->_tc_pending; }
+bool UART_IsBusy(UART_t *uart) { return uart->_tx_busy; }
+bool UART_IsFree(UART_t *uart) { return !uart->_tx_busy; }
 
-//-------------------------------------------------------------------------------------------------
-// Send
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------- Send
 
-/**
- * @brief Start UART transmit via DMA
- * @param[in] uart Pointer to `UART_t` control structure
- * @param[in] data Pointer to data buffer
- * @param[in] len Number of bytes to send
- * @return `OK` if started, `ERR` if not initialized, `BUSY` if transmitting
- */
 status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len)
 {
-  if(!uart->init_flag) return ERR;
-  if(uart->tx_flag) return BUSY;
-  if(uart->gpio_direction) GPIO_Set(uart->gpio_direction);
-  uart->dma.cha->CCR &= ~DMA_CCR_EN;
-  uart->dma.cha->CMAR = (uint32_t)data;
-  uart->dma.cha->CNDTR = len;
+  if(!uart->_init) return ERR;
+  if(uart->_tx_busy) return BUSY;
+  if(uart->dir) GPIO_Set(uart->dir);
+  uart->_dma.cha->CCR &= ~DMA_CCR_EN;
+  uart->_dma.cha->CMAR = (uint32_t)data;
+  uart->_dma.cha->CNDTR = len;
   if(uart->prefix) uart->reg->TDR = uart->prefix;
-  uart->dma.cha->CCR |= DMA_CCR_EN;
-  uart->tx_flag = true;
-  uart->tc_flag = true;
+  uart->_dma.cha->CCR |= DMA_CCR_EN;
+  uart->_tx_busy = true;
+  uart->_tc_pending = true;
   return OK;
 }
 
-//-------------------------------------------------------------------------------------------------
-// Receive
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------- Receive
 
 uint16_t UART_Size(UART_t *uart) { return BUFF_Size(uart->buff); }
-uint16_t UART_Read(UART_t *uart, uint8_t *array) { return BUFF_Read(uart->buff, array); }
+uint16_t UART_Read(UART_t *uart, uint8_t *data) { return BUFF_Read(uart->buff, data); }
 char *UART_ReadString(UART_t *uart) { return BUFF_ReadString(uart->buff); }
 bool UART_Skip(UART_t *uart) { return BUFF_Skip(uart->buff); }
 void UART_Clear(UART_t *uart) { BUFF_Clear(uart->buff); }
 
-//-------------------------------------------------------------------------------------------------
-// Utils
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------- Utils
 
-/**
- * @brief Calculate transmission time for frame
- * @param[in] uart Pointer to `UART_t` control structure
- * @param[in] len Frame length in bytes
- * @return Transmission time in milliseconds
- */
 uint32_t UART_CalcTime_ms(UART_t *uart, uint16_t len)
 {
   uint32_t bits = 10; // 1 start + 8 data + 1 stop

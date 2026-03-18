@@ -1,11 +1,7 @@
+// hal/stm32/sys/sys.c
+
 #include "sys.h"
-#include "log.h"
-#ifdef OpenCPLC
-  #include "vrts.h"
-#endif
-#if(SYS_PANIC_RESET)
-  #include "pwr.h"
-#endif
+
 
 /**
  * @brief Initialize system clock, SysTick and heap.
@@ -37,7 +33,7 @@ void clock_init(void)
   #elif(SYS_CLOCK_FREQ == 18432000)
     RCC_HSE(18432000);
   #elif(SYS_CLOCK_FREQ == 59904000)
-    RCC_PLL(18432000, 2, 13, 2);
+    RCC_SetPLL(18432000, 2, 13, 2);
   #else
     #error "System clock frequency SYS_CLOCK_FREQ \
     is not defined or not supported!"

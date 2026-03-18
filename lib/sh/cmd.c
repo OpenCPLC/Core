@@ -1,207 +1,166 @@
+/** @file lib/sh/cmd.c */
+
 #include "cmd.h"
 
-//------------------------------------------------------------------------------------------------- STRUCT
+//------------------------------------------------------------------------------------------------- Internal
 
 static struct {
-  FILE_t *files[CMD_FILE_LIMIT];
-  uint32_t files_hash[CMD_FILE_LIMIT];
+  MBB_t *files[CMD_MBB_LIMIT];
+  uint32_t files_hash[CMD_MBB_LIMIT];
   uint8_t files_count;
   void (*callbacks[CMD_CALLBACK_LIMIT])(char **, uint16_t);
   uint32_t callbacks_hash[CMD_CALLBACK_LIMIT];
   uint8_t callbacks_count;
   void (*callback_default)(char **, uint16_t);
   bool flash_autosave;
-  FILE_t *file_active;
-  void (*Sleep)(PWR_SleepMode_e);
+  MBB_t *file_active;
+  void (*Sleep)(PWR_SleepMode_t);
   void (*Reset)(void);
   uint16_t trig;
-} bash;
+} cmd;
 
-/**
- * @brief Dodaje plik do systemu BASH.
- * @param file Wskaźnik do struktury pliku do dodania.
- */
-void CMD_AddFile(FILE_t *file)
+void CMD_AddFile(MBB_t *file)
 {
-  if(bash.files_count >= CMD_FILE_LIMIT) {
-    LOG_Error("BASH Exceeded file limit (max:%u)", CMD_FILE_LIMIT);
+  if(cmd.files_count >= CMD_MBB_LIMIT) {
+    LOG_Error("CMD exceeded file limit (max:%u)", CMD_MBB_LIMIT);
     return;
   }
-  bash.files[bash.files_count] = file;
-  bash.files_hash[bash.files_count] = hash_djb2_ci(file->name);
-  if(!bash.files_count) {
-    bash.file_active = file;
+  cmd.files[cmd.files_count] = file;
+  cmd.files_hash[cmd.files_count] = hash_djb2_ci(file->name);
+  if(!cmd.files_count) {
+    cmd.file_active = file;
   }
-  bash.files_count++;
-  FILE_Flash_Load(file);
+  cmd.files_count++;
+  MBB_FlashLoad(file);
 }
 
-/**
- * @brief Dodaje nową komendę do systemu BASH, powiązaną z funkcją callback.
- * @param callback Funkcja obsługująca komendę
- * @param argv0 Nazwa komendy, przypisywana do funkcji callback.
- */
 void CMD_AddCallback(void (*callback)(char **, uint16_t), char *argv0)
 {
   if(!argv0 || !strlen(argv0)) {
-    bash.callback_default = callback;
+    cmd.callback_default = callback;
     return;
   }
-  if(bash.callbacks_count >= CMD_CALLBACK_LIMIT) {
-    LOG_Error("BASH Exceeded callback limit (max:%u)", CMD_CALLBACK_LIMIT);
+  if(cmd.callbacks_count >= CMD_CALLBACK_LIMIT) {
+    LOG_Error("CMD exceeded callback limit (max:%u)", CMD_CALLBACK_LIMIT);
     return;
   }
-  bash.callbacks[bash.callbacks_count] = callback;
-  bash.callbacks_hash[bash.callbacks_count] = hash_djb2_ci(argv0);
-  bash.callbacks_count++;
+  cmd.callbacks[cmd.callbacks_count] = callback;
+  cmd.callbacks_hash[cmd.callbacks_count] = hash_djb2_ci(argv0);
+  cmd.callbacks_count++;
 }
 
-/**
- * @brief Włącza lub wyłącza automatyczne zapisywanie danych do pamięci flash.
- * @param autosave Flaga włączająca (true) lub wyłączająca (false) autosave.
- */
 void CMD_FlashAutosave(bool autosave)
 {
-  bash.flash_autosave = autosave;
+  cmd.flash_autosave = autosave;
 }
 
-static inline void CMD_WrongCommand(char *cmd)
+void CMD_SetSleep(void (*Sleep)(PWR_SleepMode_t))
 {
-  #if(LOG_COLORS)
-    LOG_Warning("Wrong "ANSI_ORANGE"%s"ANSI_END" command usage", cmd);
-  #else
-    LOG_Warning("Wrong '%s' command usage", cmd);
-  #endif
+  cmd.Sleep = Sleep;
 }
 
-/**
- * @brief Wyświetla ostrzeżenie o nieprawidłowej liczbie argumentów dla danej komendy.
- * @param cmd Nazwa komendy, która została wywołana z błędną liczbą argumentów.
- * @param argc Ilość argumentów.
- */
-void CMD_WrongArgc(char *cmd, uint16_t argc)
+void CMD_SetReset(void (*Reset)(void))
 {
-  CMD_WrongCommand(cmd);
-  #if(LOG_COLORS)
-    LOG_Warning("Incorrect argument count: "ANSI_LIME"%u"ANSI_END, argc);
-  #else
-    LOG_Warning("Incorrect argument count: %u", argc);
-  #endif
+  cmd.Reset = Reset;
 }
 
-/**
- * @brief Wyświetla ostrzeżenie o nieprawidłowym argumencie dla danej komendy.
- * @param cmd Nazwa komendy, która została wywołana z błędnym argumentem.
- * @param argv Wartość argumentu, który jest nieprawidłowy.
- * @param pos Pozycja argumentu, który jest nieprawidłowy.
- */
-void CMD_WrongArgv(char *cmd, char *argv, uint16_t pos)
+static inline void CMD_WrongCommand(char *name)
 {
-  CMD_WrongCommand(cmd);
-  #if(LOG_COLORS)
-    LOG_Warning("Invalid argument " ANSI_ORANGE "%s" ANSI_END \
-      " on " ANSI_LIME "%u" ANSI_END " position", cmd, pos);
-  #else
-    LOG_Warning("Invalid argument '%s' on %u position", cmd, pos);
-  #endif
+  LOG_Warning("Wrong " ANSI_ORANGE "%s" ANSI_END " command usage", name);
 }
 
-//------------------------------------------------------------------------------------------------- DATA
+void CMD_WrongArgc(char *name, uint16_t argc)
+{
+  CMD_WrongCommand(name);
+  LOG_Warning("Incorrect argument count: " ANSI_LIME "%u" ANSI_END, argc);
+}
+
+void CMD_WrongArgv(char *name, char *argv, uint16_t pos)
+{
+  CMD_WrongCommand(name);
+  LOG_Warning("Invalid argument " ANSI_ORANGE "%s" ANSI_END " on " ANSI_LIME "%u" ANSI_END " position", argv, pos);
+}
+
+//------------------------------------------------------------------------------------------------- Data
 
 static void CMD_Data(uint8_t *data, uint16_t size, STREAM_t *stream)
 {
-  stream->packages--;
-  #if(LOG_COLORS)
-    LOG_Bash("File " ANSI_CREAM "%s" ANSI_END " data pack:" ANSI_LIME "%d" ANSI_END,
-      bash.file_active->name, stream->packages);
-  #elif
-    LOG_Bash("File %s data pack:%d", bash.file_active->name, stream->packages);
-  #endif
-  bash.file_active->lock = false;
-  FILE_Append(bash.file_active, data, size);
-  if(!stream->packages) {
+  stream->_packages--;
+  LOG_Bash("File " ANSI_CREAM "%s" ANSI_END " data pack:" ANSI_LIME "%d" ANSI_END,
+    cmd.file_active->name, stream->_packages);
+  cmd.file_active->lock = false;
+  MBB_Append(cmd.file_active, data, size);
+  if(!stream->_packages) {
     STREAM_ArgsMode(stream);
-    if(bash.flash_autosave) FILE_Flash_Save(bash.file_active);
+    if(cmd.flash_autosave) MBB_FlashSave(cmd.file_active);
   }
   else {
-    bash.file_active->lock = true;
+    cmd.file_active->lock = true;
   }
 }
 
-//------------------------------------------------------------------------------------------------- FILE
+//------------------------------------------------------------------------------------------------- File
 
-static FILE_t *CMD_FindFile(char *file_name)
+static MBB_t *CMD_FindFile(char *file_name)
 {
   uint32_t file_hash = hash_djb2(file_name);
-  for(uint8_t i = 0; i < bash.files_count; i++) {
-    if(file_hash == bash.files_hash[i]) {
-      return bash.files[i];
+  for(uint8_t i = 0; i < cmd.files_count; i++) {
+    if(file_hash == cmd.files_hash[i]) {
+      return cmd.files[i];
     }
   }
-  #if(LOG_COLORS)
-    LOG_Warning("File " ANSI_ORANGE "%s" ANSI_END " not exist", (char *)file_name);
-  #else
-    LOG_Warning("File %s not exist", (char *)file_name);
-  #endif
+  LOG_Warning("File " ANSI_ORANGE "%s" ANSI_END " not exist", (char *)file_name);
   return NULL;
 }
 
-static void CMD_AccessDenied(FILE_t *file)
+static void CMD_AccessDenied(MBB_t *file)
 {
   LOG_Warning("File %s access denied", (char *)file->name);
 }
 
 static void CMD_File(char **argv, uint16_t argc, STREAM_t *stream)
 {
-  if(!bash.files_count) {
-    LOG_Warning("No file added to bash");
+  if(!cmd.files_count) {
+    LOG_Warning("No file added to cmd");
     return;
   }
   CMD_Argc(2, 4);
   switch(hash_djb2(argv[1])) {
     case HASH_List: { // FILE list
       CMD_Argc(2);
-      const char *file_names[bash.files_count];
-      for(uint16_t i = 0; i < bash.files_count; i++) {
-        file_names[i] = bash.files[i]->name;
+      const char *file_names[cmd.files_count];
+      for(uint16_t i = 0; i < cmd.files_count; i++) {
+        file_names[i] = cmd.files[i]->name;
       }
-      #if(LOG_COLORS)
-        LOG_Bash("File list: " ANSI_CREAM "%a %s" ANSI_END, bash.files_count, file_names);
-      #elif
-        LOG_Bash("File list: %a, %s", bash.files_count, file_names);
-      #endif
+      LOG_Bash("File list: " ANSI_CREAM "%a %s" ANSI_END, cmd.files_count, file_names);
       break;
     }
     case HASH_Active:
     case HASH_Select: { // FILE select <file_name:str>
       CMD_Argc(3);
-      FILE_t *file = CMD_FindFile(argv[2]);
+      MBB_t *file = CMD_FindFile(argv[2]);
       if(!file) return;
-      bash.file_active = file;
-      #if(LOG_COLORS)
-        LOG_Bash("File " ANSI_CREAM "%s" ANSI_END " selected", bash.file_active->name);
-      #elif
-        LOG_Bash("File %s was selected", bash.file_active->name);
-      #endif
+      cmd.file_active = file;
+      LOG_Bash("File " ANSI_CREAM "%s" ANSI_END " selected", cmd.file_active->name);
       break;
     }
-    case HASH_Info: {  // FILE info
+    case HASH_Info: { // FILE info
       CMD_Argc(2);
-      LOG_Bash("File %o", bash.file_active, &DBG_File);
+      LOG_Bash("File %o", cmd.file_active, &MBB_Print);
       break;
     }
     case HASH_Clear: { // FILE clear
       CMD_Argc(2);
-      if(FILE_Clear(bash.file_active)) {
-        CMD_AccessDenied(bash.file_active);
+      if(MBB_Clear(cmd.file_active)) {
+        CMD_AccessDenied(cmd.file_active);
         return;
       }
-      LOG_Bash("File %s is empty", bash.file_active->name);
+      LOG_Bash("File %s is empty", cmd.file_active->name);
       return;
     }
     case HASH_Save: { // FILE save <packages:uint16>?
       CMD_Argc(2, 3);
-      if(FILE_Clear(bash.file_active)) CMD_AccessDenied(bash.file_active);
+      if(MBB_Clear(cmd.file_active)) CMD_AccessDenied(cmd.file_active);
       else {
         uint16_t packages = 1;
         if(argc == 3) {
@@ -212,13 +171,9 @@ static void CMD_File(char **argv, uint16_t argc, STREAM_t *stream)
           packages = str_to_int(argv[2]);
         }
         STREAM_DataMode(stream);
-        stream->packages = packages;
-        bash.file_active->lock = true;
-        #if(LOG_COLORS)
-          LOG_Bash("File " ANSI_CREAM "%s" ANSI_END " save pack:" ANSI_LIME "%d" ANSI_END, bash.file_active->name, stream->packages);
-        #elif
-          LOG_Bash("File %s save pack:%d", bash.file_active->name, stream->packages);
-        #endif
+        stream->_packages = packages;
+        cmd.file_active->lock = true;
+        LOG_Bash("File " ANSI_CREAM "%s" ANSI_END " save pack:" ANSI_LIME "%d" ANSI_END, cmd.file_active->name, stream->_packages);
       }
       break;
     }
@@ -232,19 +187,15 @@ static void CMD_File(char **argv, uint16_t argc, STREAM_t *stream)
         packages = str_to_int(argv[2]);
       }
       STREAM_DataMode(stream);
-      stream->packages = packages;
-      bash.file_active->lock = true;
-      #if(LOG_COLORS)
-        LOG_Bash("File " ANSI_CREAM "%s" ANSI_END " append pack:" ANSI_LIME "%d" ANSI_END, bash.file_active->name, stream->packages);
-      #elif
-        LOG_Bash("File %s append pack:%d", bash.file_active->name, stream->packages);
-      #endif
+      stream->_packages = packages;
+      cmd.file_active->lock = true;
+      LOG_Bash("File " ANSI_CREAM "%s" ANSI_END " append pack:" ANSI_LIME "%d" ANSI_END, cmd.file_active->name, stream->_packages);
       break;
     }
     case HASH_Load: { // FILE load <limit:uint16>? <offset:uint16>?
       CMD_Argc(2, 4);
-      if(bash.file_active->lock) CMD_AccessDenied(bash.file_active);
-      uint16_t limit = bash.file_active->size;
+      if(cmd.file_active->lock) CMD_AccessDenied(cmd.file_active);
+      uint16_t limit = cmd.file_active->size;
       uint16_t offset = 0;
       if(argc >= 3) {
         if(!str_is_u16(argv[2])) {
@@ -260,9 +211,9 @@ static void CMD_File(char **argv, uint16_t argc, STREAM_t *stream)
         }
         offset = str_to_int(argv[3]);
       }
-      if(offset >= bash.file_active->size) offset = 0;
-      if(limit + offset > bash.file_active->size) limit = bash.file_active->size - offset;
-      DBG_Data(&bash.file_active->buffer[offset], limit);
+      if(offset >= cmd.file_active->size) offset = 0;
+      if(limit + offset > cmd.file_active->size) limit = cmd.file_active->size - offset;
+      DBG_Data(&cmd.file_active->buffer[offset], limit);
       DBG_Enter();
       break;
     }
@@ -270,53 +221,49 @@ static void CMD_File(char **argv, uint16_t argc, STREAM_t *stream)
       CMD_Argc(3);
       switch(hash_djb2(argv[2])) {
         case HASH_Save:
-          if(FILE_Flash_Save(bash.file_active)) LOG_Error("File %s flash save fault", bash.file_active->name);
-          else LOG_Bash("File %s flash save success", bash.file_active->name);
+          if(MBB_FlashSave(cmd.file_active)) LOG_Error("File %s flash save fault", cmd.file_active->name);
+          else LOG_Bash("File %s flash save success", cmd.file_active->name);
           break;
-        case HASH_Load: case HASH_Reset: 
-          if(FILE_Flash_Load(bash.file_active)) LOG_Error("File %s flash load fault", bash.file_active->name);
-          else LOG_Bash("File %s flash load success", bash.file_active->name);
+        case HASH_Load: case HASH_Reset:
+          if(MBB_FlashLoad(cmd.file_active)) LOG_Error("File %s flash load fault", cmd.file_active->name);
+          else LOG_Bash("File %s flash load success", cmd.file_active->name);
           break;
         default: CMD_ArgvExit(2);
       }
+      break;
     }
     case HASH_Mutex: { // FILE mutex {set|rst}
       CMD_Argc(3);
       switch(hash_djb2(argv[2])) {
-        case HASH_Set: bash.file_active->lock = true; break;
-        case HASH_Rst: case HASH_Reset: bash.file_active->lock = false; break;
+        case HASH_Set: cmd.file_active->lock = true; break;
+        case HASH_Rst: case HASH_Reset: cmd.file_active->lock = false; break;
         default: CMD_ArgvExit(2);
       }
       break;
     }
     case HASH_Copy: { // FILE copy {from|to} <file_name:str>
       CMD_Argc(4);
-      FILE_t *file = CMD_FindFile(argv[3]);
+      MBB_t *file = CMD_FindFile(argv[3]);
       if(!file) return;
       switch(hash_djb2(argv[2])) {
         case HASH_To:
-          if(FILE_Copy(file, bash.file_active)) LOG_Error("File copy fault");
-          else LOG_Bash("File copy %s → %s success", bash.file_active->name, file->name);
+          if(MBB_Copy(file, cmd.file_active)) LOG_Error("File copy fault");
+          else LOG_Bash("File copy %s -> %s success", cmd.file_active->name, file->name);
           break;
         case HASH_From:
-          if(FILE_Copy(bash.file_active, file)) LOG_Error("File copy fault");
-          else LOG_Bash("File copy %s → %s success", file->name, bash.file_active->name);
+          if(MBB_Copy(cmd.file_active, file)) LOG_Error("File copy fault");
+          else LOG_Bash("File copy %s -> %s success", file->name, cmd.file_active->name);
           break;
         default: CMD_ArgvExit(2);
       }
       break;
     }
-    case HASH_Print: { // FILE print {int8|uint8|int16|uint16|int32|uint32|struce} <limit:uint16>? <offset:uint16>?
-      LOG_Bash("%02a %d", 50, bash.file_active->buffer);
+    case HASH_Print: { // FILE print
+      LOG_Bash("%02a %d", 50, cmd.file_active->buffer);
       break;
     }
-    // TODO: FILE (struct) print <limit:uint16>? <offset:uint16>?
     default: {
-      #if(LOG_COLORS)
-        LOG_Error("File command doesn't support "ANSI_YELLOW"%s"ANSI_END" option", argv[1]);
-      #else
-        LOG_Error("File command doesn't support %s option", argv[1]);
-      #endif
+      LOG_Error("File command doesn't support " ANSI_YELLOW "%s" ANSI_END " option", argv[1]);
     }
   }
 }
@@ -331,9 +278,10 @@ static void CMD_Uid(char **argv, uint16_t argc)
 }
 
 //------------------------------------------------------------------------------------------------- RTC
+
 #ifdef RTC_H_
 
-static RTC_Weekday_e RTC_Str2Weekday(const char *str)
+static RTC_Weekday_t RTC_Str2Weekday(const char *str)
 {
   switch(hash_djb2(str)) {
     case RTC_Hash_Everyday: case RTC_Hash_Evd: case HASH_0: return RTC_Weekday_Everyday;
@@ -411,7 +359,7 @@ static void CMD_Rtc(char **argv, uint16_t argc)
         .second = second_nbr
       };
       RTC_SetDatetime(&dt);
-      LOG_Bash("RTC preset datatime");
+      LOG_Bash("RTC preset datetime");
       break;
     }
   }
@@ -420,7 +368,7 @@ static void CMD_Rtc(char **argv, uint16_t argc)
 static void CMD_Alarm(char **argv, uint16_t argc)
 {
   CMD_Argc(2, 4);
-  RTC_Alarm_e alarm_type;
+  RTC_Alarm_t alarm_type;
   char alarm_char;
   uint32_t argv1_hash = hash_djb2(argv[1]);
   switch(argv1_hash) {
@@ -430,13 +378,13 @@ static void CMD_Alarm(char **argv, uint16_t argc)
   }
   switch(argc) {
     case 2: {
-      RTC_Alarm_t alarm = RTC_Alarm(alarm_type);
+      RTC_AlarmCfg_t alarm = RTC_Alarm(alarm_type);
       if(RTC_AlarmIsEnabled(alarm_type)) return LOG_Bash("Alarm %c %o", alarm_char, &alarm, &DBG_Alarm);
       else return LOG_Bash("Alarm %c disabled", alarm_char);
       break;
     }
     case 4: {
-      RTC_Weekday_e weekday = RTC_Str2Weekday(argv[2]);
+      RTC_Weekday_t weekday = RTC_Str2Weekday(argv[2]);
       if(weekday == RTC_Weekday_Error) {
         CMD_ArgvExit(2);
       }
@@ -455,7 +403,7 @@ static void CMD_Alarm(char **argv, uint16_t argc)
       if(hour_nbr >= 24 || minute_nbr >= 60 || second_nbr >= 60) {
         CMD_ArgvExit(3);
       }
-      RTC_Alarm_t alarm = {
+      RTC_AlarmCfg_t alarm = {
         .week = true,
         .day_mask = weekday_mask,
         .day = weekday,
@@ -475,9 +423,10 @@ static void CMD_Alarm(char **argv, uint16_t argc)
 }
 
 #endif
+
 //------------------------------------------------------------------------------------------------- PWR
 
-PWR_SleepMode_e PWR_StrSleepMode(const char *str)
+static PWR_SleepMode_t PWR_StrSleepMode(const char *str)
 {
   switch(hash_djb2(str)) {
     case PWR_Hash_Stop0: case HASH_0: return PWR_SleepMode_Stop0;
@@ -495,10 +444,10 @@ static void CMD_Power(char **argv, uint16_t argc)
   switch(hash_djb2(argv[1])) {
     case HASH_Sleep: {
       CMD_Argc(3, 4);
-      PWR_SleepMode_e mode = PWR_StrSleepMode(argv[2]);
+      PWR_SleepMode_t mode = PWR_StrSleepMode(argv[2]);
       if(mode == PWR_SleepMode_Error) CMD_ArgvExit(2);
       if(argc == 3) {
-        if(bash.Sleep) bash.Sleep(mode);
+        if(cmd.Sleep) cmd.Sleep(mode);
         else PWR_Sleep(mode);
       }
       else if(argc == 4) {
@@ -512,7 +461,7 @@ static void CMD_Power(char **argv, uint16_t argc)
     case HASH_Reset: {
       CMD_Argc(2, 3);
       if(argc == 2) {
-        if(bash.Reset) bash.Reset();
+        if(cmd.Reset) cmd.Reset();
         else DbgReset = true;
       }
       else if(argc == 3) {
@@ -528,7 +477,7 @@ static void CMD_Power(char **argv, uint16_t argc)
 //------------------------------------------------------------------------------------------------- Addr
 
 #if(STREAM_ADDRESS)
-static void CMD_Addr(char **argv, uint16_t argc)
+static void CMD_Addr(char **argv, uint16_t argc, STREAM_t *stream)
 {
   CMD_Argc(1, 2);
   if(argc == 2) {
@@ -549,53 +498,38 @@ static void CMD_Ping(char **argv, uint16_t argc)
 
 //------------------------------------------------------------------------------------------------- Trig
 
-/**
- * @brief Get and clear current trigger code.
- * Returns `0` if no trigger is pending.
- * @return Trigger code or `0` if none.
- */
 uint16_t TRIG_Event(void)
 {
-  if(bash.trig) {
-    uint16_t trig = bash.trig;
-    bash.trig = 0;
+  if(cmd.trig) {
+    uint16_t trig = cmd.trig;
+    cmd.trig = 0;
     return trig;
   }
   return 0;
 }
 
-/**
- * @brief Wait until any trigger occurs.
- * Function blocks until trigger is set, then clears it.
- * @return Trigger code that was received.
- */
 uint16_t TRIG_Wait(void)
 {
-  while(!bash.trig) let();
-  uint16_t trig = bash.trig;
-  bash.trig = 0;
+  while(!cmd.trig) let();
+  uint16_t trig = cmd.trig;
+  cmd.trig = 0;
   return trig;
 }
 
-/**
- * @brief Wait until specific trigger code occurs.
- * Function blocks until `code` is received, then clears it.
- * @param[in] code Expected trigger code.
- */
 void TRIG_WaitFor(uint16_t code)
 {
-  while(bash.trig != code) let();
-  bash.trig = 0;
+  while(cmd.trig != code) let();
+  cmd.trig = 0;
 }
 
 static void CMD_Trig(char **argv, uint16_t argc)
 {
   CMD_Argc(1, 2);
   if(argc == 1) {
-    bash.trig = 1;
+    cmd.trig = 1;
   }
   else if(str_is_u16(argv[1])) {
-    bash.trig = str_to_int(argv[1]);
+    cmd.trig = str_to_int(argv[1]);
   }
   else {
     LOG_ErrorParse(argv[1], "uint16_t");
@@ -605,18 +539,12 @@ static void CMD_Trig(char **argv, uint16_t argc)
 
 //------------------------------------------------------------------------------------------------- Loop
 
-/**
- * @brief Obsługuje komendy odczytane ze strumienia w systemie BASH.
- * Obsługuje wbudowane komendy oraz te dodane przez użytkownika.
- * @param stream Strumień wejściowy (np. UART) z komendami lub danymi.
- * @return `true` jeśli komenda została obsłużona, `false` w przypadku błędu lub nieznanej komendy.
- */
 bool CMD_Loop(STREAM_t *stream)
 {
   char **argv = NULL;
   uint16_t argc = STREAM_Read(stream, &argv);
   if(argc) {
-    if(stream->data_mode) CMD_Data((uint8_t *)argv[0], argc, stream);
+    if(stream->_data_mode) CMD_Data((uint8_t *)argv[0], argc, stream);
     else {
       uint32_t argv0_hash = hash_djb2(argv[0]);
       switch(argv0_hash) {
@@ -630,25 +558,21 @@ bool CMD_Loop(STREAM_t *stream)
           case HASH_Alarm: CMD_Alarm(argv, argc); break;
         #endif
         #if(STREAM_ADDRESS)
-          case HASH_Addr: break;
+          case HASH_Addr: CMD_Addr(argv, argc, stream); break;
         #endif
         default: {
-          for(uint8_t i = 0; i < bash.callbacks_count; i++) {
-            if(argv0_hash == bash.callbacks_hash[i]) {
-              bash.callbacks[i](argv, argc);
+          for(uint8_t i = 0; i < cmd.callbacks_count; i++) {
+            if(argv0_hash == cmd.callbacks_hash[i]) {
+              cmd.callbacks[i](argv, argc);
               return true;
             }
           }
-          if(bash.callback_default) {
-            bash.callback_default(argv, argc);
+          if(cmd.callback_default) {
+            cmd.callback_default(argv, argc);
             return true;
           }
           else {
-            #if(LOG_COLORS)
-              LOG_Warning("Command " ANSI_ORANGE "%s" ANSI_END " not found", argv[0]);
-            #else
-              LOG_Warning("Command '%s' not found", argv[0]);
-            #endif
+            LOG_Warning("Command " ANSI_ORANGE "%s" ANSI_END " not found", argv[0]);
             return false;
           }
         }
