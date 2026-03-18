@@ -1,6 +1,6 @@
 # 💡 OpenCPLC
 
-Projekt to warstwa abstrakcji między aplikacją a peryferiami mikrokontrolera. Podobnie jak **Arduino**, ale ukierunkowana na automatykę. Bez własnego IDE i C++. Wielowątkowość zapewnia [**🔀VRTS**](https://github.com/Xaeian/VRTS), eliminując typowe problemy **RTOS**. System ma wbudowaną konsolę CMD jak **🐧Linux**, a [**⚒️Forge**](https://github.com/OpenCPLC/Forge) upraszcza pracę z projektem do poziomu znajomego z [**🐍Pythona**](https://www.python.org/): instalacja przez `pip`, klonowanie projektów jedną komendą.
+Projekt to warstwa abstrakcji między aplikacją a peryferiami mikrokontrolera. Podobnie jak [Arduino](https://www.arduino.cc), ale ukierunkowana na automatykę. Bez własnego IDE i C++. Wielowątkowość zapewnia [🔀VRTS](https://github.com/Xaeian/VRTS), eliminując typowe problemy [RTOS](https://www.freertos.org/). System ma wbudowaną konsolę CMD jak 🐧Linux, a [**⚒️Forge**](https://github.com/OpenCPLC/Forge) upraszcza pracę z projektem do poziomu znajomego z [🐍Pythona](https://www.python.org/): instalacja przez [`pip`](https://pypi.org), klonowanie projektów jedną komendą.
 
 ```bash
 pip install opencplc      # zainstaluj Forge
@@ -8,7 +8,7 @@ opencplc -n myapp -b Uno  # nowy projekt dla Uno
 make run                  # build & flash
 ```
 
-Technologicznie najbliżej mu do [**🪁Zephyra**](https://www.zephyrproject.org/), ale jest prostszy i bliższy natywnym rozwiązaniom: czysty **C** i **Makefile**, warstwy abstrakcji, mapping i konfiguracja w C. Bez zewnętrznych plików i formatów, magicznych makr ani systemów budowania, które potrafią zagłuszyć IntelliSense. Z działającym 🐞debuggerem! Bardziej zorientowany na automatykę niż IoT. C/C++ od dekad nie doczekało się własnego `pip` czy `npm`, mimo wielu prób, więc nie idziemy w tę stronę. Framework rozwija się stabilnie, wydając kolejne wersje semantyczne dla całego ekosystemu. Jeden workspace może obsługiwać wiele projektów jednocześnie, każdy na swojej wersji frameworka, bez konfliktów i z pełną powtarzalnością.
+Technologicznie najbliżej mu do [🪁Zephyra](https://www.zephyrproject.org/), ale jest prostszy i bliższy natywnym rozwiązaniom: czysty **C** i **Makefile**, warstwy abstrakcji, mapping i konfiguracja w C. Bez zewnętrznych plików i formatów, magicznych makr ani systemów budowania, które potrafią zagłuszyć IntelliSense. Z działającym 🐞debuggerem! Bardziej zorientowany na automatykę niż IoT. C/C++ od dekad nie doczekało się własnego `pip` czy `npm`, mimo wielu prób, więc nie idziemy w tę stronę. Framework rozwija się stabilnie, wydając kolejne wersje semantyczne dla całego ekosystemu. Jeden workspace może obsługiwać wiele projektów jednocześnie, każdy na swojej wersji frameworka, bez konfliktów i z pełną powtarzalnością.
 
 ## C👩🏻‍❤️‍👨🏻PLC 🤔Why?
 

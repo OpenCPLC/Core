@@ -1,6 +1,6 @@
 # 💡 OpenCPLC
 
-A hardware abstraction layer between your application and microcontroller peripherals. Like **Arduino**, but built for industrial automation. No proprietary IDE, no C++. Multithreading is handled by [**🔀VRTS**](https://github.com/Xaeian/VRTS), cutting out the typical **RTOS** headaches. The system has a built-in CMD console like **🐧Linux**, and [**⚒️ Forge**](https://github.com/OpenCPLC/Forge) brings the workflow down to something as approachable as [**🐍Python**](https://www.python.org/): install via `pip`, clone projects with a single command.
+A hardware abstraction layer between your application and microcontroller peripherals. Like [Arduino](https://www.arduino.cc), but built for automation. No custom IDE, no C++. Multithreading is handled by [🔀VRTS](https://github.com/Xaeian/VRTS), cutting out typical [RTOS](https://www.freertos.org/) headaches. The system has a built-in CMD console like 🐧Linux, and [**⚒️Forge**](https://github.com/OpenCPLC/Forge) simplifies the workflow to [🐍Python](https://www.python.org/) level: install via [`pip`](https://pypi.org), clone projects with a single command.
 
 ```bash
 pip install opencplc      # install Forge
