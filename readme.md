@@ -13,11 +13,11 @@ Technically closest to [🪁Zephyr](https://www.zephyrproject.org/), but simpler
 
 ## C👩🏻‍❤️‍👨🏻PLC 🤔Why?
 
-Software is getting more complex by the day, often by developers' own choice. Sometimes the complexity of an application is completely out of proportion to the problem it solves or the value it delivers. We want our solution to be as simple as possible, the interface intuitive, and the technology overhead minimal. We use well-known tools: [**Visual Studio Code**](https://code.visualstudio.com/), [**Git**](https://git-scm.com/), and [**C**](https://www.learn-c.org/), which despite its age is still [number one](https://www.geeksforgeeks.org/blogs/embedded-systems-programming-languages/) among embedded developers. There's no reason it can't show up more in industrial automation and help the industry keep pace with 🌐IT.
+Software is getting more complex by the day, often by developers' own choice. Sometimes the complexity of an application is completely out of proportion to the problem it solves or the value it delivers. We want our solution to be as simple as possible, the interface intuitive, and the technology overhead minimal. We use well-known tools: [**Visual Studio Code**](https://code.visualstudio.com), [**Git**](https://git-scm.com/), and [**C**](https://www.learn-c.org), which despite its age is still [number one](https://www.geeksforgeeks.org/blogs/embedded-systems-programming-languages) among embedded developers. There's no reason it can't show up more in industrial automation and help the industry keep pace with 🌐IT.
 
 Demand for automation engineers has always been high and won't change. Back when programmers were scarce and automation was largely done by electricians, ladder logic **🪜LAD** was a brilliant solution, it was based on circuit logic they already understood. Today the tables have turned: C code is often more readable for technical graduates than a tree of contacts and coils. And let's not forget that [**C**](https://en.wikipedia.org/wiki/C_(programming_language)) was designed as a general-purpose language, which makes it far more versatile than the sandboxed environments shipped by PLC vendors.
 
-_A practical comparison of LAD, ST and ANSI C can be found in the [**🟢start🔴stop**](https://github.com/OpenCPLC/Framework/wiki/Start-Stop-Lang-Comparison) example._
+_A practical comparison of LAD, ST and ANSI C can be found in the [**🟢start🔴stop**](wiki/Start-Stop-Lang-Comparison) example._
 
 ## 🖥️ Our Controllers
 
