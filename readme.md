@@ -1,11 +1,12 @@
-# 💡 OpenCPLC
+# OpenCPLC ☢️ Core
 
 A hardware abstraction layer between your application and microcontroller peripherals. Like [Arduino](https://www.arduino.cc), but built for automation. No custom IDE, no C++. Multithreading is handled by [🔀VRTS](https://github.com/Xaeian/VRTS), cutting out typical [RTOS](https://www.freertos.org/) headaches. The system has a built-in CMD console like 🐧Linux, and [**⚒️Forge**](https://github.com/OpenCPLC/Forge) simplifies the workflow to [🐍Python](https://www.python.org/) level: install via [`pip`](https://pypi.org), clone projects with a single command.
 
 ```bash
-pip install opencplc      # install Forge
-opencplc -n myapp -b Uno  # new project for Uno
-make run                  # build & flash
+pip install opencplc            # install OpenCPLC Forge
+opencplc -n myapp -b Uno        # new project for Uno
+opencplc -n myapp -c STM32G081  # bare-metal project for STM32G081 (e.g. Nucleo)
+make run                        # build & flash
 ```
 
 Technically closest to [🪁Zephyr](https://www.zephyrproject.org/), but simpler and closer to native solutions: plain **C** and **Makefile**, abstraction layers, mapping and configuration all in C. No external files or formats, no magic macros, no build systems that silently break IntelliSense. With a working 🐞debugger! More focused on automation than IoT. C/C++ has never gotten its own `pip` or `npm` despite decades of attempts, so we're not going that route. The framework grows steadily with semantic versioning across the whole ecosystem. One workspace, many projects, each on its own framework version, no conflicts, full reproducibility.
