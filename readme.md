@@ -17,7 +17,7 @@ Software is getting more complex by the day, often by developers' own choice. So
 
 Demand for automation engineers has always been high and won't change. Back when programmers were scarce and automation was largely done by electricians, ladder logic **🪜LAD** was a brilliant solution, it was based on circuit logic they already understood. Today the tables have turned: C code is often more readable for technical graduates than a tree of contacts and coils. And let's not forget that [**C**](https://en.wikipedia.org/wiki/C_(programming_language)) was designed as a general-purpose language, which makes it far more versatile than the sandboxed environments shipped by PLC vendors.
 
-_A practical comparison of LAD, ST and ANSI C can be found in the [**🟢start🔴stop**](wiki/Start-Stop-Lang-Comparison) example._
+_A practical comparison of LAD, ST and ANSI C can be found in the [**🟢start🔴stop**](https://github.com/OpenCPLC/Core/wiki/Start-Stop-Lang-Comparison) example._
 
 ## 🖥️ Our Controllers
 
