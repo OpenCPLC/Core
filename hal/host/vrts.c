@@ -12,6 +12,14 @@
   #include <unistd.h>
 #endif
 
+//------------------------------------------------------------------------------------------------- Panic
+
+__attribute__((weak)) void vrts_panic(const char *msg)
+{
+  fprintf(stderr, "vrts_panic: %s\n", msg);
+  while(1);
+}
+
 //------------------------------------------------------------------------------------------------- Globals
 
 volatile uint64_t VrtsTicker;

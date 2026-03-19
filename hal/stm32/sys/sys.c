@@ -107,3 +107,8 @@ void sleep_us(uint32_t us)
 {
   DELAY_Wait(sys_sleep_tim, us);
 }
+
+void vrts_panic(const char *msg)
+{
+  panic(msg);
+}

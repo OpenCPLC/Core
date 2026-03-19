@@ -1,19 +1,13 @@
-/** @file lib/col/heap.c */
+// lib/col/heap.c
 
 #include "heap.h"
 #include "vrts.h"
-#include "sys.h"
-#include "log.h"
 
-//------------------------------------------------------------------------------------------------- malloc/free
+//------------------------------------------------------------------------------------------------- Allocator
 
-static uint8_t Heap[((HEAP_SIZE + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1))] __attribute__((aligned(HEAP_ALIGN)));  // The heap memory region
+static uint8_t Heap[((HEAP_SIZE + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1))] __attribute__((aligned(HEAP_ALIGN))); // Heap memory region
 static heap_block_t *FreeList = (heap_block_t*)Heap; // Pointer to the first block in the free list
 
-/**
- * @brief Initialize heap with one large free block.
- * @note Must be called once before using `heap_alloc()`.
- */
 void heap_init(void)
 {
   FreeList->size = ((HEAP_SIZE + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1)) - sizeof(heap_block_t); // One free block covers the whole heap
@@ -21,62 +15,44 @@ void heap_init(void)
   FreeList->free = true; // Mark the block as free
 }
 
-/**
- * @brief Allocate a memory block from the heap.
- * @param size Number of bytes to allocate
- * @return Pointer to allocated memory, or NULL if no block is available
- */
 void *heap_alloc(size_t size)
 {
   size = (size + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1);
-  heap_block_t *curr = FreeList;  // Start from the first free block
+  heap_block_t *curr = FreeList; // Start from the first free block
   // Traverse the free list to find a block large enough
   while(curr) {
     if(curr->free && curr->size >= size) {
-      // Found a free block with sufficient size
       // If the block is bigger than needed, split it
       if(curr->size > size + sizeof(heap_block_t)) {
         heap_block_t *new_block = (heap_block_t*)((uint8_t*)curr + sizeof(heap_block_t) + size);
-        new_block->size = curr->size - size - sizeof(heap_block_t);  // Size of the remaining free space
+        new_block->size = curr->size - size - sizeof(heap_block_t); // Size of the remaining free space
         new_block->free = true; // Mark the new block as free
         new_block->next = curr->next; // Link new block with rest of list
         curr->next = new_block; // Insert the new block right after current
         curr->size = size; // Shrink current block to the requested size
       }
       curr->free = 0; // Mark current block as allocated
-      // Return pointer to memory just after the block header
-      return (uint8_t*)curr + sizeof(heap_block_t);
+      return (uint8_t*)curr + sizeof(heap_block_t); // Return pointer just after the block header
     }
-    curr = curr->next;  // Move to the next block if this one isn't suitable
+    curr = curr->next; // Move to the next block if this one isn't suitable
   }
-  panic("Heap allocation failed" LOG_LIB("heap")); // Not return
-  return NULL; // No suitable block found (heap is full or no large enough block)
+  vrts_panic("Heap allocation failed"); // Not return
+  return NULL;
 }
 
-/**
- * @brief Free a previously allocated memory block.
- * @param ptr Pointer returned by heap_alloc(), or NULL
- */
 void heap_free(void *ptr)
 {
   if(!ptr) return; // Nothing to free if pointer is NULL
-  // Get the corresponding block header
-  heap_block_t *curr = (heap_block_t*)((uint8_t*)ptr - sizeof(heap_block_t));
-  curr->free = 1;  // Mark this block as free
+  heap_block_t *curr = (heap_block_t*)((uint8_t*)ptr - sizeof(heap_block_t)); // Get the block header
+  curr->free = 1; // Mark this block as free
   // Coalesce with next block if it's free
   heap_block_t *next = curr->next;
   if(next && next->free) {
-    curr->size += sizeof(heap_block_t) + next->size;  // Merge sizes including the header
-    curr->next = next->next;  // Remove next block from list
+    curr->size += sizeof(heap_block_t) + next->size; // Merge sizes including the header
+    curr->next = next->next; // Remove next block from list
   }
 }
 
-/**
- * @brief Reallocate (resize) an existing heap block.
- * @param ptr Pointer returned by `heap_alloc()` or `NULL`
- * @param size New size in bytes (if 0, block is freed)
- * @return Pointer to resized memory block, or NULL if allocation failed
- */
 void *heap_reloc(void *ptr, size_t size)
 {
   size = (size + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1);
@@ -86,22 +62,19 @@ void *heap_reloc(void *ptr, size_t size)
     return NULL;
   }
   heap_block_t *curr = (heap_block_t*)((uint8_t*)ptr - sizeof(heap_block_t));
-  if(curr->size >= size) return ptr; // If current block already big enough, keep it
-  void *new_ptr = heap_alloc(size); // Otherwise allocate new block
-  if(!new_ptr) return NULL; // No memory available
+  if(curr->size >= size) return ptr; // Current block already big enough
+  void *new_ptr = heap_alloc(size); // Allocate new block
+  if(!new_ptr) return NULL;
   memcpy(new_ptr, ptr, curr->size); // Copy data from old block to new one
-  heap_free(ptr);  // Free old block
+  heap_free(ptr); // Free old block
   return new_ptr;
 }
 
 //------------------------------------------------------------------------------------------------- Garbage-collector
 
 // Stacks, one for each thread for multi-threading mode or single stack for single-threaded mode
-heap_new_t *Stacks[VRTS_SWITCHING ? VRTS_THREAD_LIMIT: 1]; 
+heap_new_t *Stacks[VRTS_SWITCHING ? VRTS_THREAD_LIMIT : 1];
 
-/**
- * @brief Initializes dynamic GC stack for active thread (auto-expanding).
- */
 static heap_new_t *heap_get_stack(void)
 {
   uint8_t active_thread = vrts_active_thread();
@@ -114,7 +87,6 @@ static heap_new_t *heap_get_stack(void)
   Stacks[active_thread] = stack;
   return stack;
 }
-
 
 void *heap_new(size_t size)
 {
