@@ -228,7 +228,7 @@ uint32_t BKPR_Read(BKPR_t reg)
 
 //------------------------------------------------------------------------------------------------- IWDG
 
-void IWDG_Init(IWDG_Prescaler_t prescaler, uint16_t reload)
+void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 {
   if(reload > 0x0FFF) reload = 0x0FFF;
   RCC->CSR |= RCC_CSR_LSION;
