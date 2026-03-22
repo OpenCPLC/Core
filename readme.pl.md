@@ -1,6 +1,10 @@
 # OpenCPLC ☢️ Core
 
-Projekt to warstwa abstrakcji między aplikacją a peryferiami mikrokontrolera. Podobnie jak [Arduino](https://www.arduino.cc), ale ukierunkowana na automatykę. Bez własnego IDE i C++. Wielowątkowość zapewnia [🔀VRTS](https://github.com/Xaeian/VRTS), eliminując typowe problemy [RTOS](https://www.freertos.org/). System ma wbudowaną konsolę CMD jak 🐧Linux, a [**⚒️Forge**](https://github.com/OpenCPLC/Forge) upraszcza pracę z projektem do poziomu znajomego z [🐍Pythona](https://www.python.org/): instalacja przez [`pip`](https://pypi.org), klonowanie projektów jedną komendą.
+PLC bez laddera. Dla inżynierów, którzy potrzebują prawdziwej kontroli, a nie diagramów.
+
+OpenCPLC to warstwa abstrakcji między aplikacją a peryferiami mikrokontrolera. Jak [Arduino](https://www.arduino.cc), ale pod automatykę i systemy sterowania. Bez własnego IDE. Bez C++.
+
+Wielowątkowość obsługuje [🔀VRTS](https://github.com/Xaeian/VRTS), redukując typową złożoność [RTOS](https://www.freertos.org)'ów, możesz skupić się na logice sterowania. Wbudowana konsola CMD daje klimat 🐧Linuxa, a [**⚒️Forge**](https://github.com/OpenCPLC/Forge) sprowadza workflow do poziomu [🐍Pythona](https://www.python.org): instalacja przez [`pip`](https://pypi.org/project/pip), klonowanie projektów jedną komendą i od razu działasz.
 
 ```bash
 pip install opencplc            # zainstaluj OpenCPLC Forge

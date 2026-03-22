@@ -134,7 +134,7 @@ float rms_i32(int32_t *array, uint16_t len);
  * @param len Number of elements in the array.
  * @param shift Shift amount in bits: >0 = left, <0 = right, 0 = no change.
  */
-void shift_u16(uint16_t *array, uint16_t len, int32_t shift);
+void shift_u16(uint16_t *array, uint16_t len, int16_t shift);
 
 /**
  * @brief Shifts each element of a uint32_t array (in-place, with saturation on left shift).
@@ -144,7 +144,7 @@ void shift_u16(uint16_t *array, uint16_t len, int32_t shift);
  * @param len   Number of elements in the array.
  * @param shift Shift amount in bits: >0 = left, <0 = right, 0 = no change.
  */
-void shift_u32(uint32_t *array, uint16_t len, int32_t shift);
+void shift_u32(uint32_t *array, uint16_t len, int16_t shift);
 
 //-------------------------------------------------------------------------------------- scalar
 

@@ -450,8 +450,7 @@ float rms_i32(int32_t *array, uint16_t len)
 
 //--------------------------------------------------------------------------------------------- shift
 
-
-void shift_u16(uint16_t *array, uint16_t len, int32_t shift)
+void shift_u16(uint16_t *array, uint16_t len, int16_t shift)
 {
   if(len == 0 || shift == 0) return;
   if(shift > 0) {
@@ -483,7 +482,7 @@ void shift_u16(uint16_t *array, uint16_t len, int32_t shift)
   }
 }
 
-void shift_u32(uint32_t *array, uint16_t len, int32_t shift)
+void shift_u32(uint32_t *array, uint16_t len, int16_t shift)
 {
   if(len == 0 || shift == 0) return;
   if(shift > 0) {
