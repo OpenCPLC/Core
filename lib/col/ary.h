@@ -20,7 +20,6 @@
  * Internal:
  * @param _head Write index (next free slot).
  * @param _tail Read index (oldest element).
-
  */
 typedef struct {
   void *value;
