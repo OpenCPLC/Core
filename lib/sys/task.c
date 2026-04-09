@@ -1,4 +1,4 @@
-/** @file lib/sys/task.c */
+// lib/sys/task.c
 
 #include "task.h"
 #include "log.h"
@@ -25,7 +25,7 @@ static QUEUE_New(task_queue, TASK_t, TASK_LIMIT, task_equal, task_compare);
 
 static inline void task_full_error(void)
 {
-  LOG_Error("Task queue full" LOG_LIB("TASK"));
+  LOG_ERR("Task queue full" LOG_LIB("TASK"));
 }
 
 void TASK_Add(void (*Handler)(void *), void *arg, uint32_t delay_ms)

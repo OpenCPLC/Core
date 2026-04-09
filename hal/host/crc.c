@@ -26,10 +26,8 @@ static uint32_t reflect_bits(uint32_t data, uint8_t width)
 
 //-------------------------------------------------------------------------------------------------
 
-uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
+void CRC_Init(CRC_t *crc)
 {
-  // Generate table (same as Python __init)
-  uint32_t table[256];
   uint32_t topbit = 1u << (crc->width - 1);
   uint32_t mask = get_crc_mask(crc->width);
   for(uint16_t i = 0; i < 256; i++) {
@@ -38,16 +36,20 @@ uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
       if(remainder & topbit) remainder = (remainder << 1) ^ crc->polynomial;
       else remainder <<= 1;
     }
-    table[i] = remainder & mask;
+    crc->table[i] = remainder & mask;
   }
-  // Calculate CRC (same as Python checksum)
+}
+
+uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
+{
+  uint32_t mask = get_crc_mask(crc->width);
   uint32_t remainder = crc->initial;
   uint8_t *bytes = (uint8_t *)data;
   for(uint16_t i = 0; i < count; i++) {
     uint8_t byte = bytes[i];
     if(crc->reflect_data_in) byte = (uint8_t)reflect_bits(byte, 8);
     uint8_t idx = (uint8_t)((byte ^ (remainder >> (crc->width - 8))) & 0xFF);
-    remainder = table[idx] ^ (remainder << 8);
+    remainder = crc->table[idx] ^ (remainder << 8);
     remainder &= mask;
   }
   if(crc->reflect_data_out) remainder = reflect_bits(remainder, crc->width);
@@ -107,7 +109,7 @@ status_t CRC_Ok(const CRC_t *crc, uint8_t *data, uint16_t count)
 //-------------------------------------------------------------------------------------------------
 #if(CRC_PRESETS)
 
-const CRC_t crc32_iso = {
+CRC_t crc32_iso = {
   .width = 32,
   .polynomial = 0x04C11DB7,
   .initial = 0xFFFFFFFF,
@@ -117,7 +119,7 @@ const CRC_t crc32_iso = {
   .invert_out = false
 };
 
-const CRC_t crc32_aixm = {
+CRC_t crc32_aixm = {
   .width = 32,
   .polynomial = 0x814141AB,
   .initial = 0x00000000,
@@ -127,7 +129,7 @@ const CRC_t crc32_aixm = {
   .invert_out = false
 };
 
-const CRC_t crc32_autosar = {
+CRC_t crc32_autosar = {
   .width = 32,
   .polynomial = 0xF4ACFB13,
   .initial = 0xFFFFFFFF,
@@ -137,7 +139,7 @@ const CRC_t crc32_autosar = {
   .invert_out = false
 };
 
-const CRC_t crc32_cksum = {
+CRC_t crc32_cksum = {
   .width = 32,
   .polynomial = 0x04C11DB7,
   .initial = 0x00000000,
@@ -147,7 +149,7 @@ const CRC_t crc32_cksum = {
   .invert_out = false
 };
 
-const CRC_t crc16_kermit = {
+CRC_t crc16_kermit = {
   .width = 16,
   .polynomial = 0x1021,
   .initial = 0x0000,
@@ -157,7 +159,7 @@ const CRC_t crc16_kermit = {
   .invert_out = false
 };
 
-const CRC_t crc16_modbus = {
+CRC_t crc16_modbus = {
   .width = 16,
   .polynomial = 0x8005,
   .initial = 0xFFFF,
@@ -167,7 +169,7 @@ const CRC_t crc16_modbus = {
   .invert_out = true
 };
 
-const CRC_t crc16_buypass = {
+CRC_t crc16_buypass = {
   .width = 16,
   .polynomial = 0x8005,
   .initial = 0x0000,
@@ -177,7 +179,7 @@ const CRC_t crc16_buypass = {
   .invert_out = false
 };
 
-const CRC_t crc8_maxim = {
+CRC_t crc8_maxim = {
   .width = 8,
   .polynomial = 0x31,
   .initial = 0x00,
@@ -187,7 +189,7 @@ const CRC_t crc8_maxim = {
   .invert_out = false
 };
 
-const CRC_t crc8_smbus = {
+CRC_t crc8_smbus = {
   .width = 8,
   .polynomial = 0x07,
   .initial = 0x00,

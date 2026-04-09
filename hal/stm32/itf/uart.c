@@ -175,12 +175,16 @@ void UART_Init(UART_t *uart)
 
 void UART_ReInit(UART_t *uart)
 {
-  while(UART_SendActive(uart)) __NOP();
+  uart->reg->CR1 &= ~USART_CR1_TCIE;
+  uart->_dma.cha->CCR &= ~DMA_CCR_EN;
+  uart->_tx_busy = false;
+  uart->_tc_pending = false;
+  if(uart->dir) GPIO_Rst(uart->dir);
+  uart->_init = false;
   uart->reg->CR3 &= ~USART_CR3_DMAT;
   uart->reg->ICR = UART_ICR_CLEAR;
   uart->reg->RQR = USART_RQR_RXFRQ;
   uart->reg->CR1 &= ~USART_CR1_UE;
-  while(UART_IsReady(uart)) __NOP();
   RCC_DisableUART(uart->reg);
   UART_Init(uart);
 }

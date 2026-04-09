@@ -13,12 +13,12 @@
 #include "main.h"
 
 #ifndef PDB_LOG
-  // Log function for debug messages
-  #define PDB_LOG LOG_DBG
+  // Log function for `PDB` messages
+  #define PDB_LOG(fmt, ...) LOG_LIB_DBG("pdb", fmt, ##__VA_ARGS__)
 #endif
 
 #ifndef PDB_RECORD_LIMIT
-  // Stack buffer size for insert (must be >= record size)
+  // Max record size: payload + CRC + 8B align padding. Stack buffer in `PDB_Insert`.
   #define PDB_RECORD_LIMIT 32
 #endif
 
@@ -32,24 +32,30 @@ typedef enum {
 } PDB_Status_t;
 
 typedef enum {
-  PDB_Desc = 0, // Newest first (highest key first)
-  PDB_Asc = 1   // Oldest first (lowest key first)
+  PDB_Desc = 0, // Newest first (reverse physical order)
+  PDB_Asc = 1   // Oldest first (forward physical order)
 } PDB_Dir_t;
 
-// Filter callback: return `true` to include record
-typedef bool (*PDB_Filter_t)(const void *record);
+// Filter callback: return `true` to include record. `ctx` from `PDB_Query_t.filter_ctx`.
+typedef bool (*PDB_Filter_t)(const void *record, void *ctx);
 
 /**
  * @brief PDB (picoDatabase) instance.
  * Append-only circular flash log with fixed-size records.
  * First `uint32_t` of each record is a monotonic sort key
- * (timestamp, counter, sequence number: user decides).
+ * (timestamp, counter, sequence: user decides). Iterator `dir`
+ * traverses physical layout — assumes user writes monotonic keys,
+ * order across page wrap-around is not re-sorted.
+ * Requires STM32 doubleword (8B) flash write via `FLASH_Write`.
+ * Not reentrant — single-threaded or cooperative scheduler (VRTS) only.
+ * Torn-write recovery requires `crc != NULL`. Without CRC, partially
+ * written records after power loss may be read as valid garbage.
  * @param[in] page_start First flash page reserved for PDB
- * @param[in] page_count Number of flash pages
- * @param[in] payload_size User record size in bytes
- * @param[in] crc CRC config or `NULL` (no integrity check)
+ * @param[in] page_count Number of flash pages (must be >= 2)
+ * @param[in] payload_size User record size in bytes (>= 4, first 4B = sort key)
+ * @param[in] crc CRC config or `NULL` (no integrity check, no recovery)
  * Internal:
- * @param _record_size Aligned record size (payload + CRC + padding)
+ * @param _record_size Aligned record size (payload + CRC + pad to 8B)
  * @param _page_stop Exclusive page boundary (`page_start + page_count`)
  * @param _page_active Page currently being written
  * @param _pointer Next write address in flash
@@ -62,7 +68,7 @@ typedef struct {
   uint8_t payload_size;
   const CRC_t *crc;
   // internal
-  uint8_t _record_size;
+  uint16_t _record_size;
   uint8_t _page_stop;
   uint8_t _page_active;
   uint32_t _pointer;
@@ -79,6 +85,7 @@ typedef struct {
  * @param[in] skip Number of matching records to skip (pagination)
  * @param[in] dir `PDB_Desc` newest first, `PDB_Asc` oldest first
  * @param[in] filter Callback or `NULL` (no filter)
+ * @param[in] filter_ctx User context passed to `filter` (lifetime: caller's responsibility)
  */
 typedef struct {
   uint32_t key_min;
@@ -87,6 +94,7 @@ typedef struct {
   uint16_t skip;
   PDB_Dir_t dir;
   PDB_Filter_t filter;
+  void *filter_ctx;
 } PDB_Query_t;
 
 /**
@@ -111,7 +119,7 @@ typedef struct {
 
 /**
  * @brief Initialize PDB instance.
- * Scans flash pages, recovers from torn writes.
+ * Scans flash pages, recovers from torn writes (CRC required) and post-wrap state.
  * @param[in,out] pdb Pointer to `PDB_t` instance
  * @return `OK` on success, `ERR` on invalid config or flash error
  */
@@ -141,8 +149,7 @@ status_t PDB_Delete(PDB_t *pdb);
  * @param[in] query Query parameters (copied into iterator)
  * @return `OK` always
  */
-status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter,
-  const PDB_Query_t *query);
+status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query);
 
 /**
  * @brief Fetch next matching record.
@@ -168,11 +175,10 @@ const void *PDB_IterRef(PDB_Iter_t *iter);
  * @param[in] pdb Pointer to `PDB_t` instance
  * @param[in] query Query parameters
  * @param[out] out Output buffer
- * @param[in] max Maximum records that fit in `out`
+ * @param[in] max Maximum records that fit in `out` (0 = no buffer, returns 0)
  * @return Number of records copied
  */
-uint32_t PDB_Select(PDB_t *pdb, const PDB_Query_t *query,
-  void *out, uint32_t max);
+uint32_t PDB_Select(PDB_t *pdb, const PDB_Query_t *query, void *out, uint32_t max);
 
 /**
  * @brief Count matching records without copying.

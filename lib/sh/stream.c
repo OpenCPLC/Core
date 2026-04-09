@@ -1,4 +1,4 @@
-/** @file lib/sh/stream.c */
+// lib/sh/stream.c
 
 #include "stream.h"
 

@@ -1,4 +1,4 @@
-/** @file lib/sh/dbg.c */
+// lib/sh/dbg.c
 
 #include "dbg.h"
 #include "cmd.h"
@@ -58,6 +58,7 @@ void DBG_Init(UART_t *uart)
 volatile bool DbgReset;
 
 #if(DBG_ECHO_MODE)
+
 char EchoValue;
 bool EchoEnter = false;
 bool EchoInput = false;
@@ -89,6 +90,12 @@ void DBG_Echo(void)
     DBG_Char(EchoValue);
   }
 }
+
+bool BUFF_EchoIdle(BUFF_t *buff)
+{
+  return buff->echo == buff->head;
+}
+
 #endif
 
 void DBG_Loop(void)
@@ -97,7 +104,9 @@ void DBG_Loop(void)
     #if(DBG_ECHO_MODE)
       DBG_Echo();
     #endif
-    CMD_Loop(&dbg_stream);
+    if(BUFF_EchoIdle(&dbg_buff)) {
+      CMD_Step(&dbg_stream);
+    }
     if(UART_IsFree(DbgUart)) {
       heap_clear();
       if(DbgFile->size) {

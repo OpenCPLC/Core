@@ -1,4 +1,4 @@
-/** @file lib/sh/dbg.h */
+// lib/sh/dbg.h
 
 #ifndef DBG_H_
 #define DBG_H_

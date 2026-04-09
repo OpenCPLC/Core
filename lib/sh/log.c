@@ -1,8 +1,10 @@
-/** @file lib/sh/log.c */
+// lib/sh/log.c
 
 #include "log.h"
 
 bool LogPrintFlag = true;
+
+//---------------------------------------------------------------------------------- print_args
 
 static uint8_t print_args_getstrnbr(const char **format)
 {
@@ -16,23 +18,30 @@ static uint8_t print_args_getstrnbr(const char **format)
 
 void print_args(const char *format, va_list args)
 {
-  uint8_t ary_type, ary_space_len, ary_count = 0;
+  uint8_t ary_type = 1, ary_space_len = 0, ary_count = 0;
   char ary_space[LOG_ARYSPACE_MAXLEN + 1];
   while(*format) {
     if(*format == '%') {
       format++;
+      // Flag: `0` = zero-pad
+      bool flag_zero = false;
+      while(*format == '0') { flag_zero = true; format++; }
       uint8_t width = print_args_getstrnbr(&format);
-      if(*format == '-') format++;
       uint8_t precision = 0;
-      bool default_precision = true;
+      bool has_precision = false;
       if(*format == '.') {
         format++;
         precision = print_args_getstrnbr(&format);
-        default_precision = false;
+        has_precision = true;
       }
       bool long_int = false;
       if(*format == 'l') { format++; long_int = true; }
       if(*format == 'l') { format++; long_int = true; }
+      // printf semantics: width = total field width (space-pad by default,
+      // zero-pad with `0` flag), precision = min digits for integers.
+      // DBG_Int(nbr, base, sign, fill_zero, fill_space).
+      uint8_t fill_space = flag_zero ? 0 : width;
+      uint8_t fill_zero = flag_zero ? width : (has_precision ? precision : 0);
       switch(*format) {
         case 'a': case 'A': {
           ary_count = va_arg(args, uint32_t);
@@ -47,10 +56,22 @@ void print_args(const char *format, va_list args)
             uint8_t *ary = va_arg(args, uint8_t *);
             while(ary_count) {
               switch(ary_type) {
-                case 8: DBG_Int(*(int64_t *)ary, 10, true, width, precision); ary += 8; break;
-                case 4: DBG_Int(*(int32_t *)ary, 10, true, width, precision); ary += 4; break;
-                case 2: DBG_Int(*(int16_t *)ary, 10, true, width, precision); ary += 2; break;
-                default: DBG_Int(*(int8_t *)ary, 10, true, width, precision); ary++; break;
+                case 8:
+                  DBG_Int(*(int64_t *)ary, 10, true, fill_zero, fill_space);
+                  ary += 8;
+                  break;
+                case 4:
+                  DBG_Int(*(int32_t *)ary, 10, true, fill_zero, fill_space);
+                  ary += 4;
+                  break;
+                case 2:
+                  DBG_Int(*(int16_t *)ary, 10, true, fill_zero, fill_space);
+                  ary += 2;
+                  break;
+                default:
+                  DBG_Int(*(int8_t *)ary, 10, true, fill_zero, fill_space);
+                  ary++;
+                  break;
               }
               ary_count--;
               if(ary_space_len && ary_count) DBG_String((char *)&ary_space);
@@ -60,7 +81,7 @@ void print_args(const char *format, va_list args)
             int64_t nbr;
             if(long_int) nbr = va_arg(args, int64_t);
             else nbr = va_arg(args, int32_t);
-            DBG_Int(nbr, 10, true, width, precision);
+            DBG_Int(nbr, 10, true, fill_zero, fill_space);
           }
           break;
         }
@@ -69,10 +90,22 @@ void print_args(const char *format, va_list args)
             uint8_t *ary = va_arg(args, uint8_t *);
             while(ary_count) {
               switch(ary_type) {
-                case 8: DBG_Int(*(uint64_t *)ary, 10, false, width, precision); ary += 8; break;
-                case 4: DBG_Int(*(uint32_t *)ary, 10, false, width, precision); ary += 4; break;
-                case 2: DBG_Int(*(uint16_t *)ary, 10, false, width, precision); ary += 2; break;
-                default: DBG_Int(*(uint8_t *)ary, 10, false, width, precision); ary++; break;
+                case 8:
+                  DBG_Int(*(uint64_t *)ary, 10, false, fill_zero, fill_space);
+                  ary += 8;
+                  break;
+                case 4:
+                  DBG_Int(*(uint32_t *)ary, 10, false, fill_zero, fill_space);
+                  ary += 4;
+                  break;
+                case 2:
+                  DBG_Int(*(uint16_t *)ary, 10, false, fill_zero, fill_space);
+                  ary += 2;
+                  break;
+                default:
+                  DBG_Int(*(uint8_t *)ary, 10, false, fill_zero, fill_space);
+                  ary++;
+                  break;
               }
               ary_count--;
               if(ary_space_len && ary_count) DBG_String((char *)&ary_space);
@@ -82,16 +115,16 @@ void print_args(const char *format, va_list args)
             uint64_t nbr;
             if(long_int) nbr = va_arg(args, uint64_t);
             else nbr = va_arg(args, uint32_t);
-            DBG_Int(nbr, 10, false, width, precision);
+            DBG_Int(nbr, 10, false, fill_zero, fill_space);
           }
           break;
         }
         case 'f': {
-          if(default_precision) precision = 3;
+          if(!has_precision) precision = 3;
           fallthrough;
         }
         case 'F': {
-          if(default_precision) precision = 2;
+          if(!has_precision && *format == 'F') precision = 2;
           if(ary_count) {
             float *ary = va_arg(args, float *);
             while(ary_count) {
@@ -108,15 +141,26 @@ void print_args(const char *format, va_list args)
           break;
         }
         case 'x': case 'X': {
-          uint8_t fill_zero = precision > width ? precision : width;
           if(ary_count) {
             uint8_t *ary = va_arg(args, uint8_t *);
             while(ary_count) {
               switch(ary_type) {
-                case 8: DBG_Int(*(uint64_t *)ary, 16, false, fill_zero, fill_zero); ary += 8; break;
-                case 4: DBG_Int(*(uint8_t *)ary, 16, false, fill_zero, fill_zero); ary += 4; break;
-                case 2: DBG_Int(*(uint8_t *)ary, 16, false, fill_zero, fill_zero); ary += 2; break;
-                default: DBG_Int(*(uint8_t *)ary, 16, false, fill_zero, fill_zero); ary++; break;
+                case 8:
+                  DBG_Int(*(uint64_t *)ary, 16, false, fill_zero, fill_space);
+                  ary += 8;
+                  break;
+                case 4:
+                  DBG_Int(*(uint32_t *)ary, 16, false, fill_zero, fill_space);
+                  ary += 4;
+                  break;
+                case 2:
+                  DBG_Int(*(uint16_t *)ary, 16, false, fill_zero, fill_space);
+                  ary += 2;
+                  break;
+                default:
+                  DBG_Int(*(uint8_t *)ary, 16, false, fill_zero, fill_space);
+                  ary++;
+                  break;
               }
               ary_count--;
               if(ary_space_len && ary_count) DBG_String((char *)&ary_space);
@@ -126,7 +170,20 @@ void print_args(const char *format, va_list args)
             uint64_t nbr;
             if(long_int) nbr = va_arg(args, uint64_t);
             else nbr = va_arg(args, uint32_t);
-            DBG_Int(nbr, 16, false, fill_zero, fill_zero);
+            DBG_Int(nbr, 16, false, fill_zero, fill_space);
+          }
+          break;
+        }
+        case 'p': {
+          // Pointer: `0x` prefix + hex digits sized to platform pointer width.
+          // 32-bit (STM32): 8 digits. 64-bit (host build): 16 digits.
+          void *ptr = va_arg(args, void *);
+          DBG_String("0x");
+          if(sizeof(void *) == 8) {
+            DBG_Int((int64_t)(uintptr_t)ptr, 16, false, 16, 16);
+          }
+          else {
+            DBG_Int((uint32_t)(uintptr_t)ptr, 16, false, 8, 8);
           }
           break;
         }
@@ -167,12 +224,14 @@ void print_args(const char *format, va_list args)
             uint8_t *ary = va_arg(args, uint8_t *);
             char **str = va_arg(args, char **);
             while(ary_count) {
-              DBG_String(str[*ary]);
+              uint32_t idx;
               switch(ary_type) {
-                case 4: ary += 4; break;
-                case 2: ary += 2; break;
-                default: ary++; break;
+                case 8: idx = (uint32_t)(*(uint64_t *)ary); ary += 8; break;
+                case 4: idx = *(uint32_t *)ary; ary += 4; break;
+                case 2: idx = *(uint16_t *)ary; ary += 2; break;
+                default: idx = *ary; ary++; break;
               }
+              DBG_String(str[idx]);
               ary_count--;
               if(ary_space_len && ary_count) DBG_String((char *)&ary_space);
             }
@@ -204,11 +263,10 @@ void print_args(const char *format, va_list args)
           break;
         }
         case 'b': {
-          uint8_t fill_zero = precision > width ? precision : width;
           if(ary_count) {
             uint8_t *ary = va_arg(args, uint8_t *);
             while(ary_count) {
-              DBG_Int(*ary, 2, false, fill_zero, fill_zero);
+              DBG_Int(*ary, 2, false, fill_zero, fill_space);
               ary_count--;
               if(ary_space_len && ary_count) DBG_String((char *)&ary_space);
               ary++;
@@ -216,7 +274,7 @@ void print_args(const char *format, va_list args)
           }
           else {
             uint8_t bin = (uint8_t)va_arg(args, int);
-            DBG_Int(bin, 2, false, fill_zero, fill_zero);
+            DBG_Int(bin, 2, false, fill_zero, fill_space);
           }
           break;
         }
@@ -236,8 +294,40 @@ void print_args(const char *format, va_list args)
           }
           break;
         }
+        case 't': {
+          // Current RTC time on demand. No arg consumed.
+          // `%t` -> HH:MM:SS, `%lt` -> HH:MM:SS.mmm
+          // Falls back to tick value when RTC is not initialized.
+          if(RtcInit) {
+            RTC_Datetime_t dt = RTC_Datetime();
+            if(long_int) DBG_TimeMs(&dt);
+            else DBG_Time(&dt);
+          }
+          else DBG_Int(tick_keep(0), 10, false, 0, 0);
+          break;
+        }
+        case 'T': {
+          // Current RTC datetime on demand. No arg consumed.
+          // `%T` -> YYYY-MM-DD HH:MM:SS, `%lT` -> with ms
+          // Falls back to tick value when RTC is not initialized.
+          if(RtcInit) {
+            RTC_Datetime_t dt = RTC_Datetime();
+            if(long_int) DBG_DatetimeMs(&dt);
+            else DBG_Datetime(&dt);
+          }
+          else DBG_Int(tick_keep(0), 10, false, 0, 0);
+          break;
+        }
         case '%': {
           DBG_Char('%');
+          break;
+        }
+        default: {
+          // Unknown specifier: echo raw `%X` so user can spot the typo.
+          // Note: no arg consumed, so subsequent args may misalign.
+          DBG_Char('%');
+          DBG_Char(*format);
+          break;
         }
       }
     }
@@ -259,31 +349,15 @@ void print(const char *template, ...)
   va_end(args);
 }
 
-//------------------------------------------------------------------------------------------------- Log
+//----------------------------------------------------------------------------------------- Log
 
-inline static void LOG_Datetime(void)
+// Common emit path: colored tag + formatted message + newline.
+// No automatic timestamp — use `%t` or `%T` in the format string when needed.
+static void log_emit(const char *color_tag, const char *message, va_list args)
 {
-  if(RtcInit) {
-    RTC_Datetime_t dt = RTC_Datetime();
-    #if(LOG_INCLUDE_MS)
-      #if(LOG_TIME_ONLY)
-        DBG_TimeMs(&dt);
-      #else
-        DBG_DatetimeMs(&dt);
-      #endif
-    #else
-      #if(LOG_TIME_ONLY)
-        DBG_Time(&dt);
-      #else
-        DBG_Datetime(&dt);
-      #endif
-    #endif
-  }
-  else {
-    int64_t tick = tick_keep(0);
-    DBG_Int(tick, 10, false, 8, 8);
-  }
-  DBG_Char(' ');
+  DBG_String((char *)color_tag);
+  print_args(message, args);
+  DBG_Enter();
 }
 
 void LOG_Nope(const char *message, ...)
@@ -291,138 +365,98 @@ void LOG_Nope(const char *message, ...)
   unused(message);
 }
 
-static void LOG_BashArgs(const char *message, va_list args)
-{
-  LOG_Datetime();
-  DBG_String(ANSI_GREEN "INF " ANSI_END);
-  print_args(message, args);
-  DBG_Enter();
-}
-
 void LOG_Bash(const char *message, ...)
 {
   va_list args;
   va_start(args, message);
-  LOG_BashArgs(message, args);
+  log_emit(ANSI_GREEN "INF " ANSI_END, message, args);
   va_end(args);
-}
-
-static void LOG_DebugArgs(const char *message, va_list args)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_DBG)
-    if(!LogPrintFlag) return;
-    LOG_Datetime();
-    DBG_String(ANSI_GREEN "DBG " ANSI_END);
-    print_args(message, args);
-    DBG_Enter();
-  #else
-    unused(message);
-    unused(args);
-  #endif
 }
 
 void LOG_Debug(const char *message, ...)
 {
-  va_list args;
-  va_start(args, message);
-  LOG_DebugArgs(message, args);
-  va_end(args);
-}
-
-static void LOG_InfoArgs(const char *message, va_list args)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_INF)
+  #if(LOG_LEVEL <= LOG_LEVEL_DBG)
     if(!LogPrintFlag) return;
-    LOG_Datetime();
-    DBG_String(ANSI_BLUE "INF " ANSI_END);
-    print_args(message, args);
-    DBG_Enter();
+    va_list args;
+    va_start(args, message);
+    log_emit(ANSI_GREY "DBG " ANSI_END, message, args);
+    va_end(args);
   #else
     unused(message);
-    unused(args);
   #endif
 }
 
 void LOG_Info(const char *message, ...)
 {
-  va_list args;
-  va_start(args, message);
-  LOG_InfoArgs(message, args);
-  va_end(args);
-}
-
-static void LOG_WarningArgs(const char *message, va_list args)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_WRN)
+  #if(LOG_LEVEL <= LOG_LEVEL_INF)
     if(!LogPrintFlag) return;
-    LOG_Datetime();
-    DBG_String(ANSI_YELLOW "WRN " ANSI_END);
-    print_args(message, args);
-    DBG_Enter();
+    va_list args;
+    va_start(args, message);
+    log_emit(ANSI_BLUE "INF " ANSI_END, message, args);
+    va_end(args);
   #else
     unused(message);
-    unused(args);
   #endif
 }
 
 void LOG_Warning(const char *message, ...)
 {
-  va_list args;
-  va_start(args, message);
-  LOG_WarningArgs(message, args);
-  va_end(args);
-}
-
-static void LOG_ErrorArgs(const char *message, va_list args)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_ERR)
+  #if(LOG_LEVEL <= LOG_LEVEL_WRN)
     if(!LogPrintFlag) return;
-    LOG_Datetime();
-    DBG_String(ANSI_RED "ERR " ANSI_END);
-    print_args(message, args);
-    DBG_Enter();
+    va_list args;
+    va_start(args, message);
+    log_emit(ANSI_YELLOW "WRN " ANSI_END, message, args);
+    va_end(args);
   #else
     unused(message);
-    unused(args);
   #endif
 }
 
 void LOG_Error(const char *message, ...)
 {
-  va_list args;
-  va_start(args, message);
-  LOG_ErrorArgs(message, args);
-  va_end(args);
-}
-
-static void LOG_CriticalArgs(const char *message, va_list args)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_CRT)
-    LOG_Datetime();
-    DBG_String(ANSI_MAGENTA "CRT " ANSI_END);
-    print_args(message, args);
-    DBG_Enter();
-    DBG_Send(DbgFile->buffer, DbgFile->size);
-    MBB_Clear(DbgFile);
+  #if(LOG_LEVEL <= LOG_LEVEL_ERR)
+    if(!LogPrintFlag) return;
+    va_list args;
+    va_start(args, message);
+    log_emit(ANSI_RED "ERR " ANSI_END, message, args);
+    va_end(args);
   #else
     unused(message);
-    unused(args);
   #endif
 }
 
 void LOG_Critical(const char *message, ...)
 {
-  va_list args;
-  va_start(args, message);
-  LOG_CriticalArgs(message, args);
-  va_end(args);
+  #if(LOG_LEVEL <= LOG_LEVEL_CRT)
+    va_list args;
+    va_start(args, message);
+    log_emit(ANSI_MAGNTA "CRT " ANSI_END, message, args);
+    va_end(args);
+    DBG_Send(DbgFile->buffer, DbgFile->size);
+    MBB_Clear(DbgFile);
+  #else
+    unused(message);
+  #endif
+}
+
+// Panic emit: format message with args, flush blocking, clear buffer.
+// Used by `LOG_Message(LOG_Level_Panic, ...)`. `LOG_Panic` itself is
+// non-variadic and uses simpler path (raw string only).
+static void log_panic_emit(const char *message, va_list args)
+{
+  DBG_String(ANSI_MAGNTA "PNC " ANSI_END);
+  print_args(message, args);
+  DBG_Enter();
+  DBG_WaitBlock();
+  UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
+  DBG_WaitBlock();
+  MBB_Clear(DbgFile);
 }
 
 void LOG_Panic(const char *message)
 {
   #if(LOG_LEVEL <= LOG_LEVEL_PAC)
-    LOG_Datetime();
-    DBG_String(ANSI_MAGENTA "PNC " ANSI_END);
+    DBG_String(ANSI_MAGNTA "PNC " ANSI_END);
     DBG_String((char *)message);
     DBG_Enter();
     DBG_WaitBlock();
@@ -439,22 +473,44 @@ void LOG_Message(LOG_Level_t lvl, char *message, ...)
   va_list args;
   va_start(args, message);
   switch(lvl) {
-    case LOG_Level_Debug: LOG_DebugArgs(message, args); break;
-    case LOG_Level_Info: LOG_InfoArgs(message, args); break;
-    case LOG_Level_Warning: LOG_WarningArgs(message, args); break;
-    case LOG_Level_Error: LOG_ErrorArgs(message, args); break;
-    case LOG_Level_Critical: LOG_CriticalArgs(message, args); break;
-    case LOG_Level_Panic: LOG_Panic(message); break;
+    #if(LOG_LEVEL <= LOG_LEVEL_DBG)
+      case LOG_Level_Debug:
+        if(LogPrintFlag) log_emit(ANSI_GREY "DBG " ANSI_END, message, args);
+        break;
+    #endif
+    #if(LOG_LEVEL <= LOG_LEVEL_INF)
+      case LOG_Level_Info:
+        if(LogPrintFlag) log_emit(ANSI_BLUE "INF " ANSI_END, message, args);
+        break;
+    #endif
+    #if(LOG_LEVEL <= LOG_LEVEL_WRN)
+      case LOG_Level_Warning:
+        if(LogPrintFlag) log_emit(ANSI_YELLOW "WRN " ANSI_END, message, args);
+        break;
+    #endif
+    #if(LOG_LEVEL <= LOG_LEVEL_ERR)
+      case LOG_Level_Error:
+        if(LogPrintFlag) log_emit(ANSI_RED "ERR " ANSI_END, message, args);
+        break;
+    #endif
+    #if(LOG_LEVEL <= LOG_LEVEL_CRT)
+      case LOG_Level_Critical:
+        log_emit(ANSI_MAGNTA "CRT " ANSI_END, message, args);
+        DBG_Send(DbgFile->buffer, DbgFile->size);
+        MBB_Clear(DbgFile);
+        break;
+    #endif
+    case LOG_Level_Panic: log_panic_emit(message, args); break;
     case LOG_Level_None: break;
+    default: break;
   }
   va_end(args);
 }
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------
 
 void LOG_ErrorParse(const char *value, const char *type)
 {
-  LOG_Error("Parse " ANSI_ORANGE "%s" ANSI_END " to " ANSI_TURQS "%s" ANSI_END " fault", value, type);
+  LOG_Error("Parse " ANSI_ORANGE "%s" ANSI_END " to " ANSI_TURQUS "%s" ANSI_END " fault",
+    value, type);
 }
-
-//-------------------------------------------------------------------------------------------------

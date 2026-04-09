@@ -1,4 +1,4 @@
-/** @file lib/sh/stream.h */
+// lib/sh/stream.h
 
 #ifndef STREAM_H_
 #define STREAM_H_

@@ -1,4 +1,4 @@
-/** @file lib/sys/task.h */
+// lib/sys/task.h
 
 #ifndef TASK_H_
 #define TASK_H_

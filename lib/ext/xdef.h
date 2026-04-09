@@ -61,63 +61,77 @@ typedef enum {
 #endif
 
 #if(ANSI_MODE == 0)
+  #define ANSI_MAROON   ""
   #define ANSI_RED      ""
-  #define ANSI_GREEN    ""
+  #define ANSI_SALMON   ""
+  #define ANSI_ORANGE   ""
+  #define ANSI_GOLD     ""
   #define ANSI_YELLOW   ""
+  #define ANSI_CREAM    ""
+  #define ANSI_LIME     ""
+  #define ANSI_GREEN    ""
+  #define ANSI_TURQUS   ""
+  #define ANSI_TEAL     ""
+  #define ANSI_CYAN     ""
+  #define ANSI_SKY      ""
   #define ANSI_BLUE     ""
   #define ANSI_VIOLET   ""
-  #define ANSI_MAGENTA  ""
+  #define ANSI_PURPLE   ""
+  #define ANSI_MAGNTA   ""
   #define ANSI_PINK     ""
-  #define ANSI_CYAN     ""
   #define ANSI_GREY     ""
-  #define ANSI_DGREY    ""
-  #define ANSI_GOLD     ""
-  #define ANSI_ORANGE   ""
-  #define ANSI_CREAM    ""
-  #define ANSI_TEAL     ""
-  #define ANSI_TURQS    ""
-  #define ANSI_LIME     ""
+  #define ANSI_SILVER   ""
   #define ANSI_WHITE    ""
   #define ANSI_END      ""
 #elif(ANSI_MODE == 1)
+  #define ANSI_MAROON   "\x1B[31m"
   #define ANSI_RED      "\x1B[31m"
+  #define ANSI_SALMON   "\x1B[91m"
+  #define ANSI_ORANGE   "\x1B[91m"
+  #define ANSI_GOLD     "\x1B[33m"
+  #define ANSI_YELLOW   "\x1B[93m"
+  #define ANSI_CREAM    "\x1B[97m"
+  #define ANSI_LIME     "\x1B[92m"
   #define ANSI_GREEN    "\x1B[32m"
-  #define ANSI_YELLOW   "\x1B[33m"
+  #define ANSI_TURQUS   "\x1B[96m"
+  #define ANSI_TEAL     "\x1B[36m"
+  #define ANSI_CYAN     "\x1B[36m"
+  #define ANSI_SKY      "\x1B[94m"
   #define ANSI_BLUE     "\x1B[94m"
   #define ANSI_VIOLET   "\x1B[35m"
-  #define ANSI_MAGENTA  "\x1B[35m"
+  #define ANSI_PURPLE   "\x1B[35m"
+  #define ANSI_MAGNTA   "\x1B[95m"
   #define ANSI_PINK     "\x1B[95m"
-  #define ANSI_CYAN     "\x1B[36m"
-  #define ANSI_GREY     "\x1B[37m"
-  #define ANSI_DGREY    "\x1B[90m"
-  #define ANSI_GOLD     "\x1B[33m"
-  #define ANSI_ORANGE   "\x1B[91m"
-  #define ANSI_CREAM    "\x1B[97m"
-  #define ANSI_TEAL     "\x1B[36m"
-  #define ANSI_TURQS    "\x1B[96m"
-  #define ANSI_LIME     "\x1B[92m"
+  #define ANSI_GREY     "\x1B[90m"
+  #define ANSI_SILVER   "\x1B[37m"
   #define ANSI_WHITE    "\x1B[97m"
   #define ANSI_END      "\x1B[0m"
 #else
-  #define ANSI_RED      "\x1B[38;5;167m"  /* #D75F5F */
-  #define ANSI_GREEN    "\x1B[38;5;71m"   /* #5FD7A7 */
-  #define ANSI_YELLOW   "\x1B[38;5;221m"  /* #FFD75F */
-  #define ANSI_BLUE     "\x1B[38;5;69m"   /* #5F87D7 */
-  #define ANSI_VIOLET   "\x1B[38;5;99m"   /* #875FD7 */
-  #define ANSI_MAGENTA  "\x1B[38;5;135m"  /* #AF87D7 */
-  #define ANSI_PINK     "\x1B[38;5;175m"  /* #D787AF */
-  #define ANSI_CYAN     "\x1B[38;5;44m"   /* #00D7D7 */
-  #define ANSI_GREY     "\x1B[38;5;245m"  /* #8A8A8A */
-  #define ANSI_DGREY    "\x1B[38;5;240m"  /* #585858 */
-  #define ANSI_GOLD     "\x1B[38;5;184m"  /* #D7D700 */
-  #define ANSI_ORANGE   "\x1B[38;5;173m"  /* #D7875F */
-  #define ANSI_CREAM    "\x1B[38;5;230m"  /* #FFFFD7 */
-  #define ANSI_TEAL     "\x1B[38;5;75m"   /* #5FAFFF */
-  #define ANSI_TURQS    "\x1B[38;5;79m"   /* #5FD7AF */
-  #define ANSI_LIME     "\x1B[38;5;112m"  /* #87D75F */
-  #define ANSI_WHITE    "\x1B[38;5;15m"   /* #FFFFFF */
+  #define ANSI_MAROON   "\x1B[38;5;88m"   // #870000
+  #define ANSI_RED      "\x1B[38;5;167m"  // #D75F5F
+  #define ANSI_SALMON   "\x1B[38;5;181m"  // #D7AFAF
+  #define ANSI_ORANGE   "\x1B[38;5;173m"  // #D7875F
+  #define ANSI_GOLD     "\x1B[38;5;178m"  // #D7AF00
+  #define ANSI_YELLOW   "\x1B[38;5;227m"  // #FFFF5F
+  #define ANSI_CREAM    "\x1B[38;5;187m"  // #D7D7AF
+  #define ANSI_LIME     "\x1B[38;5;112m"  // #87D700
+  #define ANSI_GREEN    "\x1B[38;5;71m"   // #5FAF5F
+  #define ANSI_TURQUS   "\x1B[38;5;79m"   // #5FD7AF
+  #define ANSI_TEAL     "\x1B[38;5;37m"   // #00AFAF
+  #define ANSI_CYAN     "\x1B[38;5;44m"   // #00D7D7
+  #define ANSI_SKY      "\x1B[38;5;75m"   // #5FAFFF
+  #define ANSI_BLUE     "\x1B[38;5;69m"   // #5F87FF
+  #define ANSI_VIOLET   "\x1B[38;5;99m"   // #875FFF
+  #define ANSI_PURPLE   "\x1B[38;5;134m"  // #AF5FD7
+  #define ANSI_MAGNTA   "\x1B[38;5;170m"  // #D75FD7
+  #define ANSI_PINK     "\x1B[38;5;168m"  // #D75F87
+  #define ANSI_GREY     "\x1B[38;5;240m"  // #585858
+  #define ANSI_SILVER   "\x1B[38;5;248m"  // #A8A8A8
+  #define ANSI_WHITE    "\x1B[97m"
   #define ANSI_END      "\x1B[0m"
 #endif
+
+#define ANSI_OK " " ANSI_GREEN "OK" ANSI_END
 
 #define ANSI_OK " " ANSI_GREEN "OK" ANSI_END
 

@@ -25,6 +25,7 @@
  * @param[in] reflect_data_out Bit-reflect final CRC
  * @param[in] final_xor XOR mask applied to final CRC
  * @param[in] invert_out Invert final CRC byte order
+ * @param[in,out] table Pointer to 256-entry lookup table buffer
  */
 typedef struct {
   uint8_t width;
@@ -34,9 +35,16 @@ typedef struct {
   bool reflect_data_out;
   uint32_t final_xor;
   bool invert_out;
+  uint32_t *table;
 } CRC_t;
 
 //------------------------------------------------------------------------------------------------- API
+
+/**
+ * @brief Build lookup table for CRC instance. Must be called before `CRC_Run`.
+ * @param[in,out] crc CRC instance with `table` pointing to 256-entry buffer
+ */
+void CRC_Init(CRC_t *crc);
 
 /**
  * @brief Calculate CRC checksum.
@@ -77,15 +85,15 @@ status_t CRC_Ok(const CRC_t *crc, uint8_t *data, uint16_t count);
 //------------------------------------------------------------------------------------------------- Presets
 #if(CRC_PRESETS)
 
-  extern const CRC_t crc32_iso;
-  extern const CRC_t crc32_aixm;
-  extern const CRC_t crc32_autosar;
-  extern const CRC_t crc32_cksum;
-  extern const CRC_t crc16_kermit;
-  extern const CRC_t crc16_modbus;
-  extern const CRC_t crc16_buypass;
-  extern const CRC_t crc8_maxim;
-  extern const CRC_t crc8_smbus;
+  extern CRC_t crc32_iso;
+  extern CRC_t crc32_aixm;
+  extern CRC_t crc32_autosar;
+  extern CRC_t crc32_cksum;
+  extern CRC_t crc16_kermit;
+  extern CRC_t crc16_modbus;
+  extern CRC_t crc16_buypass;
+  extern CRC_t crc8_maxim;
+  extern CRC_t crc8_smbus;
 
 #endif
 //-------------------------------------------------------------------------------------------------

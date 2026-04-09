@@ -2,41 +2,32 @@
 
 #include "rtc.h"
 
-//------------------------------------------------------------------------------------------------- Compatibility Layer
+//------------------------------------------------------------------------------ Compatibility Layer
 
 #if defined(STM32G0)
-  // G0: Status in ICSR, clear via SCR (write-to-clear)
-  #define RTC_SR            (RTC->ICSR)
-  #define RTC_INITF         RTC_ICSR_INITF
-  #define RTC_INIT          RTC_ICSR_INIT
-  #define RTC_ALRAWF        RTC_ICSR_ALRAWF
-  #define RTC_ALRBWF        RTC_ICSR_ALRBWF
-  #define RTC_WUTWF         RTC_ICSR_WUTWF
-  #define RTC_ALRAF         RTC_SR_ALRAF
-  #define RTC_ALRBF         RTC_SR_ALRBF
-  #define RTC_WUTF          RTC_SR_WUTF
-  #define RTC_HAS_SCR       1
+  // G0: status in `ICSR`, clear via `SCR` (write-to-clear)
+  #define RTC_SR        (RTC->ICSR)
+  #define RTC_INITF     RTC_ICSR_INITF
+  #define RTC_INIT      RTC_ICSR_INIT
+  #define RTC_ALRAWF    RTC_ICSR_ALRAWF
+  #define RTC_ALRBWF    RTC_ICSR_ALRBWF
+  #define RTC_WUTWF     RTC_ICSR_WUTWF
+  #define RTC_HAS_SCR   1
 #elif defined(STM32WB)
-  // WB: Status in ISR, clear via ISR (read-modify-write)
-  #define RTC_SR            (RTC->ISR)
-  #define RTC_INITF         RTC_ISR_INITF
-  #define RTC_INIT          RTC_ISR_INIT
-  #define RTC_ALRAWF        RTC_ISR_ALRAWF
-  #define RTC_ALRBWF        RTC_ISR_ALRBWF
-  #define RTC_WUTWF         RTC_ISR_WUTWF
-  #define RTC_ALRAF         RTC_ISR_ALRAF
-  #define RTC_ALRBF         RTC_ISR_ALRBF
-  #define RTC_WUTF          RTC_ISR_WUTF
-  #define RTC_HAS_SCR       0
+  // WB: status in `ISR`, clear via `ISR` (read-modify-write)
+  #define RTC_SR        (RTC->ISR)
+  #define RTC_INITF     RTC_ISR_INITF
+  #define RTC_INIT      RTC_ISR_INIT
+  #define RTC_ALRAWF    RTC_ISR_ALRAWF
+  #define RTC_ALRBWF    RTC_ISR_ALRBWF
+  #define RTC_WUTWF     RTC_ISR_WUTWF
+  #define RTC_HAS_SCR   0
 #endif
 
-//------------------------------------------------------------------------------------------------- Constants
+//--------------------------------------------------------------------------------------- Constants
 
-#define RTC_LSE_FREQUENCY_Hz  32768
-#define PREDIV_SYNC           255
-#define PREDIV_ASYNC          127
-#define RTC_LEAP_YEAR(year)   ((((year) % 4 == 0) && ((year) % 100 != 0)) || ((year) % 400 == 0))
-#define RTC_DAYS_IN_YEAR(x)   (RTC_LEAP_YEAR(x) ? 366 : 365)
+#define RTC_PREDIV_SYNC       255
+#define RTC_PREDIV_ASYNC      127
 #define RTC_OFFSET_YEAR       1970
 #define RTC_SECONDS_IN_WEEK   604800
 #define RTC_SECONDS_IN_DAY    86400
@@ -47,18 +38,19 @@
 #define RTC_WPR_KEY2  0x53
 #define RTC_WPR_LOCK  0xFF
 
-#define RTC_YEAR_MIN        55
+// Minimum sensible year offset from 2000 — used as `RtcReady` sanity check
+#define RTC_YEAR_MIN  26
+
+#define RTC_LEAP_YEAR(y)    ((((y) % 4 == 0) && ((y) % 100 != 0)) || ((y) % 400 == 0))
+#define RTC_DAYS_IN_YEAR(y) (RTC_LEAP_YEAR(y) ? 366 : 365)
 #define RTC_YEAR_VALID(y)   ((y) >= RTC_YEAR_MIN)
+#define RTC_SSR_TO_MS(ssr)  (((RTC_PREDIV_SYNC - (ssr)) * 1000) / (RTC_PREDIV_SYNC + 1))
 
-#define RTC_SSR_TO_MS(ssr)  (((PREDIV_SYNC - (ssr)) * 1000) / (PREDIV_SYNC + 1))
+//--------------------------------------------------------------------------------------- Variables
 
-//------------------------------------------------------------------------------------------------- Variables
-
-static volatile struct {
-  bool alarm_a;
-  bool alarm_b;
-  bool wakeup_timer;
-} rtc_flags;
+static volatile bool rtc_alarm_a_flag;
+static volatile bool rtc_alarm_b_flag;
+static volatile bool rtc_wakeup_flag;
 
 static const uint8_t RTC_DAYS_IN_MONTH[2][12] = {
   { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 },
@@ -66,15 +58,20 @@ static const uint8_t RTC_DAYS_IN_MONTH[2][12] = {
 };
 
 #if(RTC_WEEKDAYS_LONGNAMES)
-  const char *RtcWeekdays[8] = { "Everyday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+  const char *RtcWeekdays[8] = {
+    "Everyday", "Monday", "Tuesday", "Wednesday",
+    "Thursday", "Friday", "Saturday", "Sunday"
+  };
 #else
-  const char *RtcWeekdays[8] = { "Evd", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+  const char *RtcWeekdays[8] = {
+    "Evd", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"
+  };
 #endif
 
 bool RtcReady;
 bool RtcInit;
 
-//------------------------------------------------------------------------------------------------- Static Helpers
+//----------------------------------------------------------------------------------- Static Helpers
 
 static inline void rtc_unlock(void)
 {
@@ -102,19 +99,47 @@ static inline uint32_t rtc_alarm_wf_mask(RTC_Alarm_t alarm)
   return (alarm == RTC_Alarm_A) ? RTC_ALRAWF : RTC_ALRBWF;
 }
 
+/**
+ * @brief Clear RTC status flag — handles G0/WB register layout difference.
+ * @param[in] flag Flag mask (`RTC_SCR_*` on G0, `RTC_ISR_*` on WB)
+ */
 static inline void rtc_clear_flag(uint32_t flag)
 {
   #if RTC_HAS_SCR
-    // G0: write-to-clear SCR register
     RTC->SCR = flag;
   #else
-    // WB: read-modify-write ISR (need unlock)
     rtc_unlock();
     RTC->ISR &= ~flag;
     rtc_lock();
   #endif
 }
 
+/**
+ * @brief Decode RTC `TR` register into hour/minute/second.
+ * @param[in] tr Raw `RTC->TR` value
+ * @param[out] dt Datetime struct to fill
+ */
+static inline void rtc_decode_tr(uint32_t tr, RTC_Datetime_t *dt)
+{
+  dt->hour   = ((tr >> RTC_TR_HT_Pos)  & 0x03) * 10 + ((tr >> RTC_TR_HU_Pos)  & 0x0F);
+  dt->minute = ((tr >> RTC_TR_MNT_Pos) & 0x07) * 10 + ((tr >> RTC_TR_MNU_Pos) & 0x0F);
+  dt->second = ((tr >> RTC_TR_ST_Pos)  & 0x07) * 10 + ((tr >> RTC_TR_SU_Pos)  & 0x0F);
+}
+
+/**
+ * @brief Decode RTC `DR` register into year/month/day/weekday.
+ * @param[in] dr Raw `RTC->DR` value
+ * @param[out] dt Datetime struct to fill
+ */
+static inline void rtc_decode_dr(uint32_t dr, RTC_Datetime_t *dt)
+{
+  dt->year      = ((dr >> RTC_DR_YT_Pos) & 0x0F) * 10 + ((dr >> RTC_DR_YU_Pos) & 0x0F);
+  dt->month     = ((dr >> RTC_DR_MT_Pos) & 0x01) * 10 + ((dr >> RTC_DR_MU_Pos) & 0x0F);
+  dt->month_day = ((dr >> RTC_DR_DT_Pos) & 0x03) * 10 + ((dr >> RTC_DR_DU_Pos) & 0x0F);
+  dt->week_day  = (dr >> RTC_DR_WDU_Pos) & 0x07;
+}
+
+// Compute weekday from datetime, store in `datetime->week_day`, return value
 static uint8_t rtc_weekday_calc(RTC_Datetime_t *datetime)
 {
   uint64_t timestamp = RTC_DatetimeToUnix(datetime);
@@ -122,6 +147,7 @@ static uint8_t rtc_weekday_calc(RTC_Datetime_t *datetime)
   return datetime->week_day;
 }
 
+// Encode datetime to `RTC->DR` register layout (BCD)
 static uint32_t rtc_date_register(const RTC_Datetime_t *date)
 {
   return ((date->year / 10)      << RTC_DR_YT_Pos)  |
@@ -133,6 +159,7 @@ static uint32_t rtc_date_register(const RTC_Datetime_t *date)
          ((date->month_day % 10) << RTC_DR_DU_Pos);
 }
 
+// Encode datetime to `RTC->TR` register layout (BCD)
 static uint32_t rtc_time_register(const RTC_Datetime_t *date)
 {
   return ((date->hour / 10)   << RTC_TR_HT_Pos)  |
@@ -143,8 +170,16 @@ static uint32_t rtc_time_register(const RTC_Datetime_t *date)
          ((date->second % 10) << RTC_TR_SU_Pos);
 }
 
-static bool rtc_check_base(int32_t stamp, int32_t stamp_min, int32_t stamp_max,
-                           int32_t stamp_alarm, uint32_t stamp_reload)
+/**
+ * @brief Check if `stamp_alarm` falls in `[stamp_min, stamp_max]` window with wrap.
+ * @param[in] stamp_min Window start (may be negative → wraps from end)
+ * @param[in] stamp_max Window end (may exceed reload → wraps from start)
+ * @param[in] stamp_alarm Alarm timestamp to test
+ * @param[in] stamp_reload Period length (day or week in seconds)
+ * @return `true` if alarm in window
+ */
+static bool rtc_check_base(int32_t stamp_min, int32_t stamp_max,
+  int32_t stamp_alarm, uint32_t stamp_reload)
 {
   if(stamp_min < 0) {
     stamp_min += stamp_reload;
@@ -157,7 +192,7 @@ static bool rtc_check_base(int32_t stamp, int32_t stamp_min, int32_t stamp_max,
   return (stamp_alarm > stamp_min && stamp_alarm < stamp_max);
 }
 
-//------------------------------------------------------------------------------------------------- Init
+//--------------------------------------------------------------------------------------------- Init
 
 void RTC_Init(void)
 {
@@ -173,14 +208,14 @@ void RTC_Init(void)
   PWR->CR1 |= PWR_CR1_DBP;
   // Enable LSE
   RCC->BDCR |= RCC_BDCR_LSEON;
-  while(!(RCC->BDCR & RCC_BDCR_LSERDY)) __DSB();
+  while(!(RCC->BDCR & RCC_BDCR_LSERDY)) __NOP();
   // Select LSE and enable RTC
   RCC->BDCR |= RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
   // Enable interrupts
   rtc_unlock();
   RTC->CR |= RTC_CR_TSIE | RTC_CR_WUTIE | RTC_CR_ALRBIE | RTC_CR_ALRAIE;
   rtc_lock();
-  // Configure NVIC
+  // NVIC
   #if defined(STM32G0)
     NVIC_ClearPendingIRQ(RTC_TAMP_IRQn);
     NVIC_EnableIRQ(RTC_TAMP_IRQn);
@@ -196,7 +231,7 @@ void RTC_Init(void)
   RtcInit = true;
 }
 
-//------------------------------------------------------------------------------------------------- Convert
+//------------------------------------------------------------------------------------------ Convert
 
 RTC_Datetime_t RTC_UnixToDatetime(uint64_t timestamp)
 {
@@ -232,7 +267,9 @@ uint64_t RTC_DatetimeToUnix(const RTC_Datetime_t *date)
   uint16_t year = (uint16_t)(date->year + 2000);
   if(year < RTC_OFFSET_YEAR) return 0;
   for(uint16_t i = RTC_OFFSET_YEAR; i < year; i++) days += RTC_DAYS_IN_YEAR(i);
-  for(uint16_t i = 1; i < date->month; i++) days += RTC_DAYS_IN_MONTH[RTC_LEAP_YEAR(year)][i - 1];
+  for(uint16_t i = 1; i < date->month; i++) {
+    days += RTC_DAYS_IN_MONTH[RTC_LEAP_YEAR(year)][i - 1];
+  }
   days += date->month_day - 1;
   return (uint64_t)days * RTC_SECONDS_IN_DAY +
          date->hour * RTC_SECONDS_IN_HOUR +
@@ -254,13 +291,13 @@ bool RTC_DatetimeIsCorrect(const RTC_Datetime_t *date, int8_t time_zone)
     if(diff > 3600) return false;
   }
   return RTC_YEAR_VALID(date->year) &&
-    date->second < 60 &&
-    date->hour <= 23 &&
-    date->month > 0 && date->month <= 12 &&
-    date->month_day > 0 && date->month_day <= 31;
+         date->second < 60 &&
+         date->hour <= 23 &&
+         date->month > 0 && date->month <= 12 &&
+         date->month_day > 0 && date->month_day <= 31;
 }
 
-//------------------------------------------------------------------------------------------------- Convert Alarm
+//------------------------------------------------------------------------------------ Convert Alarm
 
 RTC_AlarmCfg_t RTC_DaystampToAlarm(uint32_t stamp)
 {
@@ -291,21 +328,18 @@ uint32_t RTC_AlarmToDaystamp(const RTC_AlarmCfg_t *alarm)
 
 uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm)
 {
-  return (alarm->day - 1) * RTC_SECONDS_IN_DAY +
-         alarm->hour * RTC_SECONDS_IN_HOUR +
-         alarm->minute * RTC_SECONDS_IN_MIN +
-         alarm->second;
+  return (alarm->day - 1) * RTC_SECONDS_IN_DAY + RTC_AlarmToDaystamp(alarm);
 }
 
-//------------------------------------------------------------------------------------------------- Set
+//---------------------------------------------------------------------------------------------- Set
 
 void RTC_SetDatetime(RTC_Datetime_t *datetime)
 {
   rtc_weekday_calc(datetime);
   rtc_unlock();
   RTC_SR |= RTC_INIT;
-  while(!(RTC_SR & RTC_INITF)) __DSB();
-  RTC->PRER = (PREDIV_ASYNC << RTC_PRER_PREDIV_A_Pos) | PREDIV_SYNC;
+  while(!(RTC_SR & RTC_INITF)) __NOP();
+  RTC->PRER = (RTC_PREDIV_ASYNC << RTC_PRER_PREDIV_A_Pos) | RTC_PREDIV_SYNC;
   RTC->TR = rtc_time_register(datetime);
   RTC->DR = rtc_date_register(datetime);
   RTC_SR &= ~RTC_INIT;
@@ -329,35 +363,25 @@ void RTC_Reset(void)
   RtcReady = false;
 }
 
-//------------------------------------------------------------------------------------------------- Get
+//---------------------------------------------------------------------------------------------- Get
 
 RTC_Datetime_t RTC_Datetime(void)
 {
+  // Read SSR first, then TR, then DR — order required by RM to unlock shadow regs
   uint32_t ssr = RTC->SSR;
   uint32_t tr = RTC->TR;
   uint32_t dr = RTC->DR;
-  return (RTC_Datetime_t){
-    .year      = ((dr >> RTC_DR_YT_Pos) & 0x0F) * 10 + ((dr >> RTC_DR_YU_Pos) & 0x0F),
-    .month     = ((dr >> RTC_DR_MT_Pos) & 0x01) * 10 + ((dr >> RTC_DR_MU_Pos) & 0x0F),
-    .month_day = ((dr >> RTC_DR_DT_Pos) & 0x03) * 10 + ((dr >> RTC_DR_DU_Pos) & 0x0F),
-    .week_day  = (dr >> RTC_DR_WDU_Pos) & 0x07,
-    .hour      = ((tr >> RTC_TR_HT_Pos) & 0x03) * 10 + ((tr >> RTC_TR_HU_Pos) & 0x0F),
-    .minute    = ((tr >> RTC_TR_MNT_Pos) & 0x07) * 10 + ((tr >> RTC_TR_MNU_Pos) & 0x0F),
-    .second    = ((tr >> RTC_TR_ST_Pos) & 0x07) * 10 + ((tr >> RTC_TR_SU_Pos) & 0x0F),
-    .ms        = RTC_SSR_TO_MS(ssr)
-  };
+  RTC_Datetime_t dt;
+  rtc_decode_tr(tr, &dt);
+  rtc_decode_dr(dr, &dt);
+  dt.ms = RTC_SSR_TO_MS(ssr);
+  return dt;
 }
 
 uint64_t RTC_Timestamp(void)
 {
-  return RTC_DatetimeToUnix(&(RTC_Datetime_t){
-    .year      = ((RTC->DR >> RTC_DR_YT_Pos) & 0x0F) * 10 + ((RTC->DR >> RTC_DR_YU_Pos) & 0x0F),
-    .month     = ((RTC->DR >> RTC_DR_MT_Pos) & 0x01) * 10 + ((RTC->DR >> RTC_DR_MU_Pos) & 0x0F),
-    .month_day = ((RTC->DR >> RTC_DR_DT_Pos) & 0x03) * 10 + ((RTC->DR >> RTC_DR_DU_Pos) & 0x0F),
-    .hour      = ((RTC->TR >> RTC_TR_HT_Pos) & 0x03) * 10 + ((RTC->TR >> RTC_TR_HU_Pos) & 0x0F),
-    .minute    = ((RTC->TR >> RTC_TR_MNT_Pos) & 0x07) * 10 + ((RTC->TR >> RTC_TR_MNU_Pos) & 0x0F),
-    .second    = ((RTC->TR >> RTC_TR_ST_Pos) & 0x07) * 10 + ((RTC->TR >> RTC_TR_SU_Pos) & 0x0F)
-  });
+  RTC_Datetime_t dt = RTC_Datetime();
+  return RTC_DatetimeToUnix(&dt);
 }
 
 uint64_t RTC_TimestampMs(void)
@@ -368,25 +392,20 @@ uint64_t RTC_TimestampMs(void)
 
 uint32_t RTC_Daystamp(void)
 {
-  uint32_t tr = RTC->TR;
-  uint32_t hour = ((tr >> RTC_TR_HT_Pos) & 0x03) * 10 + ((tr >> RTC_TR_HU_Pos) & 0x0F);
-  uint32_t min = ((tr >> RTC_TR_MNT_Pos) & 0x07) * 10 + ((tr >> RTC_TR_MNU_Pos) & 0x0F);
-  uint32_t sec = ((tr >> RTC_TR_ST_Pos) & 0x07) * 10 + ((tr >> RTC_TR_SU_Pos) & 0x0F);
-  return hour * RTC_SECONDS_IN_HOUR + min * RTC_SECONDS_IN_MIN + sec;
+  RTC_Datetime_t dt = RTC_Datetime();
+  return dt.hour * RTC_SECONDS_IN_HOUR + dt.minute * RTC_SECONDS_IN_MIN + dt.second;
 }
 
 uint32_t RTC_Weekstamp(void)
 {
-  uint32_t tr = RTC->TR;
-  uint32_t dr = RTC->DR;
-  uint32_t wday = (dr >> RTC_DR_WDU_Pos) & 0x07;
-  uint32_t hour = ((tr >> RTC_TR_HT_Pos) & 0x03) * 10 + ((tr >> RTC_TR_HU_Pos) & 0x0F);
-  uint32_t min = ((tr >> RTC_TR_MNT_Pos) & 0x07) * 10 + ((tr >> RTC_TR_MNU_Pos) & 0x0F);
-  uint32_t sec = ((tr >> RTC_TR_ST_Pos) & 0x07) * 10 + ((tr >> RTC_TR_SU_Pos) & 0x0F);
-  return (wday - 1) * RTC_SECONDS_IN_DAY + hour * RTC_SECONDS_IN_HOUR + min * RTC_SECONDS_IN_MIN + sec;
+  RTC_Datetime_t dt = RTC_Datetime();
+  return (dt.week_day - 1) * RTC_SECONDS_IN_DAY +
+         dt.hour * RTC_SECONDS_IN_HOUR +
+         dt.minute * RTC_SECONDS_IN_MIN +
+         dt.second;
 }
 
-//------------------------------------------------------------------------------------------------- Alarm Get
+//---------------------------------------------------------------------------------------- Alarm Get
 
 RTC_AlarmCfg_t RTC_Alarm(RTC_Alarm_t alarm)
 {
@@ -397,10 +416,10 @@ RTC_AlarmCfg_t RTC_Alarm(RTC_Alarm_t alarm)
     .hour_mask   = !!(reg & RTC_ALRMAR_MSK3),
     .minute_mask = !!(reg & RTC_ALRMAR_MSK2),
     .second_mask = !!(reg & RTC_ALRMAR_MSK1),
-    .day    = ((reg >> RTC_ALRMAR_DT_Pos) & 0x03) * 10 + ((reg >> RTC_ALRMAR_DU_Pos) & 0x0F),
-    .hour   = ((reg >> RTC_ALRMAR_HT_Pos) & 0x03) * 10 + ((reg >> RTC_ALRMAR_HU_Pos) & 0x0F),
+    .day    = ((reg >> RTC_ALRMAR_DT_Pos)  & 0x03) * 10 + ((reg >> RTC_ALRMAR_DU_Pos)  & 0x0F),
+    .hour   = ((reg >> RTC_ALRMAR_HT_Pos)  & 0x03) * 10 + ((reg >> RTC_ALRMAR_HU_Pos)  & 0x0F),
     .minute = ((reg >> RTC_ALRMAR_MNT_Pos) & 0x07) * 10 + ((reg >> RTC_ALRMAR_MNU_Pos) & 0x0F),
-    .second = ((reg >> RTC_ALRMAR_ST_Pos) & 0x07) * 10 + ((reg >> RTC_ALRMAR_SU_Pos) & 0x0F),
+    .second = ((reg >> RTC_ALRMAR_ST_Pos)  & 0x07) * 10 + ((reg >> RTC_ALRMAR_SU_Pos)  & 0x0F),
   };
 }
 
@@ -410,7 +429,7 @@ uint32_t RTC_AlarmDaystamp(RTC_Alarm_t alarm)
   return RTC_AlarmToDaystamp(&cfg);
 }
 
-//------------------------------------------------------------------------------------------------- Alarm Enable
+//------------------------------------------------------------------------------------ Alarm Control
 
 bool RTC_AlarmIsEnabled(RTC_Alarm_t alarm)
 {
@@ -422,7 +441,7 @@ void RTC_AlarmEnable(RTC_Alarm_t alarm, const RTC_AlarmCfg_t *cfg)
   uint32_t mask = rtc_alarm_mask(alarm);
   rtc_unlock();
   RTC->CR &= ~mask;
-  while(!(RTC_SR & rtc_alarm_wf_mask(alarm))) __DSB();
+  while(!(RTC_SR & rtc_alarm_wf_mask(alarm))) __NOP();
   *rtc_alarm_reg(alarm) =
     (cfg->week         << RTC_ALRMAR_WDSEL_Pos) |
     (cfg->day_mask     << RTC_ALRMAR_MSK4_Pos)  |
@@ -461,17 +480,19 @@ void RTC_AlarmIntervalEnable(RTC_Alarm_t alarm, uint32_t interval_sec)
 
 void RTC_AlarmDisable(RTC_Alarm_t alarm)
 {
+  rtc_unlock();
   RTC->CR &= ~rtc_alarm_mask(alarm);
+  rtc_lock();
 }
 
-//------------------------------------------------------------------------------------------------- Wakeup Timer
+//-------------------------------------------------------------------------------------- Wakeup Timer
 
 void RTC_WakeupTimerEnable(uint32_t sec)
 {
-  rtc_flags.wakeup_timer = false;
+  rtc_wakeup_flag = false;
   rtc_unlock();
   RTC->CR &= ~RTC_CR_WUTE;
-  while(!(RTC_SR & RTC_WUTWF));
+  while(!(RTC_SR & RTC_WUTWF)) __NOP();
   RTC->CR = (RTC->CR & ~RTC_CR_WUCKSEL_1) | RTC_CR_WUCKSEL_2;
   RTC->WUTR = sec - 1;
   RTC->CR |= RTC_CR_WUTE;
@@ -485,88 +506,90 @@ void RTC_WakeupTimerDisable(void)
   rtc_lock();
 }
 
-//------------------------------------------------------------------------------------------------- Alarm Check
+//-------------------------------------------------------------------------------------- Alarm Check
 
 bool RTC_CheckDaystamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec)
 {
   int32_t daystamp = (int32_t)RTC_Daystamp();
-  return rtc_check_base(daystamp, daystamp - offset_min_sec, daystamp + offset_max_sec,
-                        (int32_t)stamp_alarm, RTC_SECONDS_IN_DAY);
+  return rtc_check_base(daystamp - offset_min_sec, daystamp + offset_max_sec,
+    (int32_t)stamp_alarm, RTC_SECONDS_IN_DAY);
 }
 
 bool RTC_CheckWeekstamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec)
 {
   int32_t weekstamp = (int32_t)RTC_Weekstamp();
-  return rtc_check_base(weekstamp, weekstamp - offset_min_sec, weekstamp + offset_max_sec,
-                        (int32_t)stamp_alarm, RTC_SECONDS_IN_WEEK);
+  return rtc_check_base(weekstamp - offset_min_sec, weekstamp + offset_max_sec,
+    (int32_t)stamp_alarm, RTC_SECONDS_IN_WEEK);
 }
 
 bool RTC_AlarmCheck(RTC_Alarm_t alarm, uint32_t offset_min_sec, uint32_t offset_max_sec)
 {
   if(!RTC_AlarmIsEnabled(alarm)) return false;
   RTC_AlarmCfg_t cfg = RTC_Alarm(alarm);
-  if(cfg.day_mask) return RTC_CheckDaystamp(RTC_AlarmToDaystamp(&cfg), offset_min_sec, offset_max_sec);
+  if(cfg.day_mask) {
+    return RTC_CheckDaystamp(RTC_AlarmToDaystamp(&cfg), offset_min_sec, offset_max_sec);
+  }
   return RTC_CheckWeekstamp(RTC_AlarmToWeekstamp(&cfg), offset_min_sec, offset_max_sec);
 }
 
-//------------------------------------------------------------------------------------------------- Event
+//-------------------------------------------------------------------------------------------- Event
 
 bool RTC_Event(RTC_Alarm_t alarm)
 {
-  volatile bool *flag = (alarm == RTC_Alarm_A) ? &rtc_flags.alarm_a : &rtc_flags.alarm_b;
+  volatile bool *flag = (alarm == RTC_Alarm_A) ? &rtc_alarm_a_flag : &rtc_alarm_b_flag;
   if(*flag) { *flag = false; return true; }
   return false;
 }
 
 bool RTC_EventWakeupTimer(void)
 {
-  if(rtc_flags.wakeup_timer) { rtc_flags.wakeup_timer = false; return true; }
+  if(rtc_wakeup_flag) { rtc_wakeup_flag = false; return true; }
   return false;
 }
 
 void RTC_Force(RTC_Alarm_t alarm)
 {
-  if(alarm == RTC_Alarm_A) rtc_flags.alarm_a = true;
-  else rtc_flags.alarm_b = true;
+  if(alarm == RTC_Alarm_A) rtc_alarm_a_flag = true;
+  else rtc_alarm_b_flag = true;
 }
 
 void RTC_ForceWakeupTimer(void)
 {
-  rtc_flags.wakeup_timer = true;
+  rtc_wakeup_flag = true;
 }
 
-//------------------------------------------------------------------------------------------------- IRQ Handlers
+//------------------------------------------------------------------------------------- IRQ Handlers
 
 #if defined(STM32G0)
-// G0: Single handler for all RTC interrupts
+// G0: single handler for all RTC interrupts
 void RTC_TAMP_IRQHandler(void)
 {
   if(RTC->SR & RTC_SR_ALRAF) {
     rtc_clear_flag(RTC_SCR_CALRAF);
-    rtc_flags.alarm_a = true;
+    rtc_alarm_a_flag = true;
   }
   if(RTC->SR & RTC_SR_ALRBF) {
     rtc_clear_flag(RTC_SCR_CALRBF);
-    rtc_flags.alarm_b = true;
+    rtc_alarm_b_flag = true;
   }
   if(RTC->SR & RTC_SR_WUTF) {
     rtc_clear_flag(RTC_SCR_CWUTF);
-    rtc_flags.wakeup_timer = true;
+    rtc_wakeup_flag = true;
   }
   NVIC_ClearPendingIRQ(RTC_TAMP_IRQn);
 }
 
 #elif defined(STM32WB)
-// WB: Separate handlers for alarms and wakeup
+// WB: separate handlers for alarms and wakeup
 void RTC_Alarm_IRQHandler(void)
 {
   if(RTC->ISR & RTC_ISR_ALRAF) {
     rtc_clear_flag(RTC_ISR_ALRAF);
-    rtc_flags.alarm_a = true;
+    rtc_alarm_a_flag = true;
   }
   if(RTC->ISR & RTC_ISR_ALRBF) {
     rtc_clear_flag(RTC_ISR_ALRBF);
-    rtc_flags.alarm_b = true;
+    rtc_alarm_b_flag = true;
   }
   EXTI->PR1 = EXTI_PR1_PIF17; // Clear EXTI line 17 (RTC Alarm)
   NVIC_ClearPendingIRQ(RTC_Alarm_IRQn);
@@ -576,11 +599,11 @@ void RTC_WKUP_IRQHandler(void)
 {
   if(RTC->ISR & RTC_ISR_WUTF) {
     rtc_clear_flag(RTC_ISR_WUTF);
-    rtc_flags.wakeup_timer = true;
+    rtc_wakeup_flag = true;
   }
   EXTI->PR1 = EXTI_PR1_PIF20; // Clear EXTI line 20 (RTC Wakeup)
   NVIC_ClearPendingIRQ(RTC_WKUP_IRQn);
 }
 #endif
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------

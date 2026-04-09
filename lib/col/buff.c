@@ -166,9 +166,9 @@ uint16_t BUFF_Read(BUFF_t *buff, uint8_t *dst)
     if(buff->tail >= buff->end_memory) buff->tail = buff->memory;
     n--;
   }
+  buff->msg_size[buff->msg_tail] = 0;
   buff->msg_tail++;
   if(buff->msg_tail >= BUFF_MESSAGE_LIMIT) buff->msg_tail = 0;
-  buff->msg_size[buff->msg_tail] = 0;
   return size;
 }
 
