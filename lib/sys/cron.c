@@ -46,6 +46,14 @@ void CRON_Init(void)
 uint16_t CRON_Add(const CRON_t *task)
 {
   if(!task) return 0;
+  if(!task->Handler) {
+    CRON_LOG("Add fault: null handler");
+    return 0;
+  }
+  if(!task->minute || !task->hour || !task->month_day || !task->month || !task->week_day) {
+    CRON_LOG("Add fault: empty field");
+    return 0;
+  }
   for(uint16_t i = 0; i < CRON_MAX_TASKS; i++) {
     if(!tasks[i]._used) {
       tasks[i] = *task;
