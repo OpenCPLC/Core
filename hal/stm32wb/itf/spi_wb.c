@@ -1,4 +1,4 @@
-// hal/stm32wb/spi_wb.c
+// hal/stm32wb/itf/spi_wb.c
 
 #include "spi.h"
 #include "dma.h"

@@ -1,4 +1,4 @@
-/** @file plc/brd/dio/opencplc_dio.h */
+// plc/brd/dio/opencplc_dio.h
 
 #ifndef OPENCPLC_DIO_H_
 #define OPENCPLC_DIO_H_
@@ -31,7 +31,7 @@
   #define PLC_ARR_INIT(clock, center_aligned) TIM_ARR_INIT(1000, clock, center_aligned)
 #endif
 
-// Wyjścia cyfrowe tranzystorowe (TO)
+// Transistor outputs (TO)
 extern DOUT_t TO1, TO2, TO3, TO4, TO5, TO6;
 extern DOUT_t TO7, TO8, TO9, TO10, TO11, TO12;
 
@@ -42,11 +42,11 @@ void TO6_Frequency(float frequency);
 void TO7A_Frequency(float frequency);
 void TO_Frequency(float frequency);
 
-// Wejścia cyfrowe (DI)
+// Digital inputs (DI)
 extern DIN_t DI1, DI2, DI3, DI4, DI5, DI6;
 extern DIN_t DI7, DI8, DI9, DI10, DI11, DI12;
 
-// Wejścia analogowe (AI)
+// Analog inputs (AI)
 extern AIN_t AI1;
 extern AIN_t AI2;
 extern AIN_t AI3;

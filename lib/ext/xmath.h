@@ -1,4 +1,4 @@
-/** @file lib/ext/xmath.h */
+// lib/ext/xmath.h
 
 #ifndef XMATH_H_
 #define XMATH_H_
@@ -114,6 +114,15 @@ void convert_u16_to_i32(const uint16_t *u16, int32_t *i32, uint16_t len);
  * @return Mean value of middle third as `float`.
  */
 float mid_mean_u16(uint16_t *buff, uint16_t len);
+
+/**
+ * @brief Signed counterpart of `mid_mean_u16` for `int16_t` samples.
+ * @note Reorders input buffer in-place. For `len <= 2`, returns simple average.
+ * @param[in,out] buff Pointer to input sample buffer.
+ * @param[in] len Number of elements in `buff`.
+ * @return Mean value of middle third as `float`.
+ */
+float mid_mean_i16(int16_t *buff, uint16_t len);
 
 /**
  * @brief Calculates RMS value of an `int32_t` sample array.

@@ -38,7 +38,7 @@
 #define RTC_WPR_KEY2  0x53
 #define RTC_WPR_LOCK  0xFF
 
-// Minimum sensible year offset from 2000 — used as `RtcReady` sanity check
+// Minimum sensible year offset from 2000, used as `RtcReady` sanity check
 #define RTC_YEAR_MIN  26
 
 #define RTC_LEAP_YEAR(y)    ((((y) % 4 == 0) && ((y) % 100 != 0)) || ((y) % 400 == 0))
@@ -100,7 +100,7 @@ static inline uint32_t rtc_alarm_wf_mask(RTC_Alarm_t alarm)
 }
 
 /**
- * @brief Clear RTC status flag — handles G0/WB register layout difference.
+ * @brief Clear RTC status flag. Handles G0/WB register layout difference.
  * @param[in] flag Flag mask (`RTC_SCR_*` on G0, `RTC_ISR_*` on WB)
  */
 static inline void rtc_clear_flag(uint32_t flag)
@@ -367,7 +367,7 @@ void RTC_Reset(void)
 
 RTC_Datetime_t RTC_Datetime(void)
 {
-  // Read SSR first, then TR, then DR — order required by RM to unlock shadow regs
+  // Read SSR first, then TR, then DR. Order required by RM to unlock shadow regs
   uint32_t ssr = RTC->SSR;
   uint32_t tr = RTC->TR;
   uint32_t dr = RTC->DR;

@@ -1,4 +1,4 @@
-// hal/stm32wb/adc_wb.h
+// hal/stm32wb/per/adc_wb.h
 
 #ifndef ADC_WB_H_
 #define ADC_WB_H_

@@ -87,7 +87,7 @@ bool HD44780_Home(HD44780_t *hd)
   return true;
 }
 
-bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_e exec)
+bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_t exec)
 {
   switch(exec) {
     case HD44780_Exec_ScreanOn: hd->_display |= HD44780_Display_ScreanOn; break;

@@ -17,7 +17,7 @@ typedef enum {
   RGB_Cyan = 5,
   RGB_Magenta = 6,
   RGB_White = 7
-} RGB_e;
+} RGB_Color_t;
 
 #define RGB_END_COLOR RGB_White
 
@@ -25,7 +25,7 @@ typedef struct {
   GPIO_t *red;
   GPIO_t *green;
   GPIO_t *blue;
-  RGB_e state;
+  RGB_Color_t state;
   uint16_t blink_ms;
   uint64_t tick;
   bool blink_on;
@@ -33,7 +33,7 @@ typedef struct {
 } RGB_t;
 
 void RGB_Init(RGB_t *rgb);
-void RGB_Set(RGB_t *rgb, RGB_e color);
+void RGB_Set(RGB_t *rgb, RGB_Color_t color);
 void RGB_Rst(RGB_t *rgb);
 void RGB_Tgl(RGB_t *rgb);
 void RGB_Loop(RGB_t *rgb);
@@ -52,14 +52,14 @@ typedef enum {
   RGB_Hash_Cyan = 2090166448,
   RGB_Hash_Magenta = 3021013506,
   RGB_Hash_White = 279132550
-} RGB_Hash_e;
+} RGB_Hash_t;
 
 void LED_Focus(RGB_t *rgb);
-void LED_Set(RGB_e color);
+void LED_Set(RGB_Color_t color);
 void LED_Rst(void);
 void LED_Blink_ON(uint16_t ms);
 void LED_Blink_OFF(void);
-void LED_OneShoot(RGB_e color, uint16_t ms);
+void LED_OneShoot(RGB_Color_t color, uint16_t ms);
 void LED_Bash(char **argv, uint16_t argc);
 
 //-------------------------------------------------------------------------------------------------

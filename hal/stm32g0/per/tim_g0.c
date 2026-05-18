@@ -1,4 +1,4 @@
-// hal/stm32g0/tim_g0.c
+// hal/stm32g0/per/tim_g0.c
 
 #include "tim.h"
 

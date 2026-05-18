@@ -5,7 +5,6 @@
 
 #include "gpio.h"
 #include "tim.h"
-#include "gpio.h"
 #include "xmath.h"
 #include "vrts.h"
 #include "main.h"

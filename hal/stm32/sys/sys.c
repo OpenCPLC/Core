@@ -70,6 +70,9 @@ void panic(const char *message)
   }
 }
 
+// Canary checked by `memory_guard` thread. `volatile` is required: without it the
+// compiler would constant-fold the `!= 0xA5A5DEAD` check to always-false. The point
+// is to detect external modification (stack overflow, DMA misconfig, wild pointer).
 volatile static uint32_t memory_guard_code = 0xA5A5DEAD;
 
 /**

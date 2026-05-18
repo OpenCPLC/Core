@@ -123,52 +123,86 @@ void TIM_Init(TIM_t *tim);
  * @brief Start timer.
  * @param[in,out] tim Timer instance
  */
-void TIM_Enable(TIM_t *tim);
+static inline void TIM_Enable(TIM_t *tim)
+{
+  tim->reg->CR1 |= TIM_CR1_CEN;
+  tim->reg->SR &= ~TIM_SR_UIF;
+  tim->enable = true;
+}
 
 /**
  * @brief Stop timer.
  * @param[in,out] tim Timer instance
  */
-void TIM_Disable(TIM_t *tim);
+static inline void TIM_Disable(TIM_t *tim)
+{
+  tim->reg->CR1 &= ~TIM_CR1_CEN;
+  tim->_event_cnt = 0;
+  tim->enable = false;
+}
 
 /**
  * @brief Enable update interrupt.
  * @param[in,out] tim Timer instance
  */
-void TIM_InterruptEnable(TIM_t *tim);
+static inline void TIM_InterruptEnable(TIM_t *tim)
+{
+  tim->reg->DIER |= TIM_DIER_UIE;
+  tim->enable_interrupt = true;
+}
 
 /**
  * @brief Disable update interrupt.
  * @param[in,out] tim Timer instance
  */
-void TIM_InterruptDisable(TIM_t *tim);
+static inline void TIM_InterruptDisable(TIM_t *tim)
+{
+  tim->reg->DIER &= ~TIM_DIER_UIE;
+  tim->_event_cnt = 0;
+  tim->enable_interrupt = false;
+}
 
 /**
  * @brief Check if timer is running.
  * @param[in] tim Timer instance
  * @return `true` if enabled
  */
-bool TIM_IsEnable(TIM_t *tim);
+static inline bool TIM_IsEnable(TIM_t *tim)
+{
+  return tim->reg->CR1 & TIM_CR1_CEN_Msk;
+}
 
 /**
  * @brief Check if timer is stopped.
  * @param[in] tim Timer instance
  * @return `true` if disabled
  */
-bool TIM_IsDisable(TIM_t *tim);
+static inline bool TIM_IsDisable(TIM_t *tim)
+{
+  return !(tim->reg->CR1 & TIM_CR1_CEN_Msk);
+}
 
 /**
  * @brief Reset counter to zero.
  * @param[in,out] tim Timer instance
  */
-void TIM_ResetValue(TIM_t *tim);
+static inline void TIM_ResetValue(TIM_t *tim)
+{
+  tim->reg->EGR = TIM_EGR_UG;
+  tim->reg->SR = 0;
+  tim->_event_cnt = 0;
+}
 
 /**
  * @brief Get current counter value.
  * @param[in] tim Timer instance
  * @return Counter value
  */
-uint32_t TIM_GetValue(TIM_t *tim);
+static inline uint32_t TIM_GetValue(TIM_t *tim)
+{
+  if(TIM_Is32bit(tim->reg)) return tim->reg->CNT;
+  else return tim->reg->CNT & 0x0000FFFF;
+}
 
 /**
  * @brief Set prescaler value.
@@ -218,7 +252,13 @@ void DELAY_Init(TIM_t *tim, TIM_BaseTime_t base_time);
  * @param[in,out] tim Timer instance
  * @param[in] value Delay in `base_time` units
  */
-void DELAY_Wait(TIM_t *tim, uint32_t value);
+static inline void DELAY_Wait(TIM_t *tim, uint32_t value)
+{
+  tim->reg->ARR = value;
+  tim->reg->CR1 = TIM_CR1_CEN;
+  while(!tim->reg->SR);
+  tim->reg->SR = 0;
+}
 
 //------------------------------------------------------------------------------------------------- Channel Map
 

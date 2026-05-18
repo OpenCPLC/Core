@@ -1,4 +1,4 @@
-// hal/stm32g0/i2c_g0.c
+// hal/stm32g0/itf/i2c_g0.c
 
 #include "i2c.h"
 

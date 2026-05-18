@@ -1,4 +1,4 @@
-// lib/col/heap.c
+// lib/sys/heap.c
 
 #include "heap.h"
 #include "vrts.h"

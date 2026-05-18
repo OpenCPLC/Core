@@ -19,9 +19,9 @@ const CRC_t shtc3_crc = {
 
 static bool SHTC3_SendCommand(SHTC3_t *shtc3, SHTC3_CMD_t cmd)
 {
-	shtc3->buff_tx[0] = (uint8_t)(cmd >> 8);
-	shtc3->buff_tx[1] = (uint8_t)(cmd);
-	return TWI_Write(SHTC3_ADRRESS, shtc3->buff_tx, 2);
+  shtc3->buff_tx[0] = (uint8_t)(cmd >> 8);
+  shtc3->buff_tx[1] = (uint8_t)(cmd);
+  return TWI_Write(SHTC3_ADRRESS, shtc3->buff_tx, 2);
 }
 
 static bool SHTC3_WakeUp(SHTC3_t *shtc3)
@@ -53,16 +53,16 @@ static bool SHTC3_Sleep(SHTC3_t *shtc3)
 static bool SHTC3_CheckAppend(SHTC3_t *shtc3)
 {
   if((uint8_t)CRC_Run(&shtc3_crc, &shtc3->buff_rx[0], 2) != shtc3->buff_rx[2]) return false;
-	if((uint8_t)CRC_Run(&shtc3_crc, &shtc3->buff_rx[3], 2) != shtc3->buff_rx[5]) return false;
-	shtc3->raw.humidity += ((int32_t) shtc3->buff_rx[3] << 8 | shtc3->buff_rx[4]);
-	shtc3->raw.temperature += ((int32_t) shtc3->buff_rx[0] << 8 | shtc3->buff_rx[1]);
-	return true;
+  if((uint8_t)CRC_Run(&shtc3_crc, &shtc3->buff_rx[3], 2) != shtc3->buff_rx[5]) return false;
+  shtc3->raw.humidity += ((int32_t) shtc3->buff_rx[3] << 8 | shtc3->buff_rx[4]);
+  shtc3->raw.temperature += ((int32_t) shtc3->buff_rx[0] << 8 | shtc3->buff_rx[1]);
+  return true;
 }
 
 static void SHTC3_Calculate(SHTC3_t *shtc3)
 {
-	shtc3->humidity = 100.0 * (float)shtc3->raw.humidity / shtc3->oversampling / 65536;
-	shtc3->temperature = (175.0 * (float)shtc3->raw.temperature / shtc3->oversampling / 65536) - 45.0;
+  shtc3->humidity = 100.0 * (float)shtc3->raw.humidity / shtc3->oversampling / 65536;
+  shtc3->temperature = (175.0 * (float)shtc3->raw.temperature / shtc3->oversampling / 65536) - 45.0;
 }
 
 SHTC3_t SHTC3 = {

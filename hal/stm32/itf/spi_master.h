@@ -1,4 +1,4 @@
-// hal/stm32/spi_master.h
+// hal/stm32/itf/spi_master.h
 
 #ifndef SPI_MASTER_H_
 #define SPI_MASTER_H_

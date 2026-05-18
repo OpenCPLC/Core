@@ -1,4 +1,4 @@
-/** @file plc/brd/eco/opencplc_eco.c */
+// plc/brd/eco/opencplc_eco.c
 
 #include "opencplc.h"
 
@@ -232,10 +232,10 @@ void PLC_Init(void)
   DIN_Init(&SW2);
   BASH_AddFile(&cache_file);
   BASH_AddCallback(&LED_Bash, "led");
-  // Wyjścia cyfrowe przekaźnikowe (RO)
+  // Relay outputs (RO)
   DOUT_Init(&RO1);
   DOUT_Init(&RO2);
-  // Wyjścia cyfrowe tranzystorowe (TO)
+  // Transistor outputs (TO)
   DOUT_Init(&TO1);
   DOUT_Init(&TO2);
   DOUT_Init(&TO3);
@@ -244,7 +244,7 @@ void PLC_Init(void)
   PWM_Init(&to1_pwm);
   PWM_Init(&to2_pwm);
   PWM_Init(&to345_pwm);
-  // Wejścia cyfrowe (DI)
+  // Digital inputs (DI)
   if(DIN_Init(&DI1)) {
     din_pwmi15.channel[TIM_CH1] = TIM15_CH1_PB14;
     DI1.frequency = &din_pwmi15.frequency[0];
@@ -269,7 +269,7 @@ void PLC_Init(void)
     DI4.fill = &din_pwmi3.fill[0];
     din_pwmi3_init = true;
   }
-  // Wejścia analogowe (AI)
+  // Analog inputs (AI)
   ADC_Init(&ain_adc);
   ADC_Record(&ain_adc);
   ADC_Wait(&ain_adc);
@@ -280,24 +280,23 @@ void PLC_Init(void)
 
 void PLC_Loop(void)
 {
-  // Dioda LED, przyciski (BTN), przeł�
-czniki (SW)
+  // LED, buttons (BTN), switches (SW)
   RGB_Loop(&RGB);
   DIN_Loop(&BTN1);
   DIN_Loop(&BTN2);
   DIN_Loop(&BTN3);
   DIN_Loop(&SW1);
   DIN_Loop(&SW2);
-  // Wyjścia przekaźnikowe (RO)
+  // Relay outputs (RO)
   DOUT_Loop(&RO1);
   DOUT_Loop(&RO2);
-  // Wyjścia cyfrowe tranzystorowe (TO)
+  // Transistor outputs (TO)
   DOUT_Loop(&TO1);
   DOUT_Loop(&TO2);
   DOUT_Loop(&TO3);
   DOUT_Loop(&TO4);
   DOUT_Loop(&TO5);
-  // Wejścia cyfrowe (DI)
+  // Digital inputs (DI)
   DIN_Loop(&DI1);
   DIN_Loop(&DI2);
   DIN_Loop(&DI3);
@@ -308,7 +307,7 @@ czniki (SW)
   if(din_pwmi3_init && PWMI_Loop(&din_pwmi3)) {
     // PWMI_Print(&din_pwmi3_init);
   }
-  // Wejścia analogowe (AI)
+  // Analog inputs (AI)
   if(ADC_IsFree(&ain_adc)) {
     AIN_Sort(ain_buffer, sizeof(ain_channels), AIN_SAMPLES, ain_data);
     ADC_Record(&ain_adc);

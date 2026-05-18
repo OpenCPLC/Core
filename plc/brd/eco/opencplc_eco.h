@@ -27,11 +27,11 @@
   #define PLC_BASETIME 10
 #endif
 
-// Wyjścia cyfrowe przekaźnikowse (RO)
+// Relay outputs (RO)
 extern DOUT_t RO1;
 extern DOUT_t RO2;
 
-// Wyjścia cyfrowe tranzystorowe (TO)
+// Transistor outputs (TO)
 extern DOUT_t TO1;
 extern DOUT_t TO2;
 extern DOUT_t TO3;
@@ -41,13 +41,13 @@ void TO1_Frequency(float frequency);
 void TO2_Frequency(float frequency);
 void TO345_Frequency(float frequency);
 
-// Wejścia cyfrowe (DI)
+// Digital inputs (DI)
 extern DIN_t DI1;
 extern DIN_t DI2;
 extern DIN_t DI3;
 extern DIN_t DI4;
 
-// Wejścia analogowe (AI)
+// Analog inputs (AI)
 extern AIN_t AI1;
 extern AIN_t AI2;
 extern AIN_t AI3;

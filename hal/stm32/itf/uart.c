@@ -1,4 +1,4 @@
-// hal/stm32/uart.c
+// hal/stm32/itf/uart.c
 
 #include "uart.h"
 
@@ -22,8 +22,10 @@
 
 static void UART_DMA_IRQHandler(UART_t *uart)
 {
-  if(uart->_dma.reg->ISR & DMA_ISR_TCIF(uart->_dma.pos)) {
-    uart->_dma.reg->IFCR = DMA_ISR_TCIF(uart->_dma.pos);
+  uint32_t tc_mask = DMA_ISR_TCIF(uart->_dma.pos);
+  uint32_t isr = uart->_dma.reg->ISR;
+  if(isr & tc_mask) {
+    uart->_dma.reg->IFCR = tc_mask;
     uart->reg->CR1 |= USART_CR1_TCIE;
     uart->_tx_busy = false;
   }
@@ -31,8 +33,16 @@ static void UART_DMA_IRQHandler(UART_t *uart)
 
 static void UART_IRQHandler(UART_t *uart)
 {
+  uint32_t isr = uart->reg->ISR;
+  uint32_t cr1 = uart->reg->CR1;
+  // Framing/noise/parity error - drain the bad byte, do not push to buffer
+  if(isr & (USART_ISR_FE | USART_ISR_NE | USART_ISR_PE)) {
+    uart->reg->ICR = USART_ICR_FECF | USART_ICR_NECF | USART_ICR_PECF;
+    (void)uart->reg->RDR;
+    return;
+  }
   // RX not empty
-  if(uart->reg->ISR & USART_ISR_RXNE_RXFNE) {
+  if(isr & USART_ISR_RXNE_RXFNE) {
     uint8_t value = (uint8_t)uart->reg->RDR;
     BUFF_Push(uart->buff, value);
     if(uart->tim) {
@@ -41,14 +51,14 @@ static void UART_IRQHandler(UART_t *uart)
     }
   }
   // TX complete
-  if((uart->reg->CR1 & USART_CR1_TCIE) && (uart->reg->ISR & USART_ISR_TC)) {
-    uart->reg->CR1 &= ~USART_CR1_TCIE;
+  if((cr1 & USART_CR1_TCIE) && (isr & USART_ISR_TC)) {
+    uart->reg->CR1 = cr1 & ~USART_CR1_TCIE;
     uart->reg->ICR = USART_ICR_TCCF;
     uart->_tc_pending = false;
     if(uart->dir) GPIO_Rst(uart->dir);
   }
   // RX timeout
-  if(uart->reg->ISR & USART_ISR_RTOF) {
+  if(isr & USART_ISR_RTOF) {
     uart->reg->ICR = USART_ICR_RTOCF;
     BUFF_Break(uart->buff);
   }
@@ -164,9 +174,11 @@ void UART_Init(UART_t *uart)
     uart->reg->CR2 |= USART_CR2_RTOEN;
   }
   // IRQ enable
-  uart->_init = true;
+  IRQ_ClearPendingUART(uart->reg);
+  IRQ_ClearPendingDMA(uart->dma);
   IRQ_EnableDMA(uart->dma, uart->irq_priority, (IRQ_Handler_t)UART_DMA_IRQHandler, uart);
   IRQ_EnableUART(uart->reg, uart->irq_priority, (IRQ_Handler_t)UART_IRQHandler, uart);
+  uart->_init = true;
   // Enable UART
   uart->reg->CR1 |= USART_CR1_RXNEIE_RXFNEIE | USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
   // Wait for ready
@@ -175,17 +187,49 @@ void UART_Init(UART_t *uart)
 
 void UART_ReInit(UART_t *uart)
 {
-  uart->reg->CR1 &= ~USART_CR1_TCIE;
+  // Mask IRQ and clear pending before touching registers
+  IRQ_DisableUART(uart->reg);
+  IRQ_DisableDMA(uart->dma);
+  IRQ_ClearPendingUART(uart->reg);
+  IRQ_ClearPendingDMA(uart->dma);
+  // Stop timer timeout
+  if(uart->tim) {
+    TIM_InterruptDisable(uart->tim);
+    TIM_Disable(uart->tim);
+    IRQ_DisableTIM(uart->tim);
+    IRQ_ClearPendingTIM(uart->tim);
+  }
+  // UART interrupt sources off
+  uart->reg->CR1 &= ~(USART_CR1_TCIE | USART_CR1_RXNEIE_RXFNEIE | USART_CR1_RTOIE);
+  uart->reg->CR2 &= ~USART_CR2_RTOEN;
+  // Wait for `TC` if TX in flight - soft flag + hardware. Guard counts iterations, not ms
+  if(uart->_tc_pending || (uart->_dma.cha->CCR & DMA_CCR_EN)) {
+    uint32_t guard = 1000000;
+    while(!(uart->reg->ISR & USART_ISR_TC) && guard) {
+      guard--;
+      __NOP();
+    }
+  }
+  // DMA off with guard
   uart->_dma.cha->CCR &= ~DMA_CCR_EN;
+  uint32_t dma_guard = 100000;
+  while((uart->_dma.cha->CCR & DMA_CCR_EN) && dma_guard) dma_guard--;
+  DMA_ClearFlags(&uart->_dma);
+  // Soft state
   uart->_tx_busy = false;
   uart->_tc_pending = false;
-  if(uart->dir) GPIO_Rst(uart->dir);
   uart->_init = false;
+  // Peripheral off
   uart->reg->CR3 &= ~USART_CR3_DMAT;
+  uart->reg->CR1 &= ~USART_CR1_UE;
   uart->reg->ICR = UART_ICR_CLEAR;
   uart->reg->RQR = USART_RQR_RXFRQ;
-  uart->reg->CR1 &= ~USART_CR1_UE;
+  // Clear pending after ICR/RQR/DMA - a fresh edge may have appeared
+  IRQ_ClearPendingUART(uart->reg);
+  IRQ_ClearPendingDMA(uart->dma);
+  // Gate clock and drop DE - reinit = abort, do not hold RS485 in TX
   RCC_DisableUART(uart->reg);
+  if(uart->dir) GPIO_Rst(uart->dir);
   UART_Init(uart);
 }
 
@@ -244,6 +288,7 @@ status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len)
 //------------------------------------------------------------------------------------------------- Receive
 
 uint16_t UART_Size(UART_t *uart) { return BUFF_Size(uart->buff); }
+uint16_t UART_MessageCount(UART_t *uart) { return BUFF_MessageCount(uart->buff); }
 uint16_t UART_Read(UART_t *uart, uint8_t *data) { return BUFF_Read(uart->buff, data); }
 char *UART_ReadString(UART_t *uart) { return BUFF_ReadString(uart->buff); }
 bool UART_Skip(UART_t *uart) { return BUFF_Skip(uart->buff); }

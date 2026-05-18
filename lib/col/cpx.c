@@ -1,4 +1,4 @@
-/** @file lib/col/cpx.c */
+// lib/col/cpx.c
 
 #include "cpx.h"
 

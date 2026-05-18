@@ -34,31 +34,31 @@
 
 #define PLC_ARR_INIT(clock, center_aligned) (clock / 1000 / (center_aligned + 1))
 
-// Wyjścia cyfrowe przekaźnikowse (RO)
+// Relay outputs (RO)
 extern DOUT_t RO1;
 extern DOUT_t RO2;
 extern DOUT_t RO3;
 extern DOUT_t RO4;
 
-//  Wyjścia cyfrowe tranzystorowe (TO)
+//  Transistor outputs (TO)
 extern DOUT_t TO1;
 extern DOUT_t TO2;
 extern DOUT_t TO3;
 extern DOUT_t TO4;
 void TO_Frequency(float frequency);
 
-// Wyjścia cyfrowe triakowe (XO)
+// Triac outputs (XO)
 extern DOUT_t XO1;
 extern DOUT_t XO2;
 void XO_Frequency(float frequency);
 
-// Wejścia cyfrowe (DI)
+// Digital inputs (DI)
 extern DIN_t DI1;
 extern DIN_t DI2;
 extern DIN_t DI3;
 extern DIN_t DI4;
 
-// Wejścia analogowe (AI)
+// Analog inputs (AI)
 extern AIN_t AI1;
 extern AIN_t AI2;
 extern AIN_t POT;

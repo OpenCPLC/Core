@@ -1,4 +1,4 @@
-// lib/col/heap.h
+// lib/sys/heap.h
 
 #ifndef HEAP_H_
 #define HEAP_H_
@@ -35,7 +35,7 @@ typedef struct heap_block {
   bool free;
 } heap_block_t;
 
-// Initialize heap — call once before heap_alloc()
+// Initialize heap. Call once before `heap_alloc()`
 void heap_init(void);
 
 /**

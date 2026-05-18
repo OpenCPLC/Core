@@ -13,6 +13,6 @@ typedef enum {
   MODBUS_Fnc_PresetRegister = 0x06,
   MODBUS_Fnc_WriteBits = 0x0F,
   MODBUS_Fnc_WriteRegisters = 0x10
-} MODBUS_Fnc_e;
+} MODBUS_Fnc_t;
 
 #endif

@@ -1,4 +1,4 @@
-/** @file lib/col/ary.h */
+// lib/col/ary.h
 
 #ifndef ARY_H_
 #define ARY_H_

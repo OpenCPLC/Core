@@ -1,4 +1,4 @@
-// hal/stm32/i2c.h
+// hal/stm32/itf/i2c.h
 
 #ifndef I2C_H_
 #define I2C_H_

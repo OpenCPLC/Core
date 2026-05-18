@@ -1,4 +1,4 @@
-// hal/stm32wb/gpio_wb.c
+// hal/stm32wb/per/gpio_wb.c
 
 #include "gpio.h"
 

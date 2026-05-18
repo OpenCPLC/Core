@@ -25,7 +25,7 @@ void AIN_Sort(uint16_t *buff, uint16_t channels, uint16_t samples, uint16_t data
  * @param high Upper threshold value.
  * @param scale Threshold unit: voltage `[V]`, current `[mA]`, or percent `[%]`.
  */
-void AIN_Threshold(AIN_t *ain, float low, float high, AIN_Thresh_e scale)
+void AIN_Threshold(AIN_t *ain, float low, float high, AIN_Thresh_t scale)
 {
   ain->threshold_low = low / scale;
   ain->threshold_high = high / scale;

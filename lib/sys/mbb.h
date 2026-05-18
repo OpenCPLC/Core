@@ -1,4 +1,4 @@
-/** @file lib/sys/mbb.h */
+// lib/sys/mbb.h
 
 #ifndef MBB_H_
 #define MBB_H_

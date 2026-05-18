@@ -1,4 +1,4 @@
-/** @file lib/col/ary.c */
+// lib/col/ary.c
 
 #include "ary.h"
 

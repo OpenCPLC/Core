@@ -1,4 +1,4 @@
-// hal/stm32/i2c_slave.c
+// hal/stm32/itf/i2c_slave.c
 
 #include "i2c_slave.h"
 

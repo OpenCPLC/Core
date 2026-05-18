@@ -1,4 +1,4 @@
-/** @file lib/sys/mbb.c */
+// lib/sys/mbb.c
 
 #include "mbb.h"
 #include "dbg.h"

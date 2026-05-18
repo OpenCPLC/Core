@@ -198,7 +198,7 @@ void CMD_SetReset(void (*Reset)(void));
 
 /**
  * @brief Report wrong argument count error.
- * Internal — called by `CMD_Argc*` macros, not meant for direct use.
+ * Internal. Called by `CMD_Argc*` macros, not meant for direct use.
  * @param[in] cmd Command name (`argv[0]`)
  * @param[in] argc Actual argument count
  */
@@ -206,7 +206,7 @@ void CMD_WrongArgc(char *cmd, uint16_t argc);
 
 /**
  * @brief Report invalid argument error.
- * Internal — called by `CMD_ArgvExit` macro, not meant for direct use.
+ * Internal. Called by `CMD_ArgvExit` macro, not meant for direct use.
  * @param[in] cmd Command name (`argv[0]`)
  * @param[in] argv Argument value
  * @param[in] pos Argument position (0-indexed)
@@ -231,13 +231,13 @@ bool CMD_Step(STREAM_t *stream);
 uint16_t TRIG_Event(void);
 
 /**
- * @brief Wait for any trigger (cooperative — yields to scheduler).
+ * @brief Wait for any trigger (cooperative, yields to scheduler).
  * @return Trigger code received
  */
 uint16_t TRIG_Wait(void);
 
 /**
- * @brief Wait for specific trigger code (cooperative — yields to scheduler).
+ * @brief Wait for specific trigger code (cooperative, yields to scheduler).
  * @param[in] code Expected trigger code
  */
 void TRIG_WaitFor(uint16_t code);

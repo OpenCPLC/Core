@@ -1,4 +1,4 @@
-// hal/stm32/spi.h
+// hal/stm32/itf/spi.h
 
 #ifndef SPI_H_
 #define SPI_H_

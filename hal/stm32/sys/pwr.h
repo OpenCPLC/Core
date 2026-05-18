@@ -69,13 +69,13 @@ uint32_t BKPR_Read(BKPR_t reg);
 //------------------------------------------------------------------------------------------------- IWDG: Watchdog
 
 typedef enum {
-	IWDG_Time_125us = 0,
-	IWDG_Time_250us = 1,
-	IWDG_Time_500us = 2,
-	IWDG_Time_1ms = 3,
-	IWDG_Time_2ms = 4,
-	IWDG_Time_4ms = 5,
-	IWDG_Time_8ms = 6
+  IWDG_Time_125us = 0,
+  IWDG_Time_250us = 1,
+  IWDG_Time_500us = 2,
+  IWDG_Time_1ms = 3,
+  IWDG_Time_2ms = 4,
+  IWDG_Time_4ms = 5,
+  IWDG_Time_8ms = 6
 } IWDG_Time_t;
 
 void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload);

@@ -40,7 +40,7 @@ typedef enum {
   AIN_Thresh_Voltage_V = 1,  // Voltage in `[V]`
   AIN_Thresh_Current_mA = 2, // Current in `[mA]`
   AIN_Thresh_Percent = 5,    // Percent `[0–100%]`
-} AIN_Thresh_e;
+} AIN_Thresh_t;
 
 //-------------------------------------------------------------------------------------------------
 
@@ -67,8 +67,8 @@ typedef struct {
 } AIN_t;
 
 void AIN_Sort(uint16_t *buff, uint16_t channels, uint16_t samples, uint16_t data[channels][samples]);
-void AIN_Threshold(AIN_t *ain, float down, float up, AIN_Thresh_e scale);
-float AIN_Raw(AIN_t *ain);;
+void AIN_Threshold(AIN_t *ain, float down, float up, AIN_Thresh_t scale);
+float AIN_Raw(AIN_t *ain);
 float AIN_Voltage_V(AIN_t *ain);
 float AIN_Current_mA(AIN_t *ain);
 float AIN_Percent(AIN_t *ain);
@@ -79,5 +79,4 @@ float POT_Normalized(AIN_t *ain);
 
 //-------------------------------------------------------------------------------------------------
 #endif
-
 

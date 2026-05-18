@@ -57,6 +57,11 @@ void DBG_Init(UART_t *uart)
 
 volatile bool DbgReset;
 
+bool BUFF_EchoIdle(BUFF_t *buff)
+{
+  return buff->_echo == buff->_head;
+}
+
 #if(DBG_ECHO_MODE)
 
 char EchoValue;
@@ -89,11 +94,6 @@ void DBG_Echo(void)
     EchoEnter = false;
     DBG_Char(EchoValue);
   }
-}
-
-bool BUFF_EchoIdle(BUFF_t *buff)
-{
-  return buff->echo == buff->head;
 }
 
 #endif

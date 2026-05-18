@@ -17,7 +17,7 @@
 
 typedef void (*IRQ_Handler_t)(void *);
 
-//------------------------------------------------------------------------------------------------- Enable functions (unified API)
+//------------------------------------------------------------------------------------------------- Enable
 
 void IRQ_EnableTIM(void *tim, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
 void IRQ_EnableUART(void *uart, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
@@ -27,7 +27,7 @@ void IRQ_EnableADC(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
 void IRQ_EnableDMA(DMA_CHx_t channel, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
 void IRQ_EnableEXTI(uint8_t line, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
 
-//------------------------------------------------------------------------------------------------- Disable functions
+//------------------------------------------------------------------------------------------------- Disable
 
 void IRQ_DisableTIM(void *tim);
 void IRQ_DisableUART(void *uart);
@@ -36,6 +36,16 @@ void IRQ_DisableSPI(void *spi);
 void IRQ_DisableADC(void);
 void IRQ_DisableDMA(DMA_CHx_t channel);
 void IRQ_DisableEXTI(uint8_t line);
+
+//------------------------------------------------------------------------------------------------- Clear pending
+
+void IRQ_ClearPendingTIM(void *tim);
+void IRQ_ClearPendingUART(void *uart);
+void IRQ_ClearPendingI2C(void *i2c);
+void IRQ_ClearPendingSPI(void *spi);
+void IRQ_ClearPendingADC(void);
+void IRQ_ClearPendingDMA(DMA_CHx_t channel);
+void IRQ_ClearPendingEXTI(uint8_t line);
 
 //-------------------------------------------------------------------------------------------------
 #endif
