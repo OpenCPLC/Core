@@ -245,13 +245,13 @@ uint32_t BKPR_Read(BKPR_t reg)
 
 void BKP_DomainReset(void)
 {
-  if(!BOR_WasReset()) return; // domain can only be corrupted by a power-on
+  if(!BOR_WasReset()) return; // domain can only be corrupted by a power-on.
   // WB: PWR is always accessible (no enable bit)
   PWR->CR1 |= PWR_CR1_DBP;
   while(!(PWR->CR1 & PWR_CR1_DBP));
   RCC->BDCR = RCC_BDCR_BDRST; // set `BDRST`, clear `LSCO`/`LSE`/`RTCSEL`
-  (void)RCC->BDCR;            // read back lengthens reset pulse
-  RCC->BDCR = 0;              // release reset
+  (void)RCC->BDCR; // read back lengthens reset pulse
+  RCC->BDCR = 0; // release reset
 }
 
 //------------------------------------------------------------------------------------------------- IWDG
@@ -274,17 +274,17 @@ void IWDG_Refresh(void) { IWDG->KR = IWDG_KEY_REFRESH; }
 
 // `RMVF` clears all reset flags at once: latch on first read so `IWDG_WasReset`
 // and `BOR_WasReset` do not clobber each other.
-static uint32_t reset_csr;
-static bool reset_latched;
+static uint32_t rst_csr;
+static bool rst_latched;
 
 static uint32_t rst_flags(void)
 {
-  if(!reset_latched) {
-    reset_csr = RCC->CSR;
+  if(!rst_latched) {
+    rst_csr = RCC->CSR;
     RCC->CSR |= RCC_CSR_RMVF;
-    reset_latched = true;
+    rst_latched = true;
   }
-  return reset_csr;
+  return rst_csr;
 }
 
 bool IWDG_WasReset(void) { return (rst_flags() & RCC_CSR_IWDGRSTF) != 0; }
@@ -325,7 +325,7 @@ status_t BOR_SetLevel(BOR_Level_t level)
   FLASH->OPTR = optr;
   FLASH->CR |= FLASH_CR_OPTSTRT;
   while(FLASH->SR & FLASH_SR_BSY) __DSB();
-  FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads option bytes, resets MCU (no return)
+  FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads option bytes, resets MCU (no return).
   while(1) __DSB();
 }
 

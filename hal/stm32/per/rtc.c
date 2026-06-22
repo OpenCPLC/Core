@@ -197,7 +197,7 @@ static bool rtc_check_base(int32_t stamp_min, int32_t stamp_max,
 
 //--------------------------------------------------------------------------------------------- Init
 
-// RTC is running when LSE is its clock source, it is enabled, and `LSCO` is off
+// RTC is running when LSE is its clock source, it is enabled, and `LSCO` is off.
 static bool rtc_running(void)
 {
   uint32_t want = RCC_BDCR_LSEON | RCC_BDCR_LSERDY | RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
@@ -214,8 +214,7 @@ void RTC_Init(void)
     RCC->APB1ENR1 |= RCC_APB1ENR1_RTCAPBEN;
   #endif
   PWR->CR1 |= PWR_CR1_DBP;
-  // Build the clock tree only when RTC is not already running, so a valid RTC
-  // keeps its time across resets; a corrupt domain is reset first
+  // valid RTC survives resets; reset and rebuild only a stopped or corrupt domain.
   if(!rtc_running()) {
     BKP_DomainReset();
     RCC->BDCR |= RCC_BDCR_LSEON;
