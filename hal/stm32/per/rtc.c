@@ -1,6 +1,7 @@
 // hal/stm32/per/rtc.c
 
 #include "rtc.h"
+#include "pwr.h"
 
 //------------------------------------------------------------------------------ Compatibility Layer
 
@@ -8,6 +9,7 @@
   // G0: status in `ICSR`, clear via `SCR` (write-to-clear)
   #define RTC_SR        (RTC->ICSR)
   #define RTC_INITF     RTC_ICSR_INITF
+  #define RTC_INITS     RTC_ICSR_INITS
   #define RTC_INIT      RTC_ICSR_INIT
   #define RTC_ALRAWF    RTC_ICSR_ALRAWF
   #define RTC_ALRBWF    RTC_ICSR_ALRBWF
@@ -17,6 +19,7 @@
   // WB: status in `ISR`, clear via `ISR` (read-modify-write)
   #define RTC_SR        (RTC->ISR)
   #define RTC_INITF     RTC_ISR_INITF
+  #define RTC_INITS     RTC_ISR_INITS
   #define RTC_INIT      RTC_ISR_INIT
   #define RTC_ALRAWF    RTC_ISR_ALRAWF
   #define RTC_ALRBWF    RTC_ISR_ALRBWF
@@ -194,6 +197,14 @@ static bool rtc_check_base(int32_t stamp_min, int32_t stamp_max,
 
 //--------------------------------------------------------------------------------------------- Init
 
+// RTC is running when LSE is its clock source, it is enabled, and `LSCO` is off
+static bool rtc_running(void)
+{
+  uint32_t want = RCC_BDCR_LSEON | RCC_BDCR_LSERDY | RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
+  uint32_t mask = want | RCC_BDCR_RTCSEL | RCC_BDCR_LSCOEN;
+  return ((RCC->BDCR & mask) == want) && (RTC_SR & RTC_INITS);
+}
+
 void RTC_Init(void)
 {
   // Enable clocks
@@ -202,15 +213,15 @@ void RTC_Init(void)
   #elif defined(STM32WB)
     RCC->APB1ENR1 |= RCC_APB1ENR1_RTCAPBEN;
   #endif
-  // Backup domain reset
-  RCC->BDCR |= RCC_BDCR_BDRST;
-  RCC->BDCR &= ~RCC_BDCR_BDRST;
   PWR->CR1 |= PWR_CR1_DBP;
-  // Enable LSE
-  RCC->BDCR |= RCC_BDCR_LSEON;
-  while(!(RCC->BDCR & RCC_BDCR_LSERDY)) __NOP();
-  // Select LSE and enable RTC
-  RCC->BDCR |= RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
+  // Build the clock tree only when RTC is not already running, so a valid RTC
+  // keeps its time across resets; a corrupt domain is reset first
+  if(!rtc_running()) {
+    BKP_DomainReset();
+    RCC->BDCR |= RCC_BDCR_LSEON;
+    while(!(RCC->BDCR & RCC_BDCR_LSERDY)) __NOP();
+    RCC->BDCR |= RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
+  }
   // Enable interrupts
   rtc_unlock();
   RTC->CR |= RTC_CR_TSIE | RTC_CR_WUTIE | RTC_CR_ALRBIE | RTC_CR_ALRAIE;

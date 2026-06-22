@@ -261,6 +261,7 @@ void PLC_Init(void)
     // SCB->VTOR = FLASH_BASE | 0x00000000U;
   #endif
   // Konfiguracja systemowa
+  BOR_SetLevel(PLC_BOR_LEVEL); // first boot may reprogram option bytes, then reset.
   sys_clock_init();
   systick_init(PLC_BASETIME);
   RTC_Init();

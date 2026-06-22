@@ -220,6 +220,8 @@ void PLC_Init(void)
     // SCB->VTOR = FLASH_BASE | 0x00000000U;
   #endif
   // Konfiguracja systemowa
+  BOR_SetLevel(PLC_BOR_LEVEL); // first boot may reprogram option bytes, then reset.
+  BKP_DomainReset(); // clears power-on backup-domain corruption (`LSCO` on PA2)
   sys_clock_init();
   systick_init(PLC_BASETIME);
   EEPROM_Cache(&cache_eeprom);

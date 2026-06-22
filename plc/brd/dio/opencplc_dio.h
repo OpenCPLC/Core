@@ -27,6 +27,11 @@
   #define PLC_BASETIME 1
 #endif
 
+#ifndef PLC_BOR_LEVEL
+  // Brown-out reset level: 4 (~2.8V) for 3V3 automation; `BOR_Level_1V7` = power-down only
+  #define PLC_BOR_LEVEL BOR_Level_2V8
+#endif
+
 #ifndef PLC_ARR_INIT
   #define PLC_ARR_INIT(clock, center_aligned) TIM_ARR_INIT(1000, clock, center_aligned)
 #endif

@@ -27,6 +27,11 @@
   #define PLC_BASETIME 10
 #endif
 
+#ifndef PLC_BOR_LEVEL
+  // Brown-out reset level: 4 (~2.8V) for 3V3 automation; `BOR_Level_1V7` = power-down only
+  #define PLC_BOR_LEVEL BOR_Level_2V8
+#endif
+
 // Relay outputs (RO)
 extern DOUT_t RO1;
 extern DOUT_t RO2;
