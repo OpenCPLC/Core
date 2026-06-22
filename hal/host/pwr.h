@@ -98,6 +98,9 @@ typedef enum {
 void BKPR_Write(BKPR_t reg, uint32_t value);
 uint32_t BKPR_Read(BKPR_t reg);
 
+// No backup domain on host, reset is a no-op
+static inline void BKP_DomainReset(void) {}
+
 //------------------------------------------------------------------------------------------------- IWDG: Watchdog (stubs)
 
 typedef enum {
@@ -117,6 +120,21 @@ static inline void IWDG_Init(IWDG_Prescaler_t prescaler, uint16_t reload)
 
 static inline void IWDG_Refresh(void) {}
 static inline bool IWDG_WasReset(void) { return false; }
+
+//------------------------------------------------------------------------------------------------- BOR: Brown-Out Reset (stubs)
+
+// No supply rail to guard on host, BOR is a no-op
+typedef enum {
+  BOR_Level_1V7 = 0,
+  BOR_Level_2V0 = 1,
+  BOR_Level_2V2 = 2,
+  BOR_Level_2V5 = 3,
+  BOR_Level_2V8 = 4
+} BOR_Level_t;
+
+static inline BOR_Level_t BOR_GetLevel(void) { return BOR_Level_1V7; }
+static inline status_t BOR_SetLevel(BOR_Level_t level) { (void)level; return OK; }
+static inline bool BOR_WasReset(void) { return false; }
 
 //-------------------------------------------------------------------------------------------------
 

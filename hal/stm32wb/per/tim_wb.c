@@ -1,4 +1,4 @@
-// hal/stm32wb/tim_wb.c
+// hal/stm32wb/per/tim_wb.c
 
 #include "tim.h"
 

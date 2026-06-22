@@ -5,9 +5,8 @@
 //-------------------------------------------------------------------------------------------------
 
 /**
- * @brief Inicjalizuje moduł MAX31865 do pracy z czujnikiem RTD.
- * @param rtd Wskaźnik do struktury reprezentuj�
-cej układ MAX31865.
+ * @brief Initialize the MAX31865 module for RTD sensor operation.
+ * @param[in,out] rtd Pointer to MAX31865 instance
  */
 void MAX31865_Init(MAX31865_t *rtd)
 {
@@ -41,14 +40,11 @@ static status_t MAX31865_SetConfig(MAX31865_t *rtd, uint8_t config)
 }
 
 /**
- * @brief Pętla obsługuj�
-ca pomiar temperatury za pomoc�
- czujnika RTD.
- * Wykonuje konfigurację, dokonuje pomiarów oraz oblicza temperaturę.
- * @param rtd Wskaźnik do struktury reprezentuj�
-cej układ MAX31865.
- * @return Status wykonanej operacji {OK/ERR/BUSY}
-*/
+ * @brief Main measurement loop for the RTD sensor.
+ * Runs configuration, performs measurement, computes temperature.
+ * @param[in,out] rtd Pointer to MAX31865 instance
+ * @return `OK` on success, `ERR` on SPI / timeout failure, `BUSY` if SPI not free
+ */
 status_t MAX31865_Loop(MAX31865_t *rtd)
 {
   if(tick_away(&rtd->interval_tick)) return OK;
@@ -90,10 +86,9 @@ status_t MAX31865_Loop(MAX31865_t *rtd)
 #define MAX31865_Z2 (MAX31865_A * MAX31865_A - (4 * MAX31865_B))
 
 /**
- * @brief Oblicza rezystancję [Ω] na podstawie surowej wartości pomiarowej.
- * @param rtd Wskaźnik do struktury MAX31865_t zawieraj�
-cej konfigurację czujnika RTD
- * @return Wartość rezystancji [Ω] czujnika RTD.
+ * @brief Compute RTD resistance in Ω from the raw measurement.
+ * @param[in] rtd Pointer to MAX31865 instance
+ * @return Resistance in Ω, `NaN` if no valid measurement
  */
 float RTD_Resistance_Ohm(MAX31865_t *rtd)
 {
@@ -102,12 +97,9 @@ float RTD_Resistance_Ohm(MAX31865_t *rtd)
 }
 
 /**
- * @brief Oblicza temperaturę w stopniach Celsjusza [°C] na podstawie
- * rezystancji termometru oporowego RTD za pomoc�
- obliczeń rezystancji.
- * @param rtd Wskaźnik do struktury MAX31865_t zawieraj�
-cej konfigurację czujnika RTD
- * @return Wartość temperatury [°C]
+ * @brief Compute temperature in °C from RTD resistance (Callendar-Van Dusen).
+ * @param[in] rtd Pointer to MAX31865 instance
+ * @return Temperature in °C, `NaN` if no valid measurement
  */
 float RTD_Temperature_C(MAX31865_t *rtd)
 {

@@ -1,4 +1,4 @@
-// hal/stm32g0/uart_g0.h
+// hal/stm32g0/itf/uart_g0.h
 
 #ifndef UART_G0_H_
 #define UART_G0_H_

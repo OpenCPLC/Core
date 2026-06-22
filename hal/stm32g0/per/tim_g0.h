@@ -1,4 +1,4 @@
-// hal/stm32g0/tim_g0.h
+// hal/stm32g0/per/tim_g0.h
 
 #ifndef TIM_G0_H_
 #define TIM_G0_H_

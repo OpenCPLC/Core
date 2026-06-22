@@ -1,4 +1,4 @@
-// hal/stm32wb/uart_wb.h
+// hal/stm32wb/itf/uart_wb.h
 
 #ifndef UART_WB_H_
 #define UART_WB_H_

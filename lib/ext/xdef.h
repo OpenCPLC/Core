@@ -1,4 +1,4 @@
-/** @file lib/ext/xdef.h */
+// lib/ext/xdef.h
 
 #define ON  1 // Enabled
 #define OFF 0 // Disables
@@ -130,8 +130,6 @@ typedef enum {
   #define ANSI_WHITE    "\x1B[97m"
   #define ANSI_END      "\x1B[0m"
 #endif
-
-#define ANSI_OK " " ANSI_GREEN "OK" ANSI_END
 
 #define ANSI_OK " " ANSI_GREEN "OK" ANSI_END
 

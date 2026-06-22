@@ -28,6 +28,8 @@ typedef enum {
   IRQ_Priority_Low_3      = 15
 } IRQ_Priority_t;
 
+#define IRQ_Invalid ((IRQn_Type)-127)
+
 //-------------------------------------------------------------------------------------------------
 
 void IRQ_Init(void);

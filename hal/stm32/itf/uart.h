@@ -1,4 +1,4 @@
-// hal/stm32/uart.h
+// hal/stm32/itf/uart.h
 
 #ifndef UART_H_
 #define UART_H_
@@ -155,11 +155,18 @@ bool UART_IsFree(UART_t *uart);
 status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len);
 
 /**
- * @brief Get number of bytes in RX buffer.
+ * @brief Get number of bytes in current RX frame.
  * @param[in] uart Pointer to UART structure
- * @return Number of bytes available
+ * @return Number of bytes in current frame
  */
 uint16_t UART_Size(UART_t *uart);
+
+/**
+ * @brief Get number of pending frames in RX queue.
+ * @param[in] uart Pointer to UART structure
+ * @return Number of frames waiting to be read
+ */
+uint16_t UART_MessageCount(UART_t *uart);
 
 /**
  * @brief Read data from RX buffer.

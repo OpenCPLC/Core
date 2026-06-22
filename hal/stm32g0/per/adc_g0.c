@@ -1,4 +1,4 @@
-// hal/stm32g0/adc_g0.c
+// hal/stm32g0/per/adc_g0.c
 
 #include "adc.h"
 #include "dma.h"

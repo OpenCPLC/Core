@@ -2,9 +2,10 @@
 
 #include "modbus_slave.h"
 
-MODBUS_Status_e MODBUS_Loop(MODBUS_Slave_t *modbus)
+MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
 {
   if(UART_SendActive(modbus->uart)) return MODBUS_Status_UartBusy;
+  while(UART_MessageCount(modbus->uart) > 1) UART_Skip(modbus->uart);
   uint16_t size_rx = UART_Size(modbus->uart);
   if(!size_rx) return MODBUS_Status_None;
   heap_free((void *)modbus->buffer_rx);
@@ -17,9 +18,9 @@ MODBUS_Status_e MODBUS_Loop(MODBUS_Slave_t *modbus)
   uint8_t bit;
   heap_free((void *)modbus->buffer_tx);
   uint16_t size_tx = 0;
-  MODBUS_Fnc_e function_code = (MODBUS_Fnc_e)modbus->buffer_rx[1];
+  MODBUS_Fnc_t function_code = (MODBUS_Fnc_t)modbus->buffer_rx[1];
   switch(function_code) {
-  //---------------------------------------------------------------------------------------------
+    //---------------------------------------------------------------------------------------------
     case MODBUS_Fnc_ReadBits:
     case MODBUS_Fnc_ReadOuts:
       if(size_rx != 8) return MODBUS_Status_InvalidSize;
@@ -128,7 +129,7 @@ MODBUS_Status_e MODBUS_Loop(MODBUS_Slave_t *modbus)
       break;
     //---------------------------------------------------------------------------------------------
     case MODBUS_Fnc_WriteRegisters:
-    count = (modbus->buffer_rx[4] << 8) | modbus->buffer_rx[5];
+      count = (modbus->buffer_rx[4] << 8) | modbus->buffer_rx[5];
       if(size_rx < 11 || !(size_rx % 2) || (count != (size_rx - 9) / 2) || count != modbus->buffer_rx[6] / 2) return MODBUS_Status_InvalidSize;
       size_tx = 6;
       modbus->buffer_tx = (uint8_t *)heap_alloc(size_tx + 2);

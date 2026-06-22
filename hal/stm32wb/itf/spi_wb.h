@@ -1,4 +1,4 @@
-// hal/stm32wb/spi_wb.h
+// hal/stm32wb/itf/spi_wb.h
 
 #ifndef SPI_WB_H_
 #define SPI_WB_H_

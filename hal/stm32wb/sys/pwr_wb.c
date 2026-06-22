@@ -243,6 +243,17 @@ uint32_t BKPR_Read(BKPR_t reg)
   return (&RTC->BKP0R)[reg];
 }
 
+void BKP_DomainReset(void)
+{
+  if(!BOR_WasReset()) return; // domain can only be corrupted by a power-on.
+  // WB: PWR is always accessible (no enable bit)
+  PWR->CR1 |= PWR_CR1_DBP;
+  while(!(PWR->CR1 & PWR_CR1_DBP));
+  RCC->BDCR = RCC_BDCR_BDRST; // set `BDRST`, clear `LSCO`/`LSE`/`RTCSEL`
+  (void)RCC->BDCR; // read back lengthens reset pulse
+  RCC->BDCR = 0; // release reset
+}
+
 //------------------------------------------------------------------------------------------------- IWDG
 
 void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
@@ -261,13 +272,63 @@ void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 
 void IWDG_Refresh(void) { IWDG->KR = IWDG_KEY_REFRESH; }
 
-bool IWDG_WasReset(void)
+// `RMVF` clears all reset flags at once: latch on first read so `IWDG_WasReset`
+// and `BOR_WasReset` do not clobber each other.
+static uint32_t rst_csr;
+static bool rst_latched;
+
+static uint32_t rst_flags(void)
 {
-  if(RCC->CSR & RCC_CSR_IWDGRSTF) {
+  if(!rst_latched) {
+    rst_csr = RCC->CSR;
     RCC->CSR |= RCC_CSR_RMVF;
-    return true;
+    rst_latched = true;
   }
-  return false;
+  return rst_csr;
 }
+
+bool IWDG_WasReset(void) { return (rst_flags() & RCC_CSR_IWDGRSTF) != 0; }
+
+//------------------------------------------------------------------------------------------------- BOR
+
+#define FLASH_KEY1    0x45670123u
+#define FLASH_KEY2    0xCDEF89ABu
+#define FLASH_OPTKEY1 0x08192A3Bu
+#define FLASH_OPTKEY2 0x4C5D6E7Fu
+
+BOR_Level_t BOR_GetLevel(void)
+{
+  // WB: `BOR_LEV` field maps 1:1 to `BOR_Level_t`.
+  return (BOR_Level_t)((FLASH->OPTR & FLASH_OPTR_BOR_LEV) >> FLASH_OPTR_BOR_LEV_Pos);
+}
+
+status_t BOR_SetLevel(BOR_Level_t level)
+{
+  if(level > BOR_Level_2V8) level = BOR_Level_2V8;
+  if(BOR_GetLevel() == level) return OK; // already set: no flash wear, no reset
+  while(FLASH->SR & (FLASH_SR_BSY | FLASH_SR_CFGBSY)) __DSB();
+  if(FLASH->SR & FLASH_SR_PESD) return ERR; // `CPU2` (M0+) holds flash for prog/erase.
+  // Unlock flash control register
+  if(FLASH->CR & FLASH_CR_LOCK) {
+    FLASH->KEYR = FLASH_KEY1;
+    FLASH->KEYR = FLASH_KEY2;
+    if(FLASH->CR & FLASH_CR_LOCK) return ERR;
+  }
+  // Unlock option bytes
+  if(FLASH->CR & FLASH_CR_OPTLOCK) {
+    FLASH->OPTKEYR = FLASH_OPTKEY1;
+    FLASH->OPTKEYR = FLASH_OPTKEY2;
+    if(FLASH->CR & FLASH_CR_OPTLOCK) return ERR;
+  }
+  uint32_t optr = FLASH->OPTR & ~FLASH_OPTR_BOR_LEV;
+  optr |= (uint32_t)level << FLASH_OPTR_BOR_LEV_Pos;
+  FLASH->OPTR = optr;
+  FLASH->CR |= FLASH_CR_OPTSTRT;
+  while(FLASH->SR & FLASH_SR_BSY) __DSB();
+  FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads option bytes, resets MCU (no return).
+  while(1) __DSB();
+}
+
+bool BOR_WasReset(void) { return (rst_flags() & RCC_CSR_BORRSTF) != 0; }
 
 //-------------------------------------------------------------------------------------------------

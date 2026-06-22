@@ -34,7 +34,7 @@ void RGB_Init(RGB_t *rgb)
   rgb_focus = rgb;
 }
 
-static void RGB_Preset(RGB_t *rgb, RGB_e color)
+static void RGB_Preset(RGB_t *rgb, RGB_Color_t color)
 {
   switch(color) {
     case RGB_Off: RGB_RstRed(rgb); RGB_RstGreen(rgb); RGB_RstBlue(rgb); break;
@@ -48,7 +48,7 @@ static void RGB_Preset(RGB_t *rgb, RGB_e color)
   }
 }
 
-void RGB_Set(RGB_t *rgb, RGB_e color)
+void RGB_Set(RGB_t *rgb, RGB_Color_t color)
 {
   RGB_Preset(rgb, color);
   rgb->state = color;
@@ -92,7 +92,7 @@ void LED_Focus(RGB_t *rgb)
   rgb_focus = rgb;
 }
 
-void LED_Set(RGB_e color)
+void LED_Set(RGB_Color_t color)
 {
   if(!rgb_focus) return;
   RGB_Set(rgb_focus, color);
@@ -116,7 +116,7 @@ void LED_Blink_OFF(void)
   LED_Set(rgb_focus->state);
 }
 
-void LED_OneShoot(RGB_e color, uint16_t ms)
+void LED_OneShoot(RGB_Color_t color, uint16_t ms)
 {
   if(!rgb_focus) return;
   LED_Set(color);
@@ -127,7 +127,7 @@ void LED_OneShoot(RGB_e color, uint16_t ms)
 // TODO...
 void LED_Bash(char **argv, uint16_t argc)
 {
-  RGB_Hash_e sw = hash_djb2(argv[0]);
+  RGB_Hash_t sw = hash_djb2(argv[0]);
   if(sw != RGB_Hash_Rgb && sw != RGB_Hash_Led) return;
   if(!rgb_focus) return;
   if(argc > 1) {
@@ -158,7 +158,7 @@ void LED_Bash(char **argv, uint16_t argc)
           shot_ms = str_to_int(argv[3]);
         }
         else shot_ms = 200;
-        RGB_e color;
+        RGB_Color_t color;
         switch(hash_djb2(argv[2])) {
           case RGB_Hash_Red: color = RGB_Red; break;
           case RGB_Hash_Green: color = RGB_Green; break;

@@ -1,4 +1,4 @@
-// hal/stm32wb/i2c_wb.h
+// hal/stm32wb/itf/i2c_wb.h
 
 #ifndef I2C_WB_H_
 #define I2C_WB_H_

@@ -1,4 +1,4 @@
-// hal/stm32wb/uart_wb.c
+// hal/stm32wb/itf/uart_wb.c
 
 #include "uart.h"
 

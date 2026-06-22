@@ -1,4 +1,4 @@
-/** @file lib/col/cpx.h */
+// lib/col/cpx.h
 
 #ifndef CPX_H_
 #define CPX_H_

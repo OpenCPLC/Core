@@ -21,7 +21,7 @@ typedef enum {
   HD44780_CMD_FunctionSet = 0x20,
   HD44780_CMD_SetAddrCGRAM = 0x40,
   HD44780_CMD_SetAddrDDRAM = 0x80
-} HD44780_CMD_e;
+} HD44780_CMD_t;
 
 //-------------------------------------------------------------------------------------------------
 
@@ -30,7 +30,7 @@ typedef enum {
   HD44780_Entry_Left = 0x02,
   HD44780_Entry_ShiftIncrement = 0x04,
   HD44780_Entry_ShiftDecrement = 0x08
-} HD44780_Entry_e;
+} HD44780_Entry_t;
 
 typedef enum {
   HD44780_Display_ScreanOn = 0x04,
@@ -39,14 +39,14 @@ typedef enum {
   HD44780_Display_CursorOff = 0x00,
   HD44780_Display_BlinkOn = 0x02,
   HD44780_Display_BlinkOff = 0x00,
-} HD44780_Display_e;
+} HD44780_Display_t;
 
 typedef enum {
   HD44780_Move_Display = 0x08,
   HD44780_Move_Cursor = 0x00,
   HD44780_Move_Right = 0x04,
   HD44780_Move_Left = 0x00
-} HD44780_Move_e;
+} HD44780_Move_t;
 
 typedef enum {
   HD44780_Mode_8Bit = 0x10,
@@ -55,12 +55,12 @@ typedef enum {
   HD44780_Mode_1Line = 0x00,
   HD44780_Mode_Dots5x10 = 0x04,
   HD44780_Mode_Dots5x8 = 0x00
-} HD44780_Mode_e;
+} HD44780_Mode_t;
 
 typedef enum {
   HD44780_Backlight_On = 0x08,
   HD44780_Backlight_Off = 0x00
-} HD44780_Backlight_e;
+} HD44780_Backlight_t;
 
 typedef enum {
   HD44780_Exec_ScreanOn,
@@ -77,7 +77,7 @@ typedef enum {
   HD44780_Exec_AutoscrollOff,
   HD44780_Exec_BacklightOn,
   HD44780_Exec_BacklightOff,
-} HD44780_Exec_e;
+} HD44780_Exec_t;
 
 typedef enum {
   HD44780_Char_ArrowRight = 1,
@@ -87,13 +87,13 @@ typedef enum {
   HD44780_Char_BoxSet = 5,
   HD44780_Char_BoxRst = 6,
   HD44780_Char_Degree = 7,
-} HD44780_Char_e;
+} HD44780_Char_t;
 
 //-------------------------------------------------------------------------------------------------
 
 typedef struct {
-  uint8_t address; // Adres I2C Expander'a PCF8574 (domyślnie 0x27)
-  uint8_t columns; //
+  uint8_t address; // I2C address of PCF8574 expander (default `0x27`)
+  uint8_t columns;
   uint8_t rows;
   bool size5x10;
   uint8_t _row_offsets[4];
@@ -112,7 +112,7 @@ bool HD44780_Str(HD44780_t *hd, char *str, uint8_t x, uint8_t y);
 bool HD44780_CreateChar(HD44780_t *hd, uint8_t loc, uint8_t *charmap);
 bool HD44780_Clear(HD44780_t *hd);
 bool HD44780_Home(HD44780_t *hd);
-bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_e exec);
+bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_t exec);
 bool HD44780_Init(HD44780_t *hd);
 bool HD44780_ExtraChars(HD44780_t *hd);
 

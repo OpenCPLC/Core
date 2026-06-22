@@ -1,4 +1,4 @@
-// hal/stm32/i2c_master.c
+// hal/stm32/itf/i2c_master.c
 
 #include "i2c_master.h"
 
@@ -73,7 +73,7 @@ static void I2C_Master_DMA_RX_IRQHandler(I2C_Master_t *i2c)
   }
 }
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------
 
 void I2C_Master_Init(I2C_Master_t *i2c)
 {
@@ -91,7 +91,8 @@ void I2C_Master_Init(I2C_Master_t *i2c)
     I2C_DmaSetTxRequest(i2c->reg, &i2c->_tx_dma);
     i2c->_tx_dma.cha->CPAR = (uint32_t)&i2c->reg->TXDR;
     i2c->_tx_dma.cha->CCR |= DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_TCIE;
-    IRQ_EnableDMA(i2c->tx_dma, i2c->irq_priority, (IRQ_Handler_t)I2C_Master_DMA_TX_IRQHandler, i2c);
+    IRQ_EnableDMA(i2c->tx_dma, i2c->irq_priority,
+      (IRQ_Handler_t)I2C_Master_DMA_TX_IRQHandler, i2c);
     i2c->reg->CR1 |= I2C_CR1_TXDMAEN;
   }
   // RX DMA
@@ -102,7 +103,8 @@ void I2C_Master_Init(I2C_Master_t *i2c)
     I2C_DmaSetRxRequest(i2c->reg, &i2c->_rx_dma);
     i2c->_rx_dma.cha->CPAR = (uint32_t)&i2c->reg->RXDR;
     i2c->_rx_dma.cha->CCR |= DMA_CCR_MINC | DMA_CCR_TCIE;
-    IRQ_EnableDMA(i2c->rx_dma, i2c->irq_priority, (IRQ_Handler_t)I2C_Master_DMA_RX_IRQHandler, i2c);
+    IRQ_EnableDMA(i2c->rx_dma, i2c->irq_priority,
+      (IRQ_Handler_t)I2C_Master_DMA_RX_IRQHandler, i2c);
     i2c->reg->CR1 |= I2C_CR1_RXDMAEN;
   }
   i2c->reg->CR1 |= I2C_CR1_PE | (i2c->filter << I2C_CR1_DNF_Pos);
@@ -116,7 +118,7 @@ void I2C_Master_Disable(I2C_Master_t *i2c)
   RCC_DisableI2C(i2c->reg);
 }
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------
 
 bool I2C_Master_IsBusy(I2C_Master_t *i2c)
 {
@@ -128,7 +130,7 @@ bool I2C_Master_IsFree(I2C_Master_t *i2c)
   return !i2c->_busy;
 }
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------
 
 status_t I2C_Master_Write(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16_t len)
 {
@@ -172,9 +174,11 @@ status_t I2C_Master_Read(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16_
   return FREE;
 }
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------
 
-status_t I2C_Master_WriteReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len)
+status_t I2C_Master_WriteReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
+  uint8_t *data, uint16_t len
+)
 {
   if(i2c->_busy) return BUSY;
   i2c->_tx_buffer = heap_alloc(len + 1);
@@ -184,7 +188,9 @@ status_t I2C_Master_WriteReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg, uint8
   return I2C_Master_Write(i2c, addr, i2c->_tx_buffer, len + 1);
 }
 
-status_t I2C_Master_ReadReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len)
+status_t I2C_Master_ReadReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
+  uint8_t *data, uint16_t len
+)
 {
   if(i2c->_busy) return BUSY;
   i2c->_addr = addr;
@@ -197,9 +203,11 @@ status_t I2C_Master_ReadReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg, uint8_
   return FREE;
 }
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------
 
-status_t I2C_Master_WriteRead(I2C_Master_t *i2c, uint8_t addr, uint8_t *tx_data, uint16_t tx_len, uint8_t *rx_data, uint16_t rx_len)
+status_t I2C_Master_WriteRead(I2C_Master_t *i2c, uint8_t addr,
+  uint8_t *tx_data, uint16_t tx_len, uint8_t *rx_data, uint16_t rx_len
+)
 {
   if(i2c->_busy) return BUSY;
   i2c->_addr = addr;

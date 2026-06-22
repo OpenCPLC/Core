@@ -1,4 +1,4 @@
-// hal/stm32g0/uart_g0.c
+// hal/stm32g0/itf/uart_g0.c
 
 #include "uart.h"
 

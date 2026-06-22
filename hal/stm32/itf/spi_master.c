@@ -1,4 +1,4 @@
-// hal/stm32/spi_master.c
+// hal/stm32/itf/spi_master.c
 
 #include "spi_master.h"
 

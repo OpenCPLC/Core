@@ -1,4 +1,4 @@
-// hal/stm32/pwmi.c
+// hal/stm32/per/pwmi.c
 
 #include "pwmi.h"
 

@@ -1,4 +1,4 @@
-/** @file plc/brd/dio/opencplc_dio.c */
+// plc/brd/dio/opencplc_dio.c
 
 #include "opencplc.h"
 
@@ -261,6 +261,7 @@ void PLC_Init(void)
     // SCB->VTOR = FLASH_BASE | 0x00000000U;
   #endif
   // Konfiguracja systemowa
+  BOR_SetLevel(PLC_BOR_LEVEL); // first boot may reprogram option bytes, then reset.
   sys_clock_init();
   systick_init(PLC_BASETIME);
   RTC_Init();
@@ -269,7 +270,7 @@ void PLC_Init(void)
   DBG_Init(&dbg_uart);
   BASH_AddFile(&cache_file);
   BASH_AddCallback(&LED_Bash, "led");
-  // Wyjścia cyfrowe tranzystorowe (TO)
+  // Transistor outputs (TO)
   DOUT_Init(&TO1);
   DOUT_Init(&TO2);
   DOUT_Init(&TO3);
@@ -288,7 +289,7 @@ void PLC_Init(void)
   PWM_Init(&to5_pwm);
   PWM_Init(&to6_pwm);
   PWM_Init(&to7a_pwm);
-  // Wejścia cyfrowe (DI)
+  // Digital inputs (DI)
   // DIN_Init(&DI1);
   // DIN_Init(&DI2);
   // DIN_Init(&DI3);
@@ -301,7 +302,7 @@ void PLC_Init(void)
   // DIN_Init(&DI10);
   // DIN_Init(&DI11);
   // DIN_Init(&DI12);
-  // Wejścia analogowe (AI)
+  // Analog inputs (AI)
   ADC_Init(&ain_adc);
   ADC_Record(&ain_adc);
   ADC_Wait(&ain_adc);
@@ -314,7 +315,7 @@ void PLC_Loop(void)
 {
   // Dioda LED i przycisk (BTN)
   RGB_Loop(&RGB);
-  // Wyjścia cyfrowe tranzystorowe (TO)
+  // Transistor outputs (TO)
   DOUT_Loop(&TO1);
   DOUT_Loop(&TO2);
   DOUT_Loop(&TO3);
@@ -327,7 +328,7 @@ void PLC_Loop(void)
   DOUT_Loop(&TO10);
   DOUT_Loop(&TO11);
   DOUT_Loop(&TO12);
-  // Wejścia cyfrowe (DI)
+  // Digital inputs (DI)
   // DIN_Loop(&DI1);
   // DIN_Loop(&DI2);
   // DIN_Loop(&DI3);
@@ -340,7 +341,7 @@ void PLC_Loop(void)
   // DIN_Loop(&DI10);
   // DIN_Loop(&DI11);
   // DIN_Loop(&DI12);
-  // Wejścia analogowe (AI)
+  // Analog inputs (AI)
   if(ADC_IsFree(&ain_adc)) {
     AIN_Sort(ain_buffer, sizeof(ain_channels), AIN_SAMPLES, ain_data);
     ADC_Record(&ain_adc);

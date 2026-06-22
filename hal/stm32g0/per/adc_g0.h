@@ -1,4 +1,4 @@
-// hal/stm32g0/adc_g0.h
+// hal/stm32g0/per/adc_g0.h
 
 #ifndef ADC_G0_H_
 #define ADC_G0_H_

@@ -26,21 +26,22 @@
 
 //------------------------------------------------------------------------------------- Wildcards
 
+#define cron_bit(n) ((uint64_t)1 << (n))
 // Match all values for a field
-#define CRON_ANY (~0ULL)
-// Match a single value `x` (e.g. `CRON_AT(8)` = 8)
-#define CRON_AT(x) (1ULL << (x))
-// Match inclusive range `[a..b]` (e.g. `CRON_RANGE(1,5)` = 1..5)
-#define CRON_RANGE(a, b) (((1ULL << ((b) - (a) + 1)) - 1) << (a))
+#define cron_any (~(uint64_t)0)
+// Match a single value `x` (e.g. `cron_at(8)` = 8)
+#define cron_at(x) cron_bit(x)
+// Match inclusive range `[a..b]` (e.g. `cron_range(1,5)` = 1..5)
+#define cron_range(a, b) ((cron_bit((b) - (a) + 1) - 1) << (a))
 
 //----------------------------------------------------------------------------------------- Types
 
 /**
  * @brief Cron task definition.
- * Time fields are bitmasks: bit `n` set = match value `n`. Use `CRON_ANY`,
- * `CRON_AT(x)`, `CRON_RANGE(a,b)` or bit-or combinations.
+ * Time fields are bitmasks: bit `n` set = match value `n`. Use `cron_any`,
+ * `cron_at(x)`, `cron_range(a,b)` or bit-or combinations.
  * `month_day` and `week_day` follow POSIX cron rule: if both restricted,
- * task fires when either matches (OR); if either is `CRON_ANY`, only the
+ * task fires when either matches (OR); if either is `cron_any`, only the
  * other is checked (AND).
  * @param[in] Handler Called when task matches current time
  * @param[in] arg Passed to `Handler`
@@ -68,7 +69,7 @@ typedef struct {
 
 //------------------------------------------------------------------------------------------- API
 
-// Initialize cron — call after `RTC_Init`
+// Initialize cron. Call after `RTC_Init`
 void CRON_Init(void);
 
 /**
@@ -99,7 +100,7 @@ bool CRON_Enable(uint16_t handle);
  */
 bool CRON_Disable(uint16_t handle);
 
-// Process pending cron tick — call from main loop
+// Process pending cron tick. Call from main loop
 void CRON_Step(void);
 
 //---------------------------------------------------------------------------------------------

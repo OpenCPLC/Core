@@ -65,46 +65,46 @@ All controllers are based on the [**STM32G0**](https://www.st.com/en/microcontro
 
 The framework exposes an abstraction layer typical for industrial automation. Instead of embedded-style GPIO _(general purpose input output)_ or ADC _(analog digital converter)_, you work with **TO**, **RO**, **DI**, **AI**, **AO**. Hardware is mapped to this layer, so adding a new controller only requires a new peripheral map to work within the ecosystem.
 
-|   Module  | Description                                                                                           |  Uno  |  Eco  |  Dio   |  Aio   |
-| :-------: | :---------------------------------------------------------------------------------------------------- | :---: | :---: | :----: | :----: |
-| **`RO`**  | Relay outputs: **5A** 230VAC, 7A 30VDC. Switch cycle counter.                                        |   4   |   2   |   -    |   -    |
-| **`TO`**  | Transistor outputs: **4A**. Driven by supply voltage. All support PWM mode.                           |   4   |   5   | **12** |   4    |
-| **`XO`**  | Triac output: 12-230VAC. Zero-crossing detection via digital input.                                   |   2   |   -   |   -    |   -    |
-| **`DI`**  | Digital inputs: **12VDC** logic high. Supports **230VAC**. Most can work as counters.                 |   4   |   4   | **12** |   4    |
-| **`AI`**  | Analog inputs: **0-10V**, **4-20mA**, 0-20mA or 0-10V with voltage follower.                          |   2   |   4   |   4    | **10** |
-| **`AO`**  | Analog output: **0-10V**, **0-20mA** rail-to-rail.                                                    |   -   |   -   |   -    | **4**  |
-| **`RTD`** | Resistive sensor input, optimized for **PT100** and **PT1000**.                                       |   1   |   -   |   -    |   -    |
-| **`RS`**  | **RS485** communication interface with **Modbus RTU**, **BACnet** or bare metal support.              |   2   |   1   |   1    |   2    |
-| **`I2C`** | Communication bus with **5V** buffer and **1kΩ** pull-up.                                             |   1   |   -   |   -    |   1    |
-| **`POT`** | Potentiometer. Works as internal `AI`. Allows configuration without a PC.                             |   1   | **6** |   3    |   -    |
-| **`BTN`** | Button or switch. Works as internal `DI`.                                                             |   1   | **5** |   -    |   -    |
-| **`LED`** | **RGB** status LED.                                                                                   |   1   |   1   |   1    |   1    |
-|  `FLASH`  | Non-volatile memory **`kB`**: program, config, EEPROM emulation.                                      | `512` | `128` | `512`  | `512`  |
-|   `RAM`   | Working memory **`kB`**: buffers and computation.                                                     | `144` | `36`  | `144`  | `144`  |
-|   `RTC`   | Real-time clock: date and time.                                                                       |   🕑   |   -   |   🕑    |   🕑    |
+|  Module   | Description                                                                              |  Uno  |  Eco  |  Dio   |  Aio   |
+| :-------: | :--------------------------------------------------------------------------------------- | :---: | :---: | :----: | :----: |
+| **`RO`**  | Relay outputs: **5A** 230VAC, 7A 30VDC. Switch cycle counter.                            |   4   |   2   |   -    |   -    |
+| **`TO`**  | Transistor outputs: **4A**. Driven by supply voltage. All support PWM mode.              |   4   |   5   | **12** |   4    |
+| **`XO`**  | Triac output: 12-230VAC. Zero-crossing detection via digital input.                      |   2   |   -   |   -    |   -    |
+| **`DI`**  | Digital inputs: **12VDC** logic high. Supports **230VAC**. Most can work as counters.    |   4   |   4   | **12** |   4    |
+| **`AI`**  | Analog inputs: **0-10V**, **4-20mA**, 0-20mA or 0-10V with voltage follower.             |   2   |   4   |   4    | **10** |
+| **`AO`**  | Analog output: **0-10V**, **0-20mA** rail-to-rail.                                       |   -   |   -   |   -    | **4**  |
+| **`RTD`** | Resistive sensor input, optimized for **PT100** and **PT1000**.                          |   1   |   -   |   -    |   -    |
+| **`RS`**  | **RS485** communication interface with **Modbus RTU**, **BACnet** or bare metal support. |   2   |   1   |   1    |   2    |
+| **`I2C`** | Communication bus with **5V** buffer and **1kΩ** pull-up.                                |   1   |   -   |   -    |   1    |
+| **`POT`** | Potentiometer. Works as internal `AI`. Allows configuration without a PC.                |   1   | **6** |   3    |   -    |
+| **`BTN`** | Button or switch. Works as internal `DI`.                                                |   1   | **5** |   -    |   -    |
+| **`LED`** | **RGB** status LED.                                                                      |   1   |   1   |   1    |   1    |
+|  `FLASH`  | Non-volatile memory **`kB`**: program, config, EEPROM emulation.                         | `512` | `128` | `512`  | `512`  |
+|   `RAM`   | Working memory **`kB`**: buffers and computation.                                        | `144` | `36`  | `144`  | `144`  |
+|   `RTC`   | Real-time clock: date and time.                                                          |   🕑   |   -   |   🕑    |   🕑    |
 
 ## 🆚 Key Advantages
 
 **OpenCPLC** controllers stand out in environments where typical PLCs fall short. They support standard **24VDC** automation but also **12VDC**, common in mobile machinery _(construction, agriculture)_. They measure supply voltage `VCC`, important when powering directly from a battery. They accept **230VAC** signals directly on inputs, eliminating the need for extra modules. **4A** outputs handle loads directly, and firmware **`FW`** running without an operating system **`OS`** means fast startup and rock-solid stability. Every controller ships configured as an expansion module but can be easily reprogrammed as a standalone PLC.
 
-| PLC                |      Power supply |     DI1️⃣ | DI 230V | `TO` type | `TO` current | Get `VCC` | `FW`/`OS` |
-| :----------------- | ----------------: | -------: | :-----: | --------- | :----------: | :-------: | :-------: |
-| Siemens S7-1200    |  20.4-28.8V ❌    | ≥15V ❌  |    ❌    | Source    |    0.5A      |     ❌     |   `FW`    |
-| Siemens S7-1500    |  19.2-28.8V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ✅     |   `FW`    |
-| Mitsubishi iQ-F    |      20-28V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ✅     |   `FW`    |
-| Beckhoff CX7000    |  20.4-28.8V ❌    | ≥11V ✅  |    ❌    | Source    |    0.5A      |     ❌     |   `OS`    |
-| WAGO PFC200        |    18-31.2V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ❌     |   `OS`    |
-| Allen-Bradley      |    10-28.8V ✅    | ≥11V ✅  |    ❌    | Source    |    0.5A      |     ❌     |   `FW`    |
-| Schneider Modicon  |  20.4-28.8V ❌    | ≥15V ❌  |    ❌    | Source    |    0.5A      |     ❌     |   `FW`    |
-| Phoenix Contact    |    19.2-30V ❌    | ≥11V ✅  |    ❌    | Both      |    0.5A      |     ❌     |   `OS`    |
-| B&R X20            |  20.4-28.8V ❌    | ≥15V ❌  |    ❌    | Sink 💀   |    0.5A      |     ✅     |   `FW`    |
-| Delta DVP-SS2      |  20.4-28.8V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ❌     |   `FW`    |
-| Eaton easyE4       |  12.2-28.8V ✅    |  ≥9V ✅  |    ✅    | Both      |    0.5A      |     ❌     |   `FW`    |
-| ABB AC500          |      20-30V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ✅     |   `FW`    |
-| Bosch Rexroth      |      18-30V ❌    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ✅     |   `FW`    |
-| Unitronics         |  10.2-28.8V ✅    | ≥15V ❌  |    ❌    | Both      |    0.5A      |     ❌     |   `FW`    |
-| Turck TX500        |      10-32V ✅    | ≥12V ✅  |    ❌    | Source    |    0.5A      |     ❌     |   `OS`    |
-| **OpenCPLC**       |      11-32V ✅    |  ≥9V ✅  |    ✅    | Source    |   **4A**     |     ✅     |   `FW`    |
+| PLC               | Power supply |    DI1️⃣ | DI 230V | `TO` type | `TO` current | Get `VCC` | `FW`/`OS` |
+| :---------------- | -----------: | -----: | :-----: | --------- | :----------: | :-------: | :-------: |
+| Siemens S7-1200   | 20.4-28.8V ❌ | ≥15V ❌ |    ❌    | Source    |     0.5A     |     ❌     |   `FW`    |
+| Siemens S7-1500   | 19.2-28.8V ❌ | ≥15V ❌ |    ❌    | Both      |     0.5A     |     ✅     |   `FW`    |
+| Mitsubishi iQ-F   |     20-28V ❌ | ≥15V ❌ |    ❌    | Both      |     0.5A     |     ✅     |   `FW`    |
+| Beckhoff CX7000   | 20.4-28.8V ❌ | ≥11V ✅ |    ❌    | Source    |     0.5A     |     ❌     |   `OS`    |
+| WAGO PFC200       |   18-31.2V ❌ | ≥15V ❌ |    ❌    | Both      |     0.5A     |     ❌     |   `OS`    |
+| Allen-Bradley     |   10-28.8V ✅ | ≥11V ✅ |    ❌    | Source    |     0.5A     |     ❌     |   `FW`    |
+| Schneider Modicon | 20.4-28.8V ❌ | ≥15V ❌ |    ❌    | Source    |     0.5A     |     ❌     |   `FW`    |
+| Phoenix Contact   |   19.2-30V ❌ | ≥11V ✅ |    ❌    | Both      |     0.5A     |     ❌     |   `OS`    |
+| B&R X20           | 20.4-28.8V ❌ | ≥15V ❌ |    ❌    | Sink 💀    |     0.5A     |     ✅     |   `FW`    |
+| Delta DVP-SS2     | 20.4-28.8V ❌ | ≥15V ❌ |    ❌    | Both      |     0.5A     |     ❌     |   `FW`    |
+| Eaton easyE4      | 12.2-28.8V ✅ |  ≥9V ✅ |    ✅    | Both      |     0.5A     |     ❌     |   `FW`    |
+| ABB AC500         |     20-30V ❌ | ≥15V ❌ |    ❌    | Both      |     0.5A     |     ✅     |   `FW`    |
+| Bosch Rexroth     |     18-30V ❌ | ≥15V ❌ |    ❌    | Both      |     0.5A     |     ✅     |   `FW`    |
+| Unitronics        | 10.2-28.8V ✅ | ≥15V ❌ |    ❌    | Both      |     0.5A     |     ❌     |   `FW`    |
+| Turck TX500       |     10-32V ✅ | ≥12V ✅ |    ❌    | Source    |     0.5A     |     ❌     |   `OS`    |
+| **OpenCPLC**      |     11-32V ✅ |  ≥9V ✅ |    ✅    | Source    |    **4A**    |     ✅     |   `FW`    |
 
 _Data in the table is indicative. Most PLCs support expansion modules with higher current capacity or 230V signal handling. Values refer to standard digital inputs and transistor outputs._
 

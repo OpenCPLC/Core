@@ -1,4 +1,4 @@
-/** @file lib/col/queue.h */
+// lib/col/queue.h
 
 #ifndef QUEUE_H_
 #define QUEUE_H_

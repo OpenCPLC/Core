@@ -1,4 +1,4 @@
-// hal/stm32wb/i2c_wb.c
+// hal/stm32wb/itf/i2c_wb.c
 
 #include "i2c.h"
 

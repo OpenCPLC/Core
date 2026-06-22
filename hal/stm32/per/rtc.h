@@ -95,7 +95,7 @@ typedef struct {
 
 //--------------------------------------------------------------------------------------------- API
 
-// Initialize RTC peripheral, enable LSE, configure NVIC — call once before use
+// Initialize RTC peripheral, enable LSE, configure NVIC. Call once before use
 void RTC_Init(void);
 
 //----------------------------------------------------------------------------------------- Convert

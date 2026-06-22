@@ -9,11 +9,11 @@
 //-------------------------------------------------------------------------------------------------
 
 #ifndef TASK_LIMIT
-  // Maximum tasks in queue.
+  // Maximum tasks in queue
   #define TASK_LIMIT 16
 #endif
 
-// Cast helper for handler functions.
+// Cast helper for handler functions
 #define TASK_ (void (*)(void *))
 
 /**

@@ -15,24 +15,24 @@
   #include "stm32g4xx.h"
 #endif
 
-//------------------------------------------------------------------------------------------------- Compatibility Layer
+//------------------------------------------------------------------------- Compatibility Layer
 
 #if defined(STM32G0)
-  #define FLASH_PAGE_SIZE   ((uint32_t)0x00000800) // 2KB
+  #define FLASH_PAGE_SIZE ((uint32_t)0x00000800) // 2KB
   #ifdef STM32G081xx
-    #define FLASH_PAGES     64
+    #define FLASH_PAGES 64
   #elif defined(STM32G0C1xx)
-    #define FLASH_PAGES     256
+    #define FLASH_PAGES 256
   #endif
 #elif defined(STM32WB)
-  #define FLASH_PAGE_SIZE   ((uint32_t)0x00001000) // 4KB
-  #define FLASH_PAGES       ((uint16_t)(FLASH_SIZE / FLASH_PAGE_SIZE))
+  #define FLASH_PAGE_SIZE  ((uint32_t)0x00001000) // 4KB
+  #define FLASH_PAGES      ((uint16_t)(FLASH_SIZE / FLASH_PAGE_SIZE))
 #elif defined(STM32G4)
-  #define FLASH_PAGE_SIZE   ((uint32_t)0x00000800) // 2KB
-  #define FLASH_PAGES       ((uint16_t)(FLASH_SIZE / FLASH_PAGE_SIZE))
+  #define FLASH_PAGE_SIZE  ((uint32_t)0x00000800) // 2KB
+  #define FLASH_PAGES      ((uint16_t)(FLASH_SIZE / FLASH_PAGE_SIZE))
 #endif
 
-//------------------------------------------------------------------------------------------------- API
+//----------------------------------------------------------------------------------------- API
 
 /**
  * @brief Erase Flash page.
@@ -61,7 +61,7 @@ uint32_t FLASH_Read(uint32_t addr);
  * @param[in] addr Flash address (must be 8-byte aligned)
  * @param[in] data1 Lower 32 bits
  * @param[in] data2 Upper 32 bits
- * @return `OK` on success, `ERR` on error
+ * @return `OK` on success, `ERR` on error or misaligned `addr`
  */
 status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2);
 
@@ -69,7 +69,7 @@ status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2);
  * @brief Fast write 256 bytes to Flash (row programming).
  * @param[in] addr Block address (must be 256-byte aligned)
  * @param[in] data Pointer to 256-byte buffer
- * @return `OK` on success, `ERR` on error
+ * @return `OK` on success, `ERR` on error or misaligned `addr`
  * @note Function runs from RAM (`.data#` section)
  */
 status_t FLASH_WriteFast(uint32_t addr, uint32_t *data) __attribute__((section(".data#")));
@@ -108,6 +108,5 @@ status_t FLASH_Save(uint16_t page, uint8_t *data, uint16_t size);
  */
 uint16_t FLASH_Load(uint16_t page, uint8_t *data);
 
-//-------------------------------------------------------------------------------------------------
-
+//---------------------------------------------------------------------------------------------
 #endif

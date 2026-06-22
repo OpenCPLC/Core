@@ -1,4 +1,4 @@
-// hal/stm32wb/adc_wb.c
+// hal/stm32wb/per/adc_wb.c
 
 #include "adc.h"
 #include "dma.h"

@@ -1,4 +1,4 @@
-/** @file lib/ext/xmath.c */
+// lib/ext/xmath.c
 
 #include "xmath.h"
 
@@ -275,7 +275,7 @@ float avg_i32(const int32_t *array, uint16_t len)
  * @param[out] max Pointer to store maximum value (cannot be `NULL`).
  * @param[out] sum Optional pointer to store sum as `int64_t` (can be `NULL`).
  * @param[out] avg Optional pointer to store average as `float` (can be `NULL`).
- * @retval `true` on success; `false` if `count` is 0 or pointers are invalid.
+ * @return `true` on success, `false` if `count` is 0 or pointers are invalid
  */
 bool stats_u16(const uint16_t *data, uint16_t count, uint16_t *min, uint16_t *max, uint32_t *sum, float *avg)
 {
@@ -302,7 +302,7 @@ bool stats_u16(const uint16_t *data, uint16_t count, uint16_t *min, uint16_t *ma
  * @param[out] max Pointer to store maximum value (cannot be `NULL`).
  * @param[out] sum Optional pointer to store sum as `int64_t` (can be `NULL`).
  * @param[out] avg Optional pointer to store average as `float` (can be `NULL`).
- * @retval `true` on success; `false` if `count` is 0 or pointers are invalid.
+ * @return `true` on success, `false` if `count` is 0 or pointers are invalid
  */
 bool stats_i16(const int16_t *data, uint16_t count, int16_t *min, int16_t *max, int32_t *sum, float *avg)
 {
@@ -329,7 +329,7 @@ bool stats_i16(const int16_t *data, uint16_t count, int16_t *min, int16_t *max, 
  * @param[out] max Pointer to store maximum value (cannot be `NULL`).
  * @param[out] sum Optional pointer to store sum as `int64_t` (can be `NULL`).
  * @param[out] avg Optional pointer to store average as `float` (can be `NULL`).
- * @retval `true` on success; `false` if `count` is 0 or pointers are invalid.
+ * @return `true` on success, `false` if `count` is 0 or pointers are invalid
  */
 bool stats_u32(const uint32_t *data, uint16_t count, uint32_t *min, uint32_t *max, uint64_t *sum, float *avg)
 {
@@ -356,7 +356,7 @@ bool stats_u32(const uint32_t *data, uint16_t count, uint32_t *min, uint32_t *ma
  * @param[out] max Pointer to store maximum value (cannot be `NULL`).
  * @param[out] sum Optional pointer to store sum as `int64_t` (can be `NULL`).
  * @param[out] avg Optional pointer to store average as `float` (can be `NULL`).
- * @retval `true` on success; `false` if `count` is 0 or pointers are invalid.
+ * @return `true` on success, `false` if `count` is 0 or pointers are invalid
  */
 bool stats_i32(const int32_t *data, uint16_t count, int32_t *min, int32_t *max, int64_t *sum, float *avg)
 {
@@ -434,6 +434,49 @@ float mid_mean_u16(uint16_t *buff, uint16_t len)
   select_u16(buff, len, start);
   select_u16(&buff[start], len - start, size - 1);
   return avg_u16(&buff[start], size);
+}
+
+static void select_i16(int16_t *array, uint16_t len, uint16_t nth)
+{
+  if(len < 2 || nth >= len) return;
+  uint16_t left = 0;
+  uint16_t right = len - 1;
+  while(left < right) {
+    uint16_t mid = left + (right - left) / 2;
+    int16_t a = array[left];
+    int16_t b = array[mid];
+    int16_t c = array[right];
+    int16_t pivot;
+    if(a < b) pivot = (b < c) ? b : ((a < c) ? c : a);
+    else pivot = (a < c) ? a : ((b < c) ? c : b);
+    uint16_t i = left;
+    uint16_t j = right;
+    while(1) {
+      while(i <= right && array[i] < pivot) i++;
+      while(j > left && array[j] > pivot) j--;
+      if(i >= j) break;
+      int16_t tmp = array[i];
+      array[i] = array[j];
+      array[j] = tmp;
+      i++;
+      if(j == 0) break;
+      j--;
+    }
+    if(nth <= j) right = j;
+    else left = j + 1;
+  }
+}
+
+float mid_mean_i16(int16_t *buff, uint16_t len)
+{
+  if(len == 0) return 0.0f;
+  if(len <= 2) return avg_i16(buff, len);
+  uint16_t size = len / 3;
+  if(size == 0) return avg_i16(buff, len);
+  uint16_t start = size;
+  select_i16(buff, len, start);
+  select_i16(&buff[start], len - start, size - 1);
+  return avg_i16(&buff[start], size);
 }
 
 float rms_i32(int32_t *array, uint16_t len)

@@ -30,18 +30,3 @@ void DAC_Init(bool ch1_pa4, bool ch2_pa5)
   DAC_Calib(ch1_pa4, ch2_pa5);
   DAC1->CR |= (ch1_pa4 ? DAC_CR_EN1: 0) | (ch2_pa5 ? DAC_CR_EN2: 0);
 }
-
-inline void DAC_SetCH1(uint16_t value)
-{
-  DAC1->DHR12R1 = value & DAC_MASK;
-}
-
-inline void DAC_SetCH2(uint16_t value)
-{
-  DAC1->DHR12R2 = value & DAC_MASK;
-}
-
-inline void DAC_Set(uint16_t ch1, uint16_t ch2)
-{
-  DAC1->DHR12RD = DAC_SET(ch1, ch2);
-}

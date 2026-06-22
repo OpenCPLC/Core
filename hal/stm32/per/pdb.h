@@ -1,4 +1,4 @@
-// hal/stm32/pdb.h
+// hal/stm32/per/pdb.h
 
 #ifndef PDB_H_
 #define PDB_H_
@@ -32,11 +32,11 @@ typedef enum {
 } PDB_Status_t;
 
 typedef enum {
-  PDB_Desc = 0, // Newest first (reverse physical order)
-  PDB_Asc = 1   // Oldest first (forward physical order)
+  PDB_Desc = 0, // Newest first (reverse physical order).
+  PDB_Asc = 1   // Oldest first (forward physical order).
 } PDB_Dir_t;
 
-// Filter callback: return `true` to include record. `ctx` from `PDB_Query_t.filter_ctx`.
+// Filter callback. Returns `true` to include record. `ctx` from `PDB_Query_t.filter_ctx`.
 typedef bool (*PDB_Filter_t)(const void *record, void *ctx);
 
 /**
@@ -44,12 +44,13 @@ typedef bool (*PDB_Filter_t)(const void *record, void *ctx);
  * Append-only circular flash log with fixed-size records.
  * First `uint32_t` of each record is a monotonic sort key
  * (timestamp, counter, sequence: user decides). Iterator `dir`
- * traverses physical layout — assumes user writes monotonic keys,
- * order across page wrap-around is not re-sorted.
+ * traverses physical layout. Assumes user writes monotonic keys.
+ * Order across page wrap-around is not re-sorted.
  * Requires STM32 doubleword (8B) flash write via `FLASH_Write`.
- * Not reentrant — single-threaded or cooperative scheduler (VRTS) only.
+ * Not reentrant. Single-threaded or cooperative scheduler (VRTS) only.
  * Torn-write recovery requires `crc != NULL`. Without CRC, partially
- * written records after power loss may be read as valid garbage.
+ * written records after power loss may be read as valid garbage and
+ * init may pick a partially-erased page as active.
  * @param[in] page_start First flash page reserved for PDB
  * @param[in] page_count Number of flash pages (must be >= 2)
  * @param[in] payload_size User record size in bytes (>= 4, first 4B = sort key)
@@ -63,14 +64,14 @@ typedef bool (*PDB_Filter_t)(const void *record, void *ctx);
  * @param _pointer_end Past-last record address on active page
  */
 typedef struct {
-  uint8_t page_start;
-  uint8_t page_count;
+  uint16_t page_start;
+  uint16_t page_count;
   uint8_t payload_size;
   const CRC_t *crc;
   // internal
   uint16_t _record_size;
-  uint8_t _page_stop;
-  uint8_t _page_active;
+  uint16_t _page_stop;
+  uint16_t _page_active;
   uint32_t _pointer;
   uint32_t _pointer_start;
   uint32_t _pointer_end;
@@ -90,8 +91,8 @@ typedef struct {
 typedef struct {
   uint32_t key_min;
   uint32_t key_max;
-  uint16_t limit;
-  uint16_t skip;
+  uint32_t limit;
+  uint32_t skip;
   PDB_Dir_t dir;
   PDB_Filter_t filter;
   void *filter_ctx;
@@ -102,16 +103,16 @@ typedef struct {
  * @param count Records returned so far
  */
 typedef struct {
-  uint16_t count;
+  uint32_t count;
   // internal
   PDB_t *_pdb;
   PDB_Query_t _query;
-  uint8_t _page;
+  uint16_t _page;
   uint32_t _pointer;
   uint32_t _pointer_start;
   uint32_t _pointer_end;
   uint32_t _origin;
-  uint16_t _skipped;
+  uint32_t _skipped;
   bool _done;
 } PDB_Iter_t;
 
@@ -129,6 +130,8 @@ status_t PDB_Init(PDB_t *pdb);
  * @brief Append record to database.
  * Writes payload (+ CRC if configured) to flash.
  * Advances to next page and erases it when current page is full.
+ * On partial write failure, the corrupted slot is skipped and the write is
+ * retried on the next slot. Returns `ERR` only after the retry also fails.
  * @param[in,out] pdb Pointer to `PDB_t` instance
  * @param[in] record Pointer to user record (`payload_size` bytes)
  * @return `OK` on success, `ERR` on flash error

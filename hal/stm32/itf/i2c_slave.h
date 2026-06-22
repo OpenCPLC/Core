@@ -1,4 +1,4 @@
-// hal/stm32/i2c_slave.h
+// hal/stm32/itf/i2c_slave.h
 
 #ifndef I2C_SLAVE_H_
 #define I2C_SLAVE_H_

@@ -50,20 +50,22 @@ bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
   VRTS_Task_t *thread = &vrts.threads[vrts.count];
   thread->handler = handler;
   #if defined(STM32WB)
+    // M4 with FPU: 17 words = 8 hardware + 1 `EXC_RETURN` + 8 software-saved (r4-r11).
+    // `EXC_RETURN` 0xFFFFFFFD: thread mode, PSP, no FPU context (FPCA bit 4 clear).
+    // PendSV checks bit 4 to decide if lazy FPU state must be stacked on next switch.
     thread->stack = (uint32_t)(stack + size - 17);
-    stack[size - 1] = (1 << 24); // XPSR: Default value
-    stack[size - 2] = (uint32_t)handler; // PC: Point to the handler function
-    stack[size - 3] = (uint32_t)&VRTS_TaskFinished; // LR: handler return
-    stack[size - 9] = 0xFFFFFFFD; // EXC_RETURN
-    // Zero r4-r11 (software saved)
-    for(int i = 10; i <= 17; i++) stack[size - i] = 0;
+    stack[size - 1] = (1 << 24); // XPSR: Thumb bit
+    stack[size - 2] = (uint32_t)handler; // PC: handler entry
+    stack[size - 3] = (uint32_t)&VRTS_TaskFinished; // LR: return target
+    stack[size - 9] = 0xFFFFFFFD; // EXC_RETURN: thread mode + PSP, no FPU frame
+    for(int i = 10; i <= 17; i++) stack[size - i] = 0; // r4-r11 (software saved)
   #else
+    // M0+: 16 words = 8 hardware + 8 software-saved. No FPU, no `EXC_RETURN` slot.
     thread->stack = (uint32_t)(stack + size - 16);
-    stack[size - 1] = 0x01000000; // XPSR: Default value
-    stack[size - 2] = (uint32_t)handler; // PC: Point to the handler function
-    stack[size - 3] = (uint32_t)&VRTS_TaskFinished; // LR: handler return
-    // Zero r4-r11 (software saved): positions size-9 to size-16
-    for(int i = 9; i <= 16; i++) stack[size - i] = 0;
+    stack[size - 1] = 0x01000000; // XPSR: Thumb bit
+    stack[size - 2] = (uint32_t)handler; // PC: handler entry
+    stack[size - 3] = (uint32_t)&VRTS_TaskFinished; // LR: return target
+    for(int i = 9; i <= 16; i++) stack[size - i] = 0; // r4-r11 (software saved)
   #endif
   vrts.count++;
   return true;

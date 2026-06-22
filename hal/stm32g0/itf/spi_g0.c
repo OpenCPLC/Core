@@ -1,4 +1,4 @@
-// hal/stm32g0/spi_g0.c
+// hal/stm32g0/itf/spi_g0.c
 
 #include "spi.h"
 #include "dma.h"

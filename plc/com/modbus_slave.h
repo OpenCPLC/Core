@@ -1,4 +1,4 @@
-// plc/com/modbus-slave.h
+// plc/com/modbus_slave.h
 
 #ifndef MODBUS_SLAVE_H_
 #define MODBUS_SLAVE_H_
@@ -18,7 +18,7 @@ typedef enum {
   MODBUS_Status_InvalidSize = 5, // Data length does not match function specification
   MODBUS_Status_InvalidCRC = 6,  // CRC check failed
   MODBUS_Status_SendError = 7,   // Failed to send response frame
-} MODBUS_Status_e;
+} MODBUS_Status_t;
 
 #define MODBUS_IsError(status) (status >= MODBUS_Status_TooShort)
 
@@ -28,14 +28,14 @@ typedef struct {
   uint16_t *reg_read;
   uint16_t *reg_write;
   uint16_t reg_count;
-  const bool *write_mask; // Ustaw 1 jeżeli pozwala na wpisywanie do danego rejestru
-  bool *update_flag; // Ustawia 1, gdy wartość została odświerzona
+  const bool *write_mask; // Per-register write permission (`true` = writable)
+  bool *update_flag; // Set to `true` when register was updated by master
   bool update_any;
   uint8_t *buffer_tx;
   uint8_t *buffer_rx;
 } MODBUS_Slave_t;
 
-MODBUS_Status_e MODBUS_Loop(MODBUS_Slave_t *modbus);
+MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus);
 bool MODBUS_HasUpdate(MODBUS_Slave_t *modbus);
 
 //-------------------------------------------------------------------------------------------------

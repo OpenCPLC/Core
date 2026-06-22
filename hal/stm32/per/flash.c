@@ -2,37 +2,44 @@
 
 #include "flash.h"
 
-//------------------------------------------------------------------------------------------------- Compatibility Layer
+//------------------------------------------------------------------------- Compatibility Layer
 
-#define FLASH_START_ADDR  ((uint32_t)0x08000000)
-#define FLASH_KEY1        ((uint32_t)0x45670123)
-#define FLASH_KEY2        ((uint32_t)0xCDEF89AB)
+#define FLASH_START_ADDR ((uint32_t)0x08000000)
+#define FLASH_KEY1 ((uint32_t)0x45670123)
+#define FLASH_KEY2 ((uint32_t)0xCDEF89AB)
 
 #if defined(STM32G0)
-  #define FLASH_BSY         FLASH_SR_BSY1
-  #define FLASH_PNB_POS     3
+  #define FLASH_BSY FLASH_SR_BSY1
+  #define FLASH_PNB_POS 3
+  #if defined(STM32G0C1xx)
+    #define FLASH_PNB_MASK (FLASH_CR_PNB | FLASH_CR_BKER)
+  #else
+    #define FLASH_PNB_MASK FLASH_CR_PNB
+  #endif
   // G0 error flags
-  #define FLASH_ERR_FLAGS   (FLASH_SR_WRPERR | FLASH_SR_PGAERR | FLASH_SR_SIZERR | \
-                             FLASH_SR_PGSERR | FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
-  #define FLASH_CLR_FLAGS   (FLASH_SR_EOP | FLASH_ERR_FLAGS)
+  #define FLASH_ERR_FLAGS (FLASH_SR_WRPERR | FLASH_SR_PGAERR | FLASH_SR_SIZERR | \
+    FLASH_SR_PGSERR | FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
+  #define FLASH_CLR_FLAGS (FLASH_SR_EOP | FLASH_ERR_FLAGS)
 #elif defined(STM32WB)
-  #define FLASH_BSY         FLASH_SR_BSY
-  #define FLASH_PNB_POS     FLASH_CR_PNB_Pos
+  #define FLASH_BSY FLASH_SR_BSY
+  #define FLASH_PNB_POS FLASH_CR_PNB_Pos
+  #define FLASH_PNB_MASK FLASH_CR_PNB
   // WB error flags (includes OPERR, PROGERR)
-  #define FLASH_ERR_FLAGS   (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | \
-                             FLASH_SR_PGAERR | FLASH_SR_SIZERR | FLASH_SR_PGSERR | \
-                             FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
-  #define FLASH_CLR_FLAGS   (FLASH_SR_EOP | FLASH_ERR_FLAGS)
+  #define FLASH_ERR_FLAGS (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | \
+    FLASH_SR_PGAERR | FLASH_SR_SIZERR | FLASH_SR_PGSERR | \
+    FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
+  #define FLASH_CLR_FLAGS (FLASH_SR_EOP | FLASH_ERR_FLAGS)
 #elif defined(STM32G4)
-  #define FLASH_BSY         FLASH_SR_BSY
-  #define FLASH_PNB_POS     FLASH_CR_PNB_Pos
-  #define FLASH_ERR_FLAGS   (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | \
-                             FLASH_SR_PGAERR | FLASH_SR_SIZERR | FLASH_SR_PGSERR | \
-                             FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
-  #define FLASH_CLR_FLAGS   (FLASH_SR_EOP | FLASH_ERR_FLAGS)
+  #define FLASH_BSY FLASH_SR_BSY
+  #define FLASH_PNB_POS FLASH_CR_PNB_Pos
+  #define FLASH_PNB_MASK FLASH_CR_PNB
+  #define FLASH_ERR_FLAGS (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | \
+    FLASH_SR_PGAERR | FLASH_SR_SIZERR | FLASH_SR_PGSERR | \
+    FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
+  #define FLASH_CLR_FLAGS (FLASH_SR_EOP | FLASH_ERR_FLAGS)
 #endif
 
-//------------------------------------------------------------------------------------------------- Internal
+//------------------------------------------------------------------------------------ Internal
 
 static inline void flash_wait(void)
 {
@@ -51,7 +58,7 @@ static inline uint32_t flash_bank_bit(uint16_t page)
 }
 #endif
 
-//------------------------------------------------------------------------------------------------- Init
+//---------------------------------------------------------------------------------------- Init
 
 static inline status_t flash_unlock(void)
 {
@@ -70,13 +77,14 @@ static inline void flash_lock(void)
   FLASH->CR |= FLASH_CR_LOCK;
 }
 
-//------------------------------------------------------------------------------------------------- Erase
+//--------------------------------------------------------------------------------------- Erase
 
 status_t FLASH_Erase(uint16_t page)
 {
   if(page >= FLASH_PAGES) return ERR;
   if(flash_unlock()) return ERR;
-  FLASH->CR &= ~FLASH_CR_PNB;
+  FLASH->SR = FLASH_CLR_FLAGS;
+  FLASH->CR &= ~FLASH_PNB_MASK;
   #if defined(STM32G0) && defined(STM32G0C1xx)
     FLASH->CR |= flash_bank_bit(page) | ((uint32_t)page << FLASH_PNB_POS) | FLASH_CR_PER;
   #else
@@ -86,16 +94,15 @@ status_t FLASH_Erase(uint16_t page)
   flash_wait();
   FLASH->CR &= ~FLASH_CR_PER;
   __DSB();
-  if(FLASH->SR & FLASH_SR_EOP) {
-    FLASH->SR = FLASH_SR_EOP;
-    flash_lock();
-    return OK;
-  }
+  uint32_t sr = FLASH->SR;
+  FLASH->SR = FLASH_CLR_FLAGS;
   flash_lock();
+  if(sr & FLASH_ERR_FLAGS) return ERR;
+  if(sr & FLASH_SR_EOP) return OK;
   return ERR;
 }
 
-//------------------------------------------------------------------------------------------------- Address/Read
+//-------------------------------------------------------------------------------- Address/Read
 
 uint32_t FLASH_GetAddress(uint16_t page, int16_t offset)
 {
@@ -107,51 +114,60 @@ uint32_t FLASH_Read(uint32_t addr)
   return *(uint32_t *)addr;
 }
 
-//------------------------------------------------------------------------------------------------- Write
+//--------------------------------------------------------------------------------------- Write
 
+// Doubleword program: requires 8B-aligned address and uninterrupted store pair.
+// IRQ between `data1` and `data2` triggers `PROGERR`/`SIZERR` on G0/WB/G4.
 status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2)
 {
+  if(addr & 7u) return ERR;
   if(flash_unlock()) return ERR;
   FLASH->SR = FLASH_CLR_FLAGS;
   FLASH->CR |= FLASH_CR_PG;
-  *(uint32_t *)addr = data1;
-  __ISB();
-  *(uint32_t *)(addr + 4u) = data2;
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  *(volatile uint32_t *)addr = data1;
+  *(volatile uint32_t *)(addr + 4u) = data2;
   __DSB();
   flash_wait();
   FLASH->CR &= ~FLASH_CR_PG;
-  if(FLASH->SR & FLASH_ERR_FLAGS) {
-    flash_lock();
-    return ERR;
-  }
-  FLASH->SR = FLASH_SR_EOP;
-  if(*(volatile uint32_t *)addr != data1 || *(volatile uint32_t *)(addr + 4u) != data2) {
-    flash_lock();
-    return ERR;
-  }
+  __set_PRIMASK(primask);
+  uint32_t sr = FLASH->SR;
+  FLASH->SR = FLASH_CLR_FLAGS;
   flash_lock();
+  if(sr & FLASH_ERR_FLAGS) return ERR;
+  if(*(volatile uint32_t *)addr != data1) return ERR;
+  if(*(volatile uint32_t *)(addr + 4u) != data2) return ERR;
   return OK;
 }
 
+// Fast (row) program: 256B aligned, MUST execute from RAM (RWW conflict otherwise).
+// Linker must place this in `.RamFunc` and copy at startup.
 status_t FLASH_WriteFast(uint32_t addr, uint32_t *data)
 {
+  if(addr & 0xFFu) return ERR;
+  uint32_t self = (uint32_t)&FLASH_WriteFast & ~1u; // mask Thumb bit
+  if(self >= FLASH_START_ADDR && self < FLASH_START_ADDR + (FLASH_PAGES * FLASH_PAGE_SIZE)) {
+    return ERR; // not in RAM: linker misconfig
+  }
   if(flash_unlock()) return ERR;
-  while(FLASH->SR & FLASH_BSY);
+  flash_wait();
+  FLASH->SR = FLASH_CLR_FLAGS;
   FLASH->CR |= FLASH_CR_FSTPG;
+  uint32_t primask = __get_PRIMASK();
   __disable_irq();
   for(int i = 0; i < 64; i++) {
     *(uint32_t *)addr = data[i];
     addr += 4u;
   }
-  while(FLASH->SR & FLASH_BSY);
+  flash_wait();
   FLASH->CR &= ~FLASH_CR_FSTPG;
-  __enable_irq();
-  if(FLASH->SR & FLASH_SR_EOP) {
-    FLASH->SR = FLASH_SR_EOP;
-    flash_lock();
-    return OK;
-  }
+  __set_PRIMASK(primask);
+  uint32_t sr = FLASH->SR;
+  FLASH->SR = FLASH_CLR_FLAGS;
   flash_lock();
+  if(sr & FLASH_ERR_FLAGS) return ERR;
+  if(sr & FLASH_SR_EOP) return OK;
   return ERR;
 }
 
@@ -167,53 +183,71 @@ status_t FLASH_WritePage(uint16_t page, uint8_t *data)
   return OK;
 }
 
-//------------------------------------------------------------------------------------------------- Compare/Save/Load
+//--------------------------------------------------------------------------- Compare/Save/Load
 
 bool FLASH_Compare(uint16_t page, uint8_t *data, uint16_t size)
 {
+  if(page >= FLASH_PAGES) return false;
   uint32_t addr = FLASH_GetAddress(page, 0);
-  uint16_t size_flash = FLASH_Read(addr);
-  if(size_flash != size) return false;
-  addr += 4;
-  return (memcmp(data, (uint8_t *)addr, size) == 0);
+  uint32_t flash_end = FLASH_GetAddress(FLASH_PAGES, 0);
+  if(flash_end - addr < 4u + size) return false;
+  uint32_t raw = FLASH_Read(addr);
+  if(raw == 0xFFFFFFFFu) return false;
+  if((uint16_t)raw != size) return false;
+  return memcmp(data, (uint8_t *)(addr + 4u), size) == 0;
 }
 
+// Layout: [size:4B][data:size B] padded to 8B boundary per DW write.
+// Real footprint = `align_up(size + 4, 8)`. First DW = `(size, data[0..3])`.
 status_t FLASH_Save(uint16_t page, uint8_t *data, uint16_t size)
 {
   if(page >= FLASH_PAGES) return ERR;
-  if(FLASH_Erase(page)) return ERR;
+  if(size == 0) return ERR;
+  uint32_t total = ((uint32_t)size + 4u + 7u) & ~7u;
   uint32_t addr = FLASH_GetAddress(page, 0);
-  uint32_t end = FLASH_GetAddress(page + 1, 0);
-  int32_t length = (int32_t)size;
-  if(addr + size >= FLASH_GetAddress(FLASH_PAGES, 0)) return ERR;
-  if(FLASH_Write(addr, (uint32_t)size, *(uint32_t *)data)) return ERR;
-  length -= 4;
-  data += 4;
-  if(length <= 0) return OK;
-  addr += 8;
-  while(length > 0) {
-    if(addr >= end) {
+  uint32_t flash_end = FLASH_GetAddress(FLASH_PAGES, 0);
+  uint32_t end_page = FLASH_GetAddress(page + 1, 0);
+  if(flash_end - addr < total) return ERR;
+  if(FLASH_Erase(page)) return ERR;
+  uint32_t w1 = 0xFFFFFFFFu;
+  uint16_t chunk = size > 4 ? 4 : size;
+  memcpy(&w1, data, chunk);
+  if(FLASH_Write(addr, (uint32_t)size, w1)) return ERR;
+  addr += 8u;
+  data += chunk;
+  size -= chunk;
+  uint32_t d[2];
+  while(size) {
+    if(addr >= end_page) {
       page++;
+      if(page >= FLASH_PAGES) return ERR;
       if(FLASH_Erase(page)) return ERR;
-      end = FLASH_GetAddress(page + 1, 0);
+      end_page = FLASH_GetAddress(page + 1, 0);
     }
-    if(FLASH_Write(addr, *(uint32_t *)data, *((uint32_t *)data + 1))) return ERR;
-    length -= 8;
-    addr += 8;
-    data += 8;
+    d[0] = 0xFFFFFFFFu;
+    d[1] = 0xFFFFFFFFu;
+    chunk = size > 8 ? 8 : size;
+    memcpy(d, data, chunk);
+    if(FLASH_Write(addr, d[0], d[1])) return ERR;
+    addr += 8u;
+    data += chunk;
+    size -= chunk;
   }
   return OK;
 }
 
 uint16_t FLASH_Load(uint16_t page, uint8_t *data)
 {
+  if(page >= FLASH_PAGES) return 0;
   uint32_t addr = FLASH_GetAddress(page, 0);
-  uint16_t size = FLASH_Read(addr);
-  if(addr + size >= FLASH_GetAddress(FLASH_PAGES, 0)) return 0;
-  if(size == 0xFFFF) return 0;
-  addr += 4;
-  memcpy(data, (uint8_t *)addr, size);
+  uint32_t flash_end = FLASH_GetAddress(FLASH_PAGES, 0);
+  uint32_t raw = FLASH_Read(addr);
+  if(raw == 0xFFFFFFFFu) return 0;
+  uint16_t size = (uint16_t)raw;
+  if(size == 0) return 0;
+  if(flash_end - addr < 4u + size) return 0;
+  memcpy(data, (uint8_t *)(addr + 4u), size);
   return size;
 }
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------

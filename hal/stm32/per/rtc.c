@@ -1,6 +1,7 @@
 // hal/stm32/per/rtc.c
 
 #include "rtc.h"
+#include "pwr.h"
 
 //------------------------------------------------------------------------------ Compatibility Layer
 
@@ -8,6 +9,7 @@
   // G0: status in `ICSR`, clear via `SCR` (write-to-clear)
   #define RTC_SR        (RTC->ICSR)
   #define RTC_INITF     RTC_ICSR_INITF
+  #define RTC_INITS     RTC_ICSR_INITS
   #define RTC_INIT      RTC_ICSR_INIT
   #define RTC_ALRAWF    RTC_ICSR_ALRAWF
   #define RTC_ALRBWF    RTC_ICSR_ALRBWF
@@ -17,6 +19,7 @@
   // WB: status in `ISR`, clear via `ISR` (read-modify-write)
   #define RTC_SR        (RTC->ISR)
   #define RTC_INITF     RTC_ISR_INITF
+  #define RTC_INITS     RTC_ISR_INITS
   #define RTC_INIT      RTC_ISR_INIT
   #define RTC_ALRAWF    RTC_ISR_ALRAWF
   #define RTC_ALRBWF    RTC_ISR_ALRBWF
@@ -38,7 +41,7 @@
 #define RTC_WPR_KEY2  0x53
 #define RTC_WPR_LOCK  0xFF
 
-// Minimum sensible year offset from 2000 — used as `RtcReady` sanity check
+// Minimum sensible year offset from 2000, used as `RtcReady` sanity check
 #define RTC_YEAR_MIN  26
 
 #define RTC_LEAP_YEAR(y)    ((((y) % 4 == 0) && ((y) % 100 != 0)) || ((y) % 400 == 0))
@@ -100,7 +103,7 @@ static inline uint32_t rtc_alarm_wf_mask(RTC_Alarm_t alarm)
 }
 
 /**
- * @brief Clear RTC status flag — handles G0/WB register layout difference.
+ * @brief Clear RTC status flag. Handles G0/WB register layout difference.
  * @param[in] flag Flag mask (`RTC_SCR_*` on G0, `RTC_ISR_*` on WB)
  */
 static inline void rtc_clear_flag(uint32_t flag)
@@ -194,6 +197,14 @@ static bool rtc_check_base(int32_t stamp_min, int32_t stamp_max,
 
 //--------------------------------------------------------------------------------------------- Init
 
+// RTC is running when LSE is its clock source, it is enabled, and `LSCO` is off.
+static bool rtc_running(void)
+{
+  uint32_t want = RCC_BDCR_LSEON | RCC_BDCR_LSERDY | RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
+  uint32_t mask = want | RCC_BDCR_RTCSEL | RCC_BDCR_LSCOEN;
+  return ((RCC->BDCR & mask) == want) && (RTC_SR & RTC_INITS);
+}
+
 void RTC_Init(void)
 {
   // Enable clocks
@@ -202,15 +213,14 @@ void RTC_Init(void)
   #elif defined(STM32WB)
     RCC->APB1ENR1 |= RCC_APB1ENR1_RTCAPBEN;
   #endif
-  // Backup domain reset
-  RCC->BDCR |= RCC_BDCR_BDRST;
-  RCC->BDCR &= ~RCC_BDCR_BDRST;
   PWR->CR1 |= PWR_CR1_DBP;
-  // Enable LSE
-  RCC->BDCR |= RCC_BDCR_LSEON;
-  while(!(RCC->BDCR & RCC_BDCR_LSERDY)) __NOP();
-  // Select LSE and enable RTC
-  RCC->BDCR |= RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
+  // valid RTC survives resets; reset and rebuild only a stopped or corrupt domain.
+  if(!rtc_running()) {
+    BKP_DomainReset();
+    RCC->BDCR |= RCC_BDCR_LSEON;
+    while(!(RCC->BDCR & RCC_BDCR_LSERDY)) __NOP();
+    RCC->BDCR |= RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
+  }
   // Enable interrupts
   rtc_unlock();
   RTC->CR |= RTC_CR_TSIE | RTC_CR_WUTIE | RTC_CR_ALRBIE | RTC_CR_ALRAIE;
@@ -367,7 +377,7 @@ void RTC_Reset(void)
 
 RTC_Datetime_t RTC_Datetime(void)
 {
-  // Read SSR first, then TR, then DR — order required by RM to unlock shadow regs
+  // Read SSR first, then TR, then DR. Order required by RM to unlock shadow regs
   uint32_t ssr = RTC->SSR;
   uint32_t tr = RTC->TR;
   uint32_t dr = RTC->DR;

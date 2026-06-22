@@ -67,7 +67,8 @@ typedef enum {
   IRQ_UART2_LPUART2 = 28,
   IRQ_UART3456_LPUART1 = 29,
   IRQ_CEC = 30,
-  IRQ_RNG = 31
+  IRQ_RNG = 31,
+  IRQ_Invalid = -127
 } IRQ_t;
 
 //-------------------------------------------------------------------------------------------------

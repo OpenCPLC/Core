@@ -43,14 +43,14 @@ uint64_t tick_keep(uint32_t offset_ms);
 uint64_t tick_now(void);
 
 /**
- * @brief One-shot expired check — auto-resets `*tick` to 0 on trigger
+ * @brief One-shot expired check, auto-resets `*tick` to 0 on trigger
  * @param[in,out] tick Pointer to deadline set by `tick_keep()`
  * @return `true` once when deadline passes, `false` otherwise
  */
 bool tick_over(uint64_t *tick);
 
 /**
- * @brief Continuous pending check — auto-resets `*tick` to 0 on expiry
+ * @brief Continuous pending check, auto-resets `*tick` to 0 on expiry
  * @param[in,out] tick Pointer to deadline set by `tick_keep()`
  * @return `true` while waiting, `false` once expired
  */
@@ -105,7 +105,7 @@ void let(void);
 
 //------------------------------------------------------------------------------------------------- Init
 
-// Initializes SysTick — call before `vrts_init()`
+// Initializes SysTick. Call before `vrts_init()`
 bool systick_init(uint32_t systick_ms);
 
 // Initializes VRTS and starts all threads
@@ -120,7 +120,7 @@ bool vrts_unlock(void);
 // Returns index of currently active thread (always 0 on host)
 uint8_t vrts_active_thread(void);
 
-// Called on fatal VRTS error — weak, override to handle panics
+// Called on fatal VRTS error. Weak, override to handle panics
 void vrts_panic(const char *msg);
 
 //-------------------------------------------------------------------------------------------------

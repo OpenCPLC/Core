@@ -1,4 +1,4 @@
-// hal/stm32/pwm.c
+// hal/stm32/per/pwm.c
 
 #include "pwm.h"
 

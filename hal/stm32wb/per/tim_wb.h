@@ -1,4 +1,4 @@
-// hal/stm32wb/tim_wb.h
+// hal/stm32wb/per/tim_wb.h
 
 #ifndef TIM_WB_H_
 #define TIM_WB_H_

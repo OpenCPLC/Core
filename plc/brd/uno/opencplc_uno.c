@@ -217,6 +217,7 @@ void PLC_Init(void)
     // SCB->VTOR = FLASH_BASE | 0x00000000U;
   #endif
   // Konfiguracja systemowa
+  BOR_SetLevel(PLC_BOR_LEVEL); // first boot may reprogram option bytes, then reset.
   clock_init();
   systick_init(PLC_BASETIME);
   heap_init();
@@ -225,22 +226,22 @@ void PLC_Init(void)
   RGB_Init(&RGB);
   DIN_Init(&BTN);
   DBG_Init(&dbg_uart);
-  CMD_AddFile(&cache_file);
-  CMD_AddCallback(&LED_Bash, "LED");
+  CMD_AddMemBuff(&cache_file);
+  CMD_AddCommand("LED", &LED_Bash);
   // Magistrala I2C
   TWI_Init(&i2c_master);
-  // Wyjścia cyfrowe przekaźnikowe (RO)
+  // Relay outputs (RO)
   DOUT_Init(&RO1);
   DOUT_Init(&RO2);
   DOUT_Init(&RO3);
   DOUT_Init(&RO4);
-  // Wyjścia cyfrowe tranzystorowe (TO)
+  // Transistor outputs (TO)
   DOUT_Init(&TO1);
   DOUT_Init(&TO2);
   DOUT_Init(&TO3);
   DOUT_Init(&TO4);
   PWM_Init(&to_pwm);
-  // Wyjścia cyfrowe triakowe (XO)
+  // Triac outputs (XO)
   DOUT_Init(&XO1);
   DOUT_Init(&XO2);
 
@@ -259,7 +260,7 @@ void PLC_Init(void)
   #endif
 
   PWM_Init(&xo_pwm);
-  // Wejścia cyfrowe (DI)
+  // Digital inputs (DI)
   if(!DIN_Init(&DI1)) {
     din_pwmi.channel[TIM_CH1] = TIM3_CH1_PA6;
     din_pwmi_init = true;
@@ -277,7 +278,7 @@ void PLC_Init(void)
     din_pwmi_init = true;
   }
   if(din_pwmi_init) PWMI_Init(&din_pwmi);
-  // Wejścia analogowe (AI)
+  // Analog inputs (AI)
   ADC_Init(&ain_adc);
   ADC_Record(&ain_adc);
   ADC_Wait(&ain_adc);
@@ -294,20 +295,20 @@ void PLC_Loop(void)
     // Dioda LED i przycisk (BTN)
     RGB_Loop(&RGB);
     DIN_Loop(&BTN);
-    // Wyjścia przekaźnikowe (RO)
+    // Relay outputs (RO)
     DOUT_Loop(&RO1);
     DOUT_Loop(&RO2);
     DOUT_Loop(&RO3);
     DOUT_Loop(&RO4);
-    // Wyjścia cyfrowe tranzystorowe (TO)
+    // Transistor outputs (TO)
     DOUT_Loop(&TO1);
     DOUT_Loop(&TO2);
     DOUT_Loop(&TO3);
     DOUT_Loop(&TO4);
-    // Wyjścia cyfrowe triakowe (XO)
+    // Triac outputs (XO)
     DOUT_Loop(&XO1);
     DOUT_Loop(&XO2);
-    // Wejścia cyfrowe (DI)
+    // Digital inputs (DI)
     DIN_Loop(&DI1);
     DIN_Loop(&DI2);
     DIN_Loop(&DI3);
@@ -315,7 +316,7 @@ void PLC_Loop(void)
     if(din_pwmi_init && PWMI_Loop(&din_pwmi)) {
       // PWMI_Print(&din_pwmi);
     }
-    // Wejścia analogowe (AI)
+    // Analog inputs (AI)
     if(ADC_IsFree(&ain_adc)) {
       if(ain_adc._overrun) LOG_Debug("ADC overrun"), ain_adc._overrun = 0;
       else AIN_Sort(ain_buffer, sizeof(ain_channels), AIN_SAMPLES, ain_data);

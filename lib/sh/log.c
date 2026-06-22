@@ -352,7 +352,7 @@ void print(const char *template, ...)
 //----------------------------------------------------------------------------------------- Log
 
 // Common emit path: colored tag + formatted message + newline.
-// No automatic timestamp — use `%t` or `%T` in the format string when needed.
+// No automatic timestamp. Use `%t` or `%T` in the format string when needed.
 static void log_emit(const char *color_tag, const char *message, va_list args)
 {
   DBG_String((char *)color_tag);

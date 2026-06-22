@@ -1,4 +1,4 @@
-/** @file lib/col/queue.c */
+// lib/col/queue.c
 
 #include "queue.h"
 
