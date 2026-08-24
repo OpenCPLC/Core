@@ -24,7 +24,8 @@ void SPI_Master_Init(SPI_Master_t *spi)
   if(spi->miso) {
     spi->_rx_dma.mux->CCR &= 0xFFFFFFC0;
     SPI_DmaSetRxRequest(spi->reg, &spi->_rx_dma);
-    IRQ_EnableDMA(spi->rx_dma, spi->irq_priority, (IRQ_Handler_t)SPI_Master_DMA_IRQHandler, spi);
+    IRQ_EnableDMA(spi->rx_dma, spi->irq_priority,
+      (IRQ_Handler_t)SPI_Master_DMA_IRQHandler, spi);
     GPIO_InitAlternate(&SPI_MISO_MAP[spi->miso], false);
     spi->_rx_dma.cha->CPAR = (uint32_t)&spi->reg->DR;
     spi->_rx_dma.cha->CCR |= DMA_CCR_MINC | DMA_CCR_TCIE;
@@ -37,7 +38,8 @@ void SPI_Master_Init(SPI_Master_t *spi)
     spi->_tx_dma.cha->CCR |= DMA_CCR_MINC | DMA_CCR_DIR;
   }
   uint32_t cr2 = SPI_CR2_RXDMAEN | SPI_CR2_FRXTH | SPI_CR2_SSOE | 0x00000700;
-  uint32_t cr1 = SPI_CR1_MSTR | (spi->lsb << 7) | (spi->prescaler << 3) | SPI_CR1_SPE | (spi->cpol << 1) | spi->cpha;
+  uint32_t cr1 = SPI_CR1_MSTR | (spi->lsb << 7) | (spi->prescaler << 3) |
+    SPI_CR1_SPE | (spi->cpol << 1) | spi->cpha;
   if(spi->cs) {
     spi->cs->mode = GPIO_Mode_Output;
     GPIO_Init(spi->cs);
@@ -87,7 +89,9 @@ static void SPI_Master_End(SPI_Master_t *spi, uint16_t len)
 
 //-------------------------------------------------------------------------------------------------
 
-status_t SPI_Master_Transfer(SPI_Master_t *spi, uint8_t *rx_data, uint8_t *tx_data, uint16_t len)
+status_t SPI_Master_Transfer(SPI_Master_t *spi, uint8_t *rx_data, uint8_t *tx_data,
+  uint16_t len
+)
 {
   if(spi->_busy) return BUSY;
   SPI_Master_Start(spi);
@@ -181,7 +185,9 @@ static void SPI_Software_ReadBit(GPIO_t *miso, uint8_t *byte)
   #endif
 }
 
-void SPI_Software_Transfer(SPI_Software_t *spi, uint8_t *rx_data, uint8_t *tx_data, uint16_t len)
+void SPI_Software_Transfer(SPI_Software_t *spi, uint8_t *rx_data, uint8_t *tx_data,
+  uint16_t len
+)
 {
   #if(SPI_SOFTWARE_CPOL)
     GPIO_Set(spi->sck);

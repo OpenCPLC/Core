@@ -1,4 +1,4 @@
-// hal/stm32/per/pdb.h
+// hal/host/pdb.h
 
 #ifndef PDB_H_
 #define PDB_H_
@@ -47,7 +47,11 @@ typedef bool (*PDB_Filter_t)(const void *record, void *ctx);
  * Iterator `dir` traverses physical layout.
  * Assumes user writes monotonic keys.
  * Order across page wrap-around is not re-sorted.
- * Requires STM32 doubleword (8B) flash write via `FLASH_Write`.
+ * Requires doubleword (8B) flash write via `FLASH_Write`.
+ * Host build: runs on the emulated Flash of `hal/host/flash.h`,
+ * which keeps NOR rules and persists every page, so behaviour matches the target.
+ * Records live in the emulated image, reached through `FLASH_Read`/`FLASH_Ref`
+ * instead of the memory-mapped pointer used on target.
  * Not reentrant. Single-threaded or cooperative scheduler (VRTS) only.
  * Torn-write recovery requires `crc != NULL`.
  * Without CRC, partially written records after power loss may be read as valid garbage,
@@ -168,7 +172,7 @@ status_t PDB_IterNext(PDB_Iter_t *iter, void *out);
 
 /**
  * @brief Zero-copy reference to current iterator record.
- * Returns pointer directly into memory-mapped flash.
+ * Returns pointer directly into the emulated flash image.
  * Valid until next `PDB_Insert` or `PDB_Delete`.
  * @param[in] iter Iterator (after successful `PDB_IterNext`)
  * @return Pointer to record in flash

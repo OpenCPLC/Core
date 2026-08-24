@@ -8,13 +8,13 @@
 #include <string.h>
 #include "xdef.h"
 
-//------------------------------------------------------------------------------------------------- Config
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef CRC_PRESETS
   #define CRC_PRESETS ON
 #endif
 
-//------------------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
 /**
  * @brief CRC algorithm configuration.
@@ -38,7 +38,7 @@ typedef struct {
   uint32_t *table;
 } CRC_t;
 
-//------------------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 /**
  * @brief Build lookup table for CRC instance. Must be called before `CRC_Run`.
@@ -78,11 +78,11 @@ status_t CRC_Error(const CRC_t *crc, uint8_t *data, uint16_t count);
  * @param[in] crc CRC algorithm configuration
  * @param[in] data Data buffer with CRC appended
  * @param[in] count Total length including CRC bytes
- * @return `OK` if valid, `ERR` if mismatch
+ * @return Non-zero if CRC valid, `0` if mismatch
  */
 status_t CRC_Ok(const CRC_t *crc, uint8_t *data, uint16_t count);
 
-//------------------------------------------------------------------------------------------------- Presets
+//----------------------------------------------------------------------------------------- Presets
 #if(CRC_PRESETS)
 
   extern CRC_t crc32_iso;

@@ -56,7 +56,7 @@ extern AIN_t AI1;
 extern AIN_t AI2;
 extern AIN_t AI3;
 extern AIN_t AI4;
-float VCC_Value(void);
+float VCC_Voltage_V(void);
 
 // RS485
 #ifndef RS_BUFFER_SIZE

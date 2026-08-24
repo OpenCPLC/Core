@@ -24,8 +24,10 @@ extern const char UpperCase[];
 uint32_t hash_djb2(const char *str);
 uint32_t hash_djb2_ci(const char *str);
 
-uint8_t itoa_encode(int64_t nbr, char *str, uint8_t base, bool sign, uint8_t fill_zero, uint8_t fill_space);
-char *str_from_int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint8_t fill_space);
+uint8_t itoa_encode(int64_t nbr, char *str, uint8_t base, bool sign,
+  uint8_t fill_zero, uint8_t fill_space);
+char *str_from_int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero,
+  uint8_t fill_space);
 bool str_is_u16(const char *str);
 bool str_is_i16(const char *str);
 bool str_is_u32(const char *str);

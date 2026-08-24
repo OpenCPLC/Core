@@ -2,13 +2,13 @@
 
 #include "gpio.h"
 
-//------------------------------------------------------------------------------------------------- Wakeup
+//------------------------------------------------------------------------------------------ Wakeup
 
 #if(GPIO_INCLUDE_WAKEUP)
 void GPIO_BackendWakeup(GPIO_t *gpio)
 {
   if(!gpio->wakeup_pull) return;
-  RCC->APB1ENR1 |= RCC_APB1ENR1_PWREN;
+  // WB has no `PWREN` gate, `PWR` is always clocked
   PWR->CR3 |= PWR_CR3_APC;
   uint32_t mask = 1u << gpio->pin;
   if(gpio->wakeup_pull == GPIO_WakeupPull_Up) {
@@ -34,7 +34,7 @@ void GPIO_BackendWakeup(GPIO_t *gpio)
 }
 #endif
 
-//------------------------------------------------------------------------------------------------- EXTI IRQ
+//---------------------------------------------------------------------------------------- EXTI IRQ
 
 static void EXTI_IRQHandler(EXTI_t *exti)
 {
@@ -57,13 +57,16 @@ static void EXTI_IRQHandler(EXTI_t *exti)
   }
 }
 
-//------------------------------------------------------------------------------------------------- EXTI API
+//---------------------------------------------------------------------------------------- EXTI API
 
 void EXTI_On(EXTI_t *exti)
 {
   exti->irq_enable = true;
   exti->_rise_cnt = 0;
   exti->_fall_cnt = 0;
+  // Edges keep latching into the pending register while the line is masked; without
+  // this clear the unmask would fire immediately on a stale edge
+  EXTI->PR1 = (1u << exti->pin);
   EXTI->IMR1 |= (1u << exti->pin);
 }
 
@@ -77,8 +80,10 @@ void EXTI_Init(EXTI_t *exti)
 {
   RCC_EnableGPIO(exti->port);
   // GPIO mode and pull
-  exti->port->MODER = (exti->port->MODER & ~(3u << (2u * exti->pin))) | (exti->mode << (2u * exti->pin));
-  exti->port->PUPDR = (exti->port->PUPDR & ~(3u << (2u * exti->pin))) | (exti->pull << (2u * exti->pin));
+  exti->port->MODER =
+    (exti->port->MODER & ~(3u << (2u * exti->pin))) | (exti->mode << (2u * exti->pin));
+  exti->port->PUPDR =
+    (exti->port->PUPDR & ~(3u << (2u * exti->pin))) | (exti->pull << (2u * exti->pin));
   // EXTICR - WB uses 4-bit fields in SYSCFG->EXTICR
   uint32_t reg = exti->pin / 4;
   uint32_t pos = 4 * (exti->pin % 4);

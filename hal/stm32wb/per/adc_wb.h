@@ -5,7 +5,7 @@
 
 #include "stm32wbxx.h"
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 typedef enum {
   ADC_IN_VREFEN = 0,
@@ -38,7 +38,8 @@ typedef enum {
   ADC_SamplingTime_60 = 4,
   ADC_SamplingTime_105 = 5,
   ADC_SamplingTime_260 = 6,
-  ADC_SamplingTime_653 = 7
+  ADC_SamplingTime_653 = 7,
+  ADC_SamplingTime_Max = ADC_SamplingTime_653
 } ADC_SamplingTime_t;
 
 typedef enum {
@@ -58,5 +59,5 @@ typedef enum {
   ADC_ExtTrig_LPTIM2 = 13
 } ADC_ExtTrig_t;
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 #endif

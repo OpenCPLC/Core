@@ -4,7 +4,9 @@
 #include "cmd.h"
 #include "dbg.h"
 
-const char *rgb_color_name[] = { "off", "red", "green", "blue", "yellow", "cyan", "magenta", "white" };
+const char *rgb_color_name[] = {
+  "off", "red", "green", "blue", "yellow", "cyan", "magenta", "white"
+};
 RGB_t *rgb_focus;
 
 //-------------------------------------------------------------------------------------------------
@@ -185,7 +187,7 @@ void LED_Bash(char **argv, uint16_t argc)
   if(rgb_focus->state && rgb_focus->blink_ms) {
     if(rgb_focus->one_shot) DBG_String(" shot:");
     else DBG_String(" blink:");
-    DBG_uDec(rgb_focus->blink_ms); DBG_String("ms"); 
+    DBG_uDec(rgb_focus->blink_ms); DBG_String("ms");
   }
   DBG_Enter();
 }

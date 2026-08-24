@@ -50,7 +50,7 @@ void PWM_InterruptDisable(PWM_t *pwm)
 void PWM_SetPrescaler(PWM_t *pwm, uint32_t prescaler)
 {
   if(!prescaler) prescaler = 1;
-  pwm->prescaler = prescaler;  
+  pwm->prescaler = prescaler;
   pwm->reg->PSC = pwm->prescaler - 1;
 }
 
@@ -85,7 +85,8 @@ uint32_t PWM_GetValue(PWM_t *pwm, TIM_Channel_t channel)
 void PWM_SetDeadtime(PWM_t *pwm, uint16_t deadtime)
 {
   if(!PWM_HasBDTR(pwm->reg)) return;
-  if(deadtime >= 1024) deadtime = 1024;
+  // 1008 is the top of the coarsest `DTG` range; anything above cannot be encoded
+  if(deadtime > 1008) deadtime = 1008;
   uint8_t dtg, temp;
   if(deadtime < 128) {
     dtg = deadtime;
@@ -109,14 +110,15 @@ void PWM_SetDeadtime(PWM_t *pwm, uint16_t deadtime)
   pwm->reg->BDTR = (pwm->reg->BDTR & ~TIM_BDTR_DTG_Msk) | dtg;
 }
 
-void PWM_CenterAlign(PWM_t *pwm, bool enable)
+void PWM_SetAlign(PWM_t *pwm, PWM_Align_t align)
 {
-  if(enable == pwm->center_aligned) return;
+  if(align == pwm->align) return;
+  // `CMS` is writable only with the counter stopped
   pwm->reg->CR1 &= ~TIM_CR1_CEN;
   pwm->reg->CNT = 0;
-  pwm->center_aligned = enable;
-  uint8_t center_aligned = enable ? 0x03 << TIM_CR1_CMS_Pos : 0;
-  pwm->reg->CR1 = (pwm->reg->CR1 & ~TIM_CR1_CMS_Msk) | center_aligned;
+  pwm->align = align;
+  pwm->reg->CR1 = (pwm->reg->CR1 & ~TIM_CR1_CMS_Msk)
+    | ((uint32_t)align << TIM_CR1_CMS_Pos);
   pwm->reg->CR1 |= TIM_CR1_CEN;
 }
 
@@ -150,8 +152,14 @@ static void PWM_ChannelsInit(PWM_t *pwm)
   pwm->_ccer_mask = 0;
   for(uint8_t i = 0; i < 4; i++) {
     bool init = false;
-    if(pwm->channel[i]) { GPIO_InitAlternate(&TIM_CHx_MAP[pwm->channel[i]], false); init = true; }
-    if(pwm->channel[i + 4]) { GPIO_InitAlternate(&TIM_CHx_MAP[pwm->channel[i + 4]], false); init = true; }
+    if(pwm->channel[i]) {
+      GPIO_InitAlternate(&TIM_CHx_MAP[pwm->channel[i]], false);
+      init = true;
+    }
+    if(pwm->channel[i + 4]) {
+      GPIO_InitAlternate(&TIM_CHx_MAP[pwm->channel[i + 4]], false);
+      init = true;
+    }
     if(init) PWM_ChannelInit(pwm, i);
   }
 }
@@ -171,7 +179,6 @@ void PWM_OutputEnable(PWM_t *pwm, bool enable)
 void PWM_Init(PWM_t *pwm)
 {
   RCC_EnableTIM(pwm->reg);
-  pwm->reg->EGR &= ~TIM_EGR_UG;
   pwm->reg->CR1 &= ~TIM_CR1_CEN;
   pwm->reg->CCER = 0;
   pwm->reg->CCMR1 = 0;
@@ -179,8 +186,7 @@ void PWM_Init(PWM_t *pwm)
   PWM_ChannelsInit(pwm);
   PWM_SetPrescaler(pwm, pwm->prescaler);
   pwm->reg->ARR = pwm->auto_reload;
-  uint8_t center_aligned = pwm->center_aligned ? 0x03 << TIM_CR1_CMS_Pos : 0;
-  pwm->reg->CR1 = TIM_CR1_ARPE | center_aligned;
+  pwm->reg->CR1 = TIM_CR1_ARPE | ((uint32_t)pwm->align << TIM_CR1_CMS_Pos);
   PWM_SetDeadtime(pwm, pwm->deadtime);
   // DMA or Interrupt
   pwm->reg->DIER &= ~(TIM_DIER_UIE | TIM_DIER_UDE);
@@ -190,8 +196,59 @@ void PWM_Init(PWM_t *pwm)
     pwm->reg->DIER |= TIM_DIER_UIE;
   }
   if(PWM_HasBDTR(pwm->reg)) pwm->reg->BDTR |= TIM_BDTR_MOE;
-  pwm->reg->EGR |= TIM_EGR_UG;
+  // `EGR` reads back as zero, so events are fired with a plain write
+  pwm->reg->EGR = TIM_EGR_UG;
   pwm->reg->CR1 |= TIM_CR1_CEN;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+float PWM_GetFrequency(const PWM_t *pwm)
+{
+  return (float)SystemCoreClock / pwm->prescaler / pwm->auto_reload /
+    pwm_align_div(pwm->align);
+}
+
+float PWM_Frequency(PWM_t *pwm, float frequency)
+{
+  if(frequency <= 0.0f) return PWM_GetFrequency(pwm);
+  uint32_t reload_prev = pwm->auto_reload;
+  float ticks = (float)SystemCoreClock / frequency / pwm_align_div(pwm->align);
+  uint32_t prescaler = 1;
+  uint32_t auto_reload = (uint32_t)ticks;
+  while(auto_reload > 0xFFFF && prescaler < 0xFFFF) {
+    auto_reload = (uint32_t)(ticks / ++prescaler);
+  }
+  if(auto_reload > 0xFFFF) auto_reload = 0xFFFF; // below the achievable range
+  PWM_SetPrescaler(pwm, prescaler);
+  PWM_SetAutoreload(pwm, auto_reload);
+  // Duty is compare over reload, so the reload ratio alone keeps it unchanged
+  for(TIM_Channel_t chan = TIM_CH1; chan <= TIM_CH4; chan++) {
+    if(pwm->value[chan] && reload_prev) {
+      PWM_SetValue(pwm, chan, (uint32_t)(
+        ((uint64_t)pwm->value[chan] * auto_reload + reload_prev / 2) / reload_prev));
+    }
+  }
+  return PWM_GetFrequency(pwm);
+}
+
+void PWM_Trigger(PWM_t *pwm, TIM_Channel_t channel, uint16_t compare, bool irq)
+{
+  if(!IS_TIM_TRGO2_INSTANCE(pwm->reg)) return;
+  // A complementary output carries its base channel's reference, only `CH1..CH4` trigger.
+  // Their enum values sit past `CH4` and would index the registers below into `BDTR`.
+  if(channel > TIM_CH4) return;
+  // `CCR1..CCR4` are consecutive registers, the channel indexes them directly
+  (&pwm->reg->CCR1)[channel] = compare;
+  // PWM mode 2 on the trigger channel: `OCxREF` active while the counter sits
+  // above the compare, one rising edge per period on the way up
+  volatile uint32_t *ccmr = channel < TIM_CH3 ? &pwm->reg->CCMR1 : &pwm->reg->CCMR2;
+  uint8_t pos = (channel & 1) ? 12 : 4;
+  *ccmr = (*ccmr & ~(0x7u << pos)) | (0x7u << pos);
+  // Route the reference to `TRGO2`, where the ADC external trigger listens
+  pwm->reg->CR2 = (pwm->reg->CR2 & ~TIM_CR2_MMS2_Msk)
+    | ((0x4u + channel) << TIM_CR2_MMS2_Pos);
+  if(irq) pwm->reg->DIER |= TIM_DIER_CC1IE << channel;
 }
 
 //-------------------------------------------------------------------------------------------------

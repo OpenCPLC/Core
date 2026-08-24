@@ -2,7 +2,7 @@
 
 #include "vrts.h"
 
-//------------------------------------------------------------------------------------------------- Panic
+//------------------------------------------------------------------------------------------- Panic
 
 __attribute__((weak)) void vrts_panic(const char *msg)
 {
@@ -11,7 +11,7 @@ __attribute__((weak)) void vrts_panic(const char *msg)
   while(1);
 }
 
-//------------------------------------------------------------------------------------------------- Globals
+//----------------------------------------------------------------------------------------- Globals
 
 volatile uint64_t VrtsTicker;
 static uint32_t tick_ms; // time in ms for a single ticker tick
@@ -19,7 +19,7 @@ static uint32_t tick_ms; // time in ms for a single ticker tick
 volatile VRTS_Task_t *vrts_now_thread; // Current thread
 volatile VRTS_Task_t *vrts_next_thread; // Next thread
 
-//------------------------------------------------------------------------------------------------- Threads
+//----------------------------------------------------------------------------------------- Threads
 
 #if(VRTS_SWITCHING)
 
@@ -39,14 +39,15 @@ typedef struct {
 
 static VRTS_t vrts;
 
+// Landing pad for a handler that returns. Cooperative switching still needs the yield
 static void VRTS_TaskFinished(void)
 {
-  while(1) __WFI();
+  while(1) let();
 }
 
 bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
 {
-  if(vrts.count >= VRTS_THREAD_LIMIT - 1) return false;
+  if(vrts.count >= VRTS_THREAD_LIMIT) return false;
   VRTS_Task_t *thread = &vrts.threads[vrts.count];
   thread->handler = handler;
   #if defined(STM32WB)
@@ -134,7 +135,7 @@ uint8_t vrts_active_thread(void)
   #endif
 }
 
-//------------------------------------------------------------------------------------------------- Tick
+//-------------------------------------------------------------------------------------------- Tick
 
 static inline uint64_t vrts_ticker_get(void)
 {
@@ -179,7 +180,7 @@ int32_t tick_diff(uint64_t tick)
   return (int32_t)(((int64_t)vrts_ticker_get() - tick) * tick_ms);
 }
 
-//------------------------------------------------------------------------------------------------- Delay
+//------------------------------------------------------------------------------------------- Delay
 
 void delay(uint32_t ms)
 {
@@ -217,7 +218,7 @@ void sleep_until(uint64_t *tick)
   *tick = 0;
 }
 
-//------------------------------------------------------------------------------------------------- Init
+//-------------------------------------------------------------------------------------------- Init
 
 bool systick_init(uint32_t systick_ms)
 {

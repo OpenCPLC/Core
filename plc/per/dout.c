@@ -8,43 +8,6 @@
 //-------------------------------------------------------------------------------------------------
 
 /**
- * @brief Get current PWM signal frequency.
- * @param[in] pwm Pointer to `PWM_t` descriptor.
- * @return Current PWM frequency [Hz].
- */
-float PWM_GetFrequency(const PWM_t *pwm)
-{
-  return (float)SystemCoreClock / pwm->prescaler  / pwm->auto_reload / (pwm->center_aligned + 1);
-}
-
-/**
- * @brief Set PWM signal frequency.
- * A single `PWM_t` controller may drive multiple digital outputs,
- * so the change affects all linked channels.
- * @param[in,out] pwm Pointer to `PWM_t` descriptor.
- * @param[in] frequency Target frequency [Hz].
- * @return Actual applied frequency [Hz].
- */
-float PWM_Frequency(PWM_t *pwm, float frequency)
-{
-  uint32_t auto_reload_prev = pwm->auto_reload;
-  uint32_t prescaler_prev = pwm->prescaler;
-  uint32_t prescaler = 1;
-  uint32_t auto_reload;
-  do {
-    PWM_SetPrescaler(pwm, prescaler++);
-    auto_reload = (float)SystemCoreClock / pwm->prescaler / frequency / (pwm->center_aligned + 1);
-  } while(auto_reload > 0xFFFF);
-  PWM_SetAutoreload(pwm, auto_reload);
-  for(TIM_Channel_t CH = TIM_CH1; CH <= TIM_CH4; CH++) {
-    if(pwm->value[CH]) {
-      PWM_SetValue(pwm, CH, (uint32_t)((uint64_t)pwm->value[CH] * pwm->prescaler * pwm->auto_reload / auto_reload_prev / prescaler_prev));
-    }
-  }
-  return PWM_GetFrequency(pwm);
-}
-
-/**
  * @brief Get current PWM frequency linked to digital output.
  * @param[in] dout Pointer to `DOUT_t` descriptor for transistor (TO) or triac (XO) output.
  * @return Current PWM frequency [Hz], or 0 for non-PWM outputs (e.g. relay RO).
@@ -57,7 +20,7 @@ float DOUT_GetFrequency(const DOUT_t *dout)
 
 /**
  * @brief Set PWM frequency for digital output.
- * A single `PWM_t` controller may drive multiple outputs,  
+ * A single `PWM_t` controller may drive multiple outputs,
  * so the frequency change affects all linked channels.
  * @param[in,out] dout Pointer to `DOUT_t` descriptor for transistor (TO) or triac (XO) output.
  * @param[in] frequency Target PWM frequency [Hz].
@@ -178,7 +141,7 @@ void DOUT_Tgl(DOUT_t *dout)
 void DOUT_Preset(DOUT_t *dout, bool value)
 {
   if(value) DOUT_Set(dout);
-  else DOUT_Rst(dout); 
+  else DOUT_Rst(dout);
 }
 
 /**
@@ -192,7 +155,11 @@ void DOUT_Preset(DOUT_t *dout, bool value)
 bool DOUT_Pulse(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms)
 {
   if(dout->pulse) return false;
-  if(dout->relay && (ton_ms >= DOUT_RELAY_STUN_ms || toff_ms >= DOUT_RELAY_STUN_ms)) return false;
+  // `DOUT_RELAY_STUN_ms` is the shortest state a relay may hold
+  if(dout->relay &&
+    (ton_ms < DOUT_RELAY_STUN_ms || toff_ms < DOUT_RELAY_STUN_ms)) return false;
+  // `pulse` counts half-periods and holds a `uint8_t`.
+  if(count > UINT8_MAX / 2) return false;
   dout->pulse = (count * 2u);
   dout->ton_ms = ton_ms;
   dout->toff_ms = toff_ms;
@@ -209,17 +176,21 @@ bool DOUT_Pulse(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms)
  * @param[in] freeze_ms Extra OFF time added after last pulse.
  * @return `true` if pulse sequence started, otherwise `false`.
  */
-bool DOUT_PulseFreeze(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms, uint16_t freeze_ms)
+bool DOUT_PulseFreeze(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms,
+  uint16_t freeze_ms)
 {
   if(dout->pulse) return false;
-  if(dout->relay && (ton_ms >= DOUT_RELAY_STUN_ms || toff_ms >= DOUT_RELAY_STUN_ms)) return false;
+  // `DOUT_RELAY_STUN_ms` is the shortest state a relay may hold
+  if(dout->relay &&
+    (ton_ms < DOUT_RELAY_STUN_ms || toff_ms < DOUT_RELAY_STUN_ms)) return false;
+  // `pulse` counts half-periods and holds a `uint8_t`.
+  if(count > UINT8_MAX / 2) return false;
   dout->pulse = (count * 2u);
   dout->ton_ms = ton_ms;
   dout->toff_ms = toff_ms;
   dout->last_ms = toff_ms + freeze_ms;
   return true;
 }
-
 
 /**
  * @brief Get current digital output state.
@@ -284,8 +255,9 @@ void DOUT_Loop(DOUT_t *dout)
   if(dout->pulse) {
     if(dout->relay && !DOUT_State(dout)) DOUT_RelayCyclesInc(dout);
     if(dout->pwm) {
-      uint32_t value = dout->value ? 0 : dout->pwm->auto_reload;
-      PWM_SetValue(dout->pwm, dout->channel, value);
+      // Flips against the level the channel holds now, `value` is where the sequence ends
+      uint32_t level = DOUT_State(dout) ? 0 : dout->pwm->auto_reload;
+      PWM_SetValue(dout->pwm, dout->channel, level);
     }
     else {
       GPIO_Tgl(&dout->gpio);
@@ -390,7 +362,8 @@ void DOUT_Bash_Add(DOUT_t *dout)
   }
   if(!dout->name) {
     #if(LOG_COLORS)
-      LOG_Error("Object "ANSI_TURQUS"DOUT_t"ANSI_END" passed to BASH must be named", DOUT_BASH_LIMIT);
+      LOG_Error("Object "ANSI_TURQUS"DOUT_t"ANSI_END" passed to BASH must be named",
+        DOUT_BASH_LIMIT);
     #else
       LOG_Error("Object DOUT_t passed to BASH must be named", DOUT_BASH_LIMIT);
     #endif

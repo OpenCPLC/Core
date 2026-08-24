@@ -9,18 +9,19 @@
   #include <sys/time.h>
 #endif
 
-//------------------------------------------------------------------------------------------------- Globals
+//----------------------------------------------------------------------------------------- Globals
 
 bool RtcReady = false;
 bool RtcInit = false;
 
 #if(RTC_WEEKDAYS_LONGNAMES)
-  const char *RtcWeekdays[8] = { "Everyday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+  const char *RtcWeekdays[8] = { "Everyday", "Monday", "Tuesday", "Wednesday",
+    "Thursday", "Friday", "Saturday", "Sunday" };
 #else
   const char *RtcWeekdays[8] = { "Evd", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
 #endif
 
-//------------------------------------------------------------------------------------------------- Internal
+//---------------------------------------------------------------------------------------- Internal
 
 static int64_t rtc_offset_sec = 0; // offset from system time
 static RTC_AlarmCfg_t rtc_alarms[RTC_ALARM_COUNT];
@@ -63,7 +64,7 @@ static uint8_t tm_wday_to_rtc(int wday)
 
 //-------------------------------------------------------------------------------------------------
 
-void RTC_Init(void)
+status_t RTC_Init(void)
 {
   memset(rtc_alarms, 0, sizeof(rtc_alarms));
   memset(rtc_alarm_enabled, 0, sizeof(rtc_alarm_enabled));
@@ -71,9 +72,10 @@ void RTC_Init(void)
   rtc_offset_sec = 0;
   RtcInit = true;
   RtcReady = true;
+  return OK;
 }
 
-//------------------------------------------------------------------------------------------------- Convert
+//----------------------------------------------------------------------------------------- Convert
 
 RTC_Datetime_t RTC_UnixToDatetime(uint64_t timestamp)
 {
@@ -120,14 +122,15 @@ bool RTC_DatetimeIsCorrect(const RTC_Datetime_t *date, int8_t time_zone)
 {
   (void)time_zone;
   if(date->month < 1 || date->month > 12) return false;
-  if(date->month_day < 1 || date->month_day > get_days_in_month(date->month, 2000 + date->year)) return false;
+  if(date->month_day < 1 ||
+    date->month_day > get_days_in_month(date->month, 2000 + date->year)) return false;
   if(date->hour > 23) return false;
   if(date->minute > 59) return false;
   if(date->second > 59) return false;
   return true;
 }
 
-//------------------------------------------------------------------------------------------------- Convert alarm
+//----------------------------------------------------------------------------------- Convert alarm
 
 RTC_AlarmCfg_t RTC_DaystampToAlarm(uint32_t stamp)
 {
@@ -161,7 +164,7 @@ uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm)
   return ((uint32_t)(alarm->day - 1) * 86400) + RTC_AlarmToDaystamp(alarm);
 }
 
-//------------------------------------------------------------------------------------------------- Set
+//--------------------------------------------------------------------------------------------- Set
 
 void RTC_SetDatetime(RTC_Datetime_t *datetime)
 {
@@ -183,7 +186,7 @@ void RTC_Reset(void)
   memset(rtc_alarm_event, 0, sizeof(rtc_alarm_event));
 }
 
-//------------------------------------------------------------------------------------------------- Get
+//--------------------------------------------------------------------------------------------- Get
 
 RTC_Datetime_t RTC_Datetime(void)
 {
@@ -216,7 +219,7 @@ uint32_t RTC_Weekstamp(void)
   return ((uint32_t)(dt.week_day - 1) * 86400) + RTC_Daystamp();
 }
 
-//------------------------------------------------------------------------------------------------- Alarm get
+//--------------------------------------------------------------------------------------- Alarm get
 
 RTC_AlarmCfg_t RTC_Alarm(RTC_Alarm_t alarm)
 {
@@ -230,7 +233,7 @@ uint32_t RTC_AlarmDaystamp(RTC_Alarm_t alarm)
   return 0;
 }
 
-//------------------------------------------------------------------------------------------------- Alarm control
+//----------------------------------------------------------------------------------- Alarm control
 
 bool RTC_AlarmIsEnabled(RTC_Alarm_t alarm)
 {
@@ -272,7 +275,7 @@ void RTC_AlarmDisable(RTC_Alarm_t alarm)
   }
 }
 
-//------------------------------------------------------------------------------------------------- Wakeup timer (stub)
+//----------------------------------------------------------------------------- Wakeup timer (stub)
 
 void RTC_WakeupTimerEnable(uint32_t sec)
 {
@@ -285,7 +288,7 @@ void RTC_WakeupTimerDisable(void)
   // stub
 }
 
-//------------------------------------------------------------------------------------------------- Check
+//------------------------------------------------------------------------------------------- Check
 
 bool RTC_CheckDaystamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec)
 {
@@ -313,7 +316,7 @@ bool RTC_AlarmCheck(RTC_Alarm_t alarm, uint32_t offset_min_sec, uint32_t offset_
   return RTC_CheckDaystamp(RTC_AlarmToDaystamp(cfg), offset_min_sec, offset_max_sec);
 }
 
-//------------------------------------------------------------------------------------------------- Event
+//------------------------------------------------------------------------------------------- Event
 
 bool RTC_Event(RTC_Alarm_t alarm)
 {

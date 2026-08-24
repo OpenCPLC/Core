@@ -4,7 +4,7 @@
 
 bool LogPrintFlag = true;
 
-//---------------------------------------------------------------------------------- print_args
+//-------------------------------------------------------------------------------------- print_args
 
 static uint8_t print_args_getstrnbr(const char **format)
 {
@@ -23,6 +23,8 @@ void print_args(const char *format, va_list args)
   while(*format) {
     if(*format == '%') {
       format++;
+      // A trailing `%` has no specifier, and the parsing below never tests for the end
+      if(!*format) { DBG_Char('%'); break; }
       // Flag: `0` = zero-pad
       bool flag_zero = false;
       while(*format == '0') { flag_zero = true; format++; }
@@ -349,7 +351,7 @@ void print(const char *template, ...)
   va_end(args);
 }
 
-//----------------------------------------------------------------------------------------- Log
+//--------------------------------------------------------------------------------------------- Log
 
 // Common emit path: colored tag + formatted message + newline.
 // No automatic timestamp. Use `%t` or `%T` in the format string when needed.
@@ -440,8 +442,8 @@ void LOG_Critical(const char *message, ...)
 }
 
 // Panic emit: format message with args, flush blocking, clear buffer.
-// Used by `LOG_Message(LOG_Level_Panic, ...)`. `LOG_Panic` itself is
-// non-variadic and uses simpler path (raw string only).
+// Used by `LOG_Message(LOG_Level_Panic, ...)`.
+// `LOG_Panic` itself is non-variadic and uses a simpler path (raw string only).
 static void log_panic_emit(const char *message, va_list args)
 {
   DBG_String(ANSI_MAGNTA "PNC " ANSI_END);
@@ -455,7 +457,7 @@ static void log_panic_emit(const char *message, va_list args)
 
 void LOG_Panic(const char *message)
 {
-  #if(LOG_LEVEL <= LOG_LEVEL_PAC)
+  #if(LOG_LEVEL <= LOG_LEVEL_PNC)
     DBG_String(ANSI_MAGNTA "PNC " ANSI_END);
     DBG_String((char *)message);
     DBG_Enter();
@@ -507,7 +509,7 @@ void LOG_Message(LOG_Level_t lvl, char *message, ...)
   va_end(args);
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 void LOG_ErrorParse(const char *value, const char *type)
 {

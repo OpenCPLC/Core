@@ -3,7 +3,7 @@
 #include "startup.h"
 #define __weak __attribute__((weak))
 
-//------------------------------------------------------------------------------------------------- Linker symbols
+//---------------------------------------------------------------------------------- Linker symbols
 
 extern uint32_t _sidata;
 extern uint32_t _sdata;
@@ -18,7 +18,7 @@ extern uint32_t _eMB_MEM2;
 extern void __libc_init_array(void);
 extern int main(void);
 
-//------------------------------------------------------------------------------------------------- Default handlers
+//-------------------------------------------------------------------------------- Default handlers
 
 void Reset_Handler(void)
 {
@@ -41,12 +41,12 @@ void Default_Handler(void) { while(1); }
 
 static void Void_Handler(void *arg) { (void)arg; }
 
-//------------------------------------------------------------------------------------------------- Callbacks: ADC
+//---------------------------------------------------------------------------------- Callbacks: ADC
 
 void (* volatile ADC_Cb)(void *) = Void_Handler;
 void * volatile ADC_CbArg;
 
-//------------------------------------------------------------------------------------------------- Callbacks: EXTI
+//--------------------------------------------------------------------------------- Callbacks: EXTI
 
 void (* volatile EXTI0_Cb)(void *) = Void_Handler;  void * volatile EXTI0_CbArg;
 void (* volatile EXTI1_Cb)(void *) = Void_Handler;  void * volatile EXTI1_CbArg;
@@ -65,7 +65,7 @@ void (* volatile EXTI13_Cb)(void *) = Void_Handler; void * volatile EXTI13_CbArg
 void (* volatile EXTI14_Cb)(void *) = Void_Handler; void * volatile EXTI14_CbArg;
 void (* volatile EXTI15_Cb)(void *) = Void_Handler; void * volatile EXTI15_CbArg;
 
-//------------------------------------------------------------------------------------------------- Callbacks: DMA1
+//--------------------------------------------------------------------------------- Callbacks: DMA1
 
 void (* volatile DMA_CH1_Cb)(void *) = Void_Handler;  void * volatile DMA_CH1_CbArg;
 void (* volatile DMA_CH2_Cb)(void *) = Void_Handler;  void * volatile DMA_CH2_CbArg;
@@ -75,7 +75,7 @@ void (* volatile DMA_CH5_Cb)(void *) = Void_Handler;  void * volatile DMA_CH5_Cb
 void (* volatile DMA_CH6_Cb)(void *) = Void_Handler;  void * volatile DMA_CH6_CbArg;
 void (* volatile DMA_CH7_Cb)(void *) = Void_Handler;  void * volatile DMA_CH7_CbArg;
 
-//------------------------------------------------------------------------------------------------- Callbacks: DMA2
+//--------------------------------------------------------------------------------- Callbacks: DMA2
 
 void (* volatile DMA_CH8_Cb)(void *) = Void_Handler;  void * volatile DMA_CH8_CbArg;
 void (* volatile DMA_CH9_Cb)(void *) = Void_Handler;  void * volatile DMA_CH9_CbArg;
@@ -85,36 +85,36 @@ void (* volatile DMA_CH12_Cb)(void *) = Void_Handler; void * volatile DMA_CH12_C
 void (* volatile DMA_CH13_Cb)(void *) = Void_Handler; void * volatile DMA_CH13_CbArg;
 void (* volatile DMA_CH14_Cb)(void *) = Void_Handler; void * volatile DMA_CH14_CbArg;
 
-//------------------------------------------------------------------------------------------------- Callbacks: TIM
+//---------------------------------------------------------------------------------- Callbacks: TIM
 
 void (* volatile TIM1_Cb)(void *) = Void_Handler;  void * volatile TIM1_CbArg;
 void (* volatile TIM2_Cb)(void *) = Void_Handler;  void * volatile TIM2_CbArg;
 void (* volatile TIM16_Cb)(void *) = Void_Handler; void * volatile TIM16_CbArg;
 void (* volatile TIM17_Cb)(void *) = Void_Handler; void * volatile TIM17_CbArg;
 
-//------------------------------------------------------------------------------------------------- Callbacks: LPTIM
+//-------------------------------------------------------------------------------- Callbacks: LPTIM
 
 void (* volatile LPTIM1_Cb)(void *) = Void_Handler; void * volatile LPTIM1_CbArg;
 void (* volatile LPTIM2_Cb)(void *) = Void_Handler; void * volatile LPTIM2_CbArg;
 
-//------------------------------------------------------------------------------------------------- Callbacks: I2C
+//---------------------------------------------------------------------------------- Callbacks: I2C
 
 void (* volatile I2C1_EventCallback)(void *) = Void_Handler; void * volatile I2C1_CbArg;
 void (* volatile I2C1_ErrorCallback)(void *) = Void_Handler;
 void (* volatile I2C3_EventCallback)(void *) = Void_Handler; void * volatile I2C3_CbArg;
 void (* volatile I2C3_ErrorCallback)(void *) = Void_Handler;
 
-//------------------------------------------------------------------------------------------------- Callbacks: SPI
+//---------------------------------------------------------------------------------- Callbacks: SPI
 
 void (* volatile SPI1_Cb)(void *) = Void_Handler; void * volatile SPI1_CbArg;
 void (* volatile SPI2_Cb)(void *) = Void_Handler; void * volatile SPI2_CbArg;
 
-//------------------------------------------------------------------------------------------------- Callbacks: UART
+//--------------------------------------------------------------------------------- Callbacks: UART
 
 void (* volatile USART1_Cb)(void *) = Void_Handler;  void * volatile USART1_CbArg;
 void (* volatile LPUART1_Cb)(void *) = Void_Handler; void * volatile LPUART1_CbArg;
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: System
+//----------------------------------------------------------------------- Weak IRQ handlers: System
 
 __weak void NMI_Handler(void) { Default_Handler(); }
 __weak void HardFault_Handler(void) { while(1); }
@@ -126,7 +126,7 @@ __weak void DebugMon_Handler(void) { Default_Handler(); }
 __weak void PendSV_Handler(void) { Default_Handler(); }
 __weak void SysTick_Handler(void) { Default_Handler(); }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: Simple
+//----------------------------------------------------------------------- Weak IRQ handlers: Simple
 
 __weak void WWDG_IRQHandler(void) { Default_Handler(); }
 __weak void PVD_PVM_IRQHandler(void) { Default_Handler(); }
@@ -157,7 +157,7 @@ __weak void RNG_IRQHandler(void) { Default_Handler(); }
 __weak void FPU_IRQHandler(void) { Default_Handler(); }
 __weak void DMAMUX1_OVR_IRQHandler(void) { Default_Handler(); }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: EXTI (individual on WB)
+//------------------------------------------------------ Weak IRQ handlers: EXTI (individual on WB)
 
 __weak void EXTI0_IRQHandler(void)
 {
@@ -208,7 +208,7 @@ __weak void EXTI15_10_IRQHandler(void)
   if(EXTI->PR1 & EXTI_PR1_PIF15) { EXTI->PR1 = EXTI_PR1_PIF15; EXTI15_Cb(EXTI15_CbArg); }
 }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: DMA1 (individual on WB)
+//------------------------------------------------------ Weak IRQ handlers: DMA1 (individual on WB)
 
 __weak void DMA1_Channel1_IRQHandler(void) { DMA_CH1_Cb(DMA_CH1_CbArg); }
 __weak void DMA1_Channel2_IRQHandler(void) { DMA_CH2_Cb(DMA_CH2_CbArg); }
@@ -218,7 +218,7 @@ __weak void DMA1_Channel5_IRQHandler(void) { DMA_CH5_Cb(DMA_CH5_CbArg); }
 __weak void DMA1_Channel6_IRQHandler(void) { DMA_CH6_Cb(DMA_CH6_CbArg); }
 __weak void DMA1_Channel7_IRQHandler(void) { DMA_CH7_Cb(DMA_CH7_CbArg); }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: DMA2 (individual on WB)
+//------------------------------------------------------ Weak IRQ handlers: DMA2 (individual on WB)
 
 __weak void DMA2_Channel1_IRQHandler(void) { DMA_CH8_Cb(DMA_CH8_CbArg); }
 __weak void DMA2_Channel2_IRQHandler(void) { DMA_CH9_Cb(DMA_CH9_CbArg); }
@@ -228,7 +228,7 @@ __weak void DMA2_Channel5_IRQHandler(void) { DMA_CH12_Cb(DMA_CH12_CbArg); }
 __weak void DMA2_Channel6_IRQHandler(void) { DMA_CH13_Cb(DMA_CH13_CbArg); }
 __weak void DMA2_Channel7_IRQHandler(void) { DMA_CH14_Cb(DMA_CH14_CbArg); }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: TIM
+//-------------------------------------------------------------------------- Weak IRQ handlers: TIM
 
 __weak void TIM1_UP_TIM16_IRQHandler(void)
 {
@@ -243,36 +243,36 @@ __weak void TIM1_TRG_COM_TIM17_IRQHandler(void)
 
 __weak void TIM2_IRQHandler(void) { TIM2_Cb(TIM2_CbArg); }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: LPTIM
+//------------------------------------------------------------------------ Weak IRQ handlers: LPTIM
 
 __weak void LPTIM1_IRQHandler(void) { LPTIM1_Cb(LPTIM1_CbArg); }
 __weak void LPTIM2_IRQHandler(void) { LPTIM2_Cb(LPTIM2_CbArg); }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: I2C (separate event/error on WB)
+//--------------------------------------------- Weak IRQ handlers: I2C (separate event/error on WB)
 
 __weak void I2C1_EV_IRQHandler(void) { I2C1_EventCallback(I2C1_CbArg); }
 __weak void I2C1_ER_IRQHandler(void) { I2C1_ErrorCallback(I2C1_CbArg); }
 __weak void I2C3_EV_IRQHandler(void) { I2C3_EventCallback(I2C3_CbArg); }
 __weak void I2C3_ER_IRQHandler(void) { I2C3_ErrorCallback(I2C3_CbArg); }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: SPI
+//-------------------------------------------------------------------------- Weak IRQ handlers: SPI
 
 __weak void SPI1_IRQHandler(void) { SPI1_Cb(SPI1_CbArg); }
 __weak void SPI2_IRQHandler(void) { SPI2_Cb(SPI2_CbArg); }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: UART
+//------------------------------------------------------------------------- Weak IRQ handlers: UART
 
 __weak void USART1_IRQHandler(void) { USART1_Cb(USART1_CbArg); }
 __weak void LPUART1_IRQHandler(void) { LPUART1_Cb(LPUART1_CbArg); }
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers: ADC
+//-------------------------------------------------------------------------- Weak IRQ handlers: ADC
 
 __weak void ADC1_IRQHandler(void) { ADC_Cb(ADC_CbArg); }
 
-//------------------------------------------------------------------------------------------------- Vector table
+//------------------------------------------------------------------------------------ Vector table
 
 __attribute__((section(".isr_vector")))
-const void (*const g_pfnVectors[])(void) = {
+void (*const g_pfnVectors[])(void) = {
   (void (*)(void))(&_estack),
   Reset_Handler,
   NMI_Handler,

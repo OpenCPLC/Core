@@ -91,7 +91,8 @@ bool SPI_Master_IsFree(SPI_Master_t *spi);
  * @param[in] len Number of bytes to transfer
  * @return `FREE` if started, `BUSY` if transfer in progress
  */
-status_t SPI_Master_Transfer(SPI_Master_t *spi, uint8_t *rx_data, uint8_t *tx_data, uint16_t len);
+status_t SPI_Master_Transfer(SPI_Master_t *spi, uint8_t *rx_data, uint8_t *tx_data,
+  uint16_t len);
 
 /**
  * @brief Read from SPI device (sends constant `cmd` byte).
@@ -162,7 +163,8 @@ void SPI_Software_Init(SPI_Software_t *spi);
  * @param[in] tx_data Pointer to transmit buffer
  * @param[in] len Number of bytes to transfer
  */
-void SPI_Software_Transfer(SPI_Software_t *spi, uint8_t *rx_data, uint8_t *tx_data, uint16_t len);
+void SPI_Software_Transfer(SPI_Software_t *spi, uint8_t *rx_data, uint8_t *tx_data,
+  uint16_t len);
 
 #endif
 //-------------------------------------------------------------------------------------------------

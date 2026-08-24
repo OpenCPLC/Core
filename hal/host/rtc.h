@@ -9,7 +9,7 @@
 #include <time.h>
 #include "xdef.h"
 
-//------------------------------------------------------------------------------------------------- Config
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef RTC_WEEKDAYS_LONGNAMES
   #define RTC_WEEKDAYS_LONGNAMES ON
@@ -19,7 +19,7 @@
   #define RTC_ALARM_COUNT 2
 #endif
 
-//------------------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
 typedef enum {
   RTC_Weekday_Error = -1,
@@ -84,9 +84,14 @@ typedef struct {
   uint8_t second;
 } RTC_AlarmCfg_t;
 
-//------------------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
-void RTC_Init(void);
+/**
+ * @brief Initialize RTC peripheral. Call once before use.
+ * @return `OK`. The simulated clock has no crystal to wait for,
+ * but the target port can report `ERR`, so shared code checks the result on both.
+ */
+status_t RTC_Init(void);
 
 // Convert
 RTC_Datetime_t RTC_UnixToDatetime(uint64_t timestamp);
@@ -130,7 +135,8 @@ void RTC_WakeupTimerDisable(void);
 
 // Check
 bool RTC_CheckDaystamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec);
-bool RTC_CheckWeekstamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec);
+bool RTC_CheckWeekstamp(uint32_t stamp_alarm, uint32_t offset_min_sec,
+  uint32_t offset_max_sec);
 bool RTC_AlarmCheck(RTC_Alarm_t alarm, uint32_t offset_min_sec, uint32_t offset_max_sec);
 
 // Event
@@ -139,7 +145,7 @@ bool RTC_EventWakeupTimer(void);
 void RTC_Force(RTC_Alarm_t alarm);
 void RTC_ForceWakeupTimer(void);
 
-//------------------------------------------------------------------------------------------------- Globals
+//----------------------------------------------------------------------------------------- Globals
 
 extern const char *RtcWeekdays[];
 extern bool RtcReady;

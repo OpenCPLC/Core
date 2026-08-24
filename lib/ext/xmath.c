@@ -21,7 +21,23 @@ int64_t div_round(int64_t num, int64_t den)
   return -(int64_t)tmp;
 }
 
-//------------------------------------------------------------------------------------------------- ieee754
+uint32_t sqrt_u64(uint64_t value)
+{
+  uint64_t rem = value, res = 0, one = 1ull << 62;
+  while(one > rem) one >>= 2;
+  while(one) {
+    if(rem >= res + one) {
+      rem -= res + one;
+      res += 2 * one;
+    }
+    res >>= 1;
+    one >>= 2;
+  }
+  if(rem > res) res++; // remainder past the midpoint rounds up
+  return (uint32_t)res;
+}
+
+//----------------------------------------------------------------------------------------- ieee754
 
 /**
  * @brief Packs `float` value into raw IEEE 754 `uint32_t` representation.
@@ -47,7 +63,7 @@ float ieee754_unpack(uint32_t value)
   return *p_nbr;
 }
 
-//------------------------------------------------------------------------------------------------- float
+//------------------------------------------------------------------------------------------- float
 
 /**
  * @brief Returns maximum of multiple `float` values, ignoring `NaN`.
@@ -93,7 +109,7 @@ float min_f32_NaN(uint16_t count, ...)
   return min_value;
 }
 
-//------------------------------------------------------------------------------------------------- sort
+//-------------------------------------------------------------------------------------------- sort
 
 void sort_asc_u16(uint16_t *array, uint16_t len)
 {
@@ -199,73 +215,124 @@ void sort_desc_i32(int32_t *array, uint16_t len)
   }
 }
 
-//------------------------------------------------------------------------------------------------- avg
+//--------------------------------------------------------------------------------------------- avg
 
 /**
- * @brief Calculates average of `uint16_t` array.
+ * @brief Average of a `uint16_t` array as `mean × mul`, rounded, all-integer.
+ * Scaling happens before the division, so the fraction of the mean is not lost:
+ * `mul = 1` gives a plain mean, `mul = 65536` a Q16 result for fixed-point pipelines.
  * @param array Pointer to input array.
  * @param len Number of elements in `array`.
- * @return Average value as `float`. Returns `0` if `len` is `0`.
+ * @param mul Result scale factor; `mean × mul` must fit `uint32_t`.
+ * @return Rounded `mean × mul`. Returns `0` if `len` is `0`.
  */
-float avg_u16(const uint16_t *array, uint16_t len)
+uint32_t avg_u16(const uint16_t *array, uint16_t len, uint32_t mul)
 {
-  if(len == 0) return 0.0f;
+  if(len == 0) return 0;
   uint32_t sum = 0;
   for(uint16_t i = 0; i < len; i++) {
     sum += array[i];
   }
-  return (float)sum / len;
+  return (uint32_t)(((uint64_t)sum * mul + len / 2) / len);
 }
 
 /**
- * @brief Calculates average of `int16_t` array.
+ * @brief Signed counterpart of `avg_u16`: `mean × mul`, rounded, all-integer.
  * @param array Pointer to input array.
  * @param len Number of elements in `array`.
- * @return Average value as `float`. Returns `0` if `len` is `0`.
+ * @param mul Result scale factor; `mean × mul` must fit `int32_t`.
+ * @return Rounded `mean × mul`. Returns `0` if `len` is `0`.
  */
-float avg_i16(const int16_t *array, uint16_t len)
+int32_t avg_i16(const int16_t *array, uint16_t len, uint32_t mul)
 {
-  if(len == 0) return 0.0f;
+  if(len == 0) return 0;
   int32_t sum = 0;
   for(uint16_t i = 0; i < len; i++) {
     sum += array[i];
   }
-  return (float)sum / len;
+  return (int32_t)div_round((int64_t)sum * mul, len);
 }
 
 /**
- * @brief Calculates average of `uint32_t` array.
+ * @brief Average of a `uint32_t` array as `mean × mul`, rounded, all-integer.
  * @param array Pointer to input array.
  * @param len Number of elements in `array`.
- * @return Average value as `float`. Returns `0` if `len` is `0`.
+ * @param mul Result scale factor; `mean × mul` must fit `uint32_t`.
+ * @return Rounded `mean × mul`. Returns `0` if `len` is `0`.
  */
-float avg_u32(const uint32_t *array, uint16_t len)
+uint32_t avg_u32(const uint32_t *array, uint16_t len, uint32_t mul)
 {
-  if(len == 0) return 0.0f;
+  if(len == 0) return 0;
   uint64_t sum = 0;
   for(uint16_t i = 0; i < len; i++) {
     sum += array[i];
   }
-  return (float)sum / len;
+  return (uint32_t)((sum * mul + len / 2) / len);
 }
 
 /**
- * @brief Calculates average of `int32_t` array.
+ * @brief Keeps only values inside `[min_val, max_val]`, compacting the array in place.
+ * @param data Values, filtered in place.
+ * @param count Number of values.
+ * @param min_val Lower bound, inclusive.
+ * @param max_val Upper bound, inclusive.
+ * @return Number of values kept.
+ */
+uint16_t filter_range_u32(uint32_t *data, uint16_t count, uint32_t min_val, uint32_t max_val)
+{
+  if(!data || min_val > max_val) return 0;
+  uint16_t valid = 0;
+  for(uint16_t i = 0; i < count; i++) {
+    if(data[i] >= min_val && data[i] <= max_val) data[valid++] = data[i];
+  }
+  return valid;
+}
+
+/**
+ * @brief Rounded `mean x mul` of the inter-quartile core: sorts in place, drops
+ * outliers beyond `1.5 x IQR`, averages the rest. Under 4 samples a plain mean.
+ * @param data Values, sorted in place.
+ * @param count Number of values.
+ * @param mul Result scale factor (see `avg_u16`).
+ * @return Rounded `mean x mul`. Returns `0` if `count` is `0`.
+ */
+uint32_t iqr_mean_u32(uint32_t *data, uint16_t count, uint32_t mul)
+{
+  if(!data || !count) return 0;
+  if(count < 4) return avg_u32(data, count, mul);
+  sort_asc_u32(data, count);
+  uint32_t q1 = data[count / 4];
+  uint32_t q3 = data[(count * 3) / 4];
+  uint32_t iqr15 = (q3 - q1) + ((q3 - q1) >> 1);
+  uint32_t lo = q1 > iqr15 ? q1 - iqr15 : 0;
+  uint32_t hi = q3 + iqr15;
+  uint64_t sum = 0;
+  uint16_t valid = 0;
+  for(uint16_t i = 0; i < count; i++) {
+    if(data[i] >= lo && data[i] <= hi) { sum += data[i]; valid++; }
+  }
+  if(!valid) return 0;
+  return (uint32_t)((sum * mul + valid / 2) / valid);
+}
+
+/**
+ * @brief Signed counterpart of `avg_u32`: `mean × mul`, rounded, all-integer.
  * @param array Pointer to input array.
  * @param len Number of elements in `array`.
- * @return Average value as `float`. Returns `0` if `len` is `0`.
+ * @param mul Result scale factor; `mean × mul` must fit `int32_t`.
+ * @return Rounded `mean × mul`. Returns `0` if `len` is `0`.
  */
-float avg_i32(const int32_t *array, uint16_t len)
+int32_t avg_i32(const int32_t *array, uint16_t len, uint32_t mul)
 {
-  if(len == 0) return 0.0f;
+  if(len == 0) return 0;
   int64_t sum = 0;
   for(uint16_t i = 0; i < len; i++) {
     sum += array[i];
   }
-  return (float)sum / len;
+  return (int32_t)div_round(sum * mul, len);
 }
 
-//------------------------------------------------------------------------------------------------- stats: min, max, sun, avg
+//----------------------------------------------------------------------- stats: min, max, sum, avg
 
 /**
  * @brief Calculates min, max, and average of `uint16_t` buffer.
@@ -273,11 +340,13 @@ float avg_i32(const int32_t *array, uint16_t len)
  * @param[in] count Number of elements in `data`.
  * @param[out] min Pointer to store minimum value (cannot be `NULL`).
  * @param[out] max Pointer to store maximum value (cannot be `NULL`).
- * @param[out] sum Optional pointer to store sum as `int64_t` (can be `NULL`).
- * @param[out] avg Optional pointer to store average as `float` (can be `NULL`).
+ * @param[out] sum Optional pointer to store sum as `uint32_t` (can be `NULL`).
+ * @param[out] avg Optional pointer to store rounded `mean × mul` (can be `NULL`).
+ * @param[in] mul Average scale factor (see `avg_u16`).
  * @return `true` on success, `false` if `count` is 0 or pointers are invalid
  */
-bool stats_u16(const uint16_t *data, uint16_t count, uint16_t *min, uint16_t *max, uint32_t *sum, float *avg)
+bool stats_u16(const uint16_t *data, uint16_t count,
+  uint16_t *min, uint16_t *max, uint32_t *sum, uint32_t *avg, uint32_t mul)
 {
   if(!data || !count || !min || !max) return false;
   *min = 0xFFFF;
@@ -289,7 +358,7 @@ bool stats_u16(const uint16_t *data, uint16_t count, uint16_t *min, uint16_t *ma
     if(v > *max) *max = v;
     local_sum += v;
   }
-  if(avg) *avg = (float)local_sum / count;
+  if(avg) *avg = (uint32_t)(((uint64_t)local_sum * mul + count / 2) / count);
   if(sum) *sum = local_sum;
   return true;
 }
@@ -300,11 +369,13 @@ bool stats_u16(const uint16_t *data, uint16_t count, uint16_t *min, uint16_t *ma
  * @param[in] count Number of elements in `data`.
  * @param[out] min Pointer to store minimum value (cannot be `NULL`).
  * @param[out] max Pointer to store maximum value (cannot be `NULL`).
- * @param[out] sum Optional pointer to store sum as `int64_t` (can be `NULL`).
- * @param[out] avg Optional pointer to store average as `float` (can be `NULL`).
+ * @param[out] sum Optional pointer to store sum as `int32_t` (can be `NULL`).
+ * @param[out] avg Optional pointer to store rounded `mean × mul` (can be `NULL`).
+ * @param[in] mul Average scale factor (see `avg_u16`).
  * @return `true` on success, `false` if `count` is 0 or pointers are invalid
  */
-bool stats_i16(const int16_t *data, uint16_t count, int16_t *min, int16_t *max, int32_t *sum, float *avg)
+bool stats_i16(const int16_t *data, uint16_t count,
+  int16_t *min, int16_t *max, int32_t *sum, int32_t *avg, uint32_t mul)
 {
   if(!data || !count || !min || !max) return false;
   *min = INT16_MAX;
@@ -316,7 +387,7 @@ bool stats_i16(const int16_t *data, uint16_t count, int16_t *min, int16_t *max, 
     if(v > *max) *max = v;
     local_sum += v;
   }
-  if(avg) *avg = (float)local_sum / count;
+  if(avg) *avg = (int32_t)div_round((int64_t)local_sum * mul, count);
   if(sum) *sum = local_sum;
   return true;
 }
@@ -327,11 +398,13 @@ bool stats_i16(const int16_t *data, uint16_t count, int16_t *min, int16_t *max, 
  * @param[in] count Number of elements in `data`.
  * @param[out] min Pointer to store minimum value (cannot be `NULL`).
  * @param[out] max Pointer to store maximum value (cannot be `NULL`).
- * @param[out] sum Optional pointer to store sum as `int64_t` (can be `NULL`).
- * @param[out] avg Optional pointer to store average as `float` (can be `NULL`).
+ * @param[out] sum Optional pointer to store sum as `uint64_t` (can be `NULL`).
+ * @param[out] avg Optional pointer to store rounded `mean × mul` (can be `NULL`).
+ * @param[in] mul Average scale factor (see `avg_u16`).
  * @return `true` on success, `false` if `count` is 0 or pointers are invalid
  */
-bool stats_u32(const uint32_t *data, uint16_t count, uint32_t *min, uint32_t *max, uint64_t *sum, float *avg)
+bool stats_u32(const uint32_t *data, uint16_t count,
+  uint32_t *min, uint32_t *max, uint64_t *sum, uint32_t *avg, uint32_t mul)
 {
   if(!data || !count || !min || !max) return false;
   *min = 0xFFFFFFFF;
@@ -343,7 +416,7 @@ bool stats_u32(const uint32_t *data, uint16_t count, uint32_t *min, uint32_t *ma
     if(v > *max) *max = v;
     local_sum += v;
   }
-  if(avg) *avg = (float)local_sum / count;
+  if(avg) *avg = (uint32_t)((local_sum * mul + count / 2) / count);
   if(sum) *sum = local_sum;
   return true;
 }
@@ -355,10 +428,12 @@ bool stats_u32(const uint32_t *data, uint16_t count, uint32_t *min, uint32_t *ma
  * @param[out] min Pointer to store minimum value (cannot be `NULL`).
  * @param[out] max Pointer to store maximum value (cannot be `NULL`).
  * @param[out] sum Optional pointer to store sum as `int64_t` (can be `NULL`).
- * @param[out] avg Optional pointer to store average as `float` (can be `NULL`).
+ * @param[out] avg Optional pointer to store rounded `mean × mul` (can be `NULL`).
+ * @param[in] mul Average scale factor (see `avg_u16`).
  * @return `true` on success, `false` if `count` is 0 or pointers are invalid
  */
-bool stats_i32(const int32_t *data, uint16_t count, int32_t *min, int32_t *max, int64_t *sum, float *avg)
+bool stats_i32(const int32_t *data, uint16_t count,
+  int32_t *min, int32_t *max, int64_t *sum, int32_t *avg, uint32_t mul)
 {
   if(!data || !count || !min || !max) return false;
   *min = INT32_MAX;
@@ -370,12 +445,12 @@ bool stats_i32(const int32_t *data, uint16_t count, int32_t *min, int32_t *max, 
     if(v > *max) *max = v;
     local_sum += v;
   }
-  if(avg) *avg = (float)local_sum / count;
+  if(avg) *avg = (int32_t)div_round(local_sum * mul, count);
   if(sum) *sum = local_sum;
   return true;
 }
 
-//----------------------------------------------------------------------------------------- adc
+//--------------------------------------------------------------------------------------------- adc
 
 void convert_u16_to_i32(const uint16_t *u16, int32_t *i32, uint16_t len)
 {
@@ -424,16 +499,16 @@ static void select_u16(uint16_t *array, uint16_t len, uint16_t nth)
   }
 }
 
-float mid_mean_u16(uint16_t *buff, uint16_t len)
+uint32_t mid_mean_u16(uint16_t *buff, uint16_t len, uint32_t mul)
 {
-  if(len == 0) return 0.0f;
-  if(len <= 2) return avg_u16(buff, len);
+  if(len == 0) return 0;
+  if(len <= 2) return avg_u16(buff, len, mul);
   uint16_t size = len / 3;
-  if(size == 0) return avg_u16(buff, len);
+  if(size == 0) return avg_u16(buff, len, mul);
   uint16_t start = size;
   select_u16(buff, len, start);
   select_u16(&buff[start], len - start, size - 1);
-  return avg_u16(&buff[start], size);
+  return avg_u16(&buff[start], size, mul);
 }
 
 static void select_i16(int16_t *array, uint16_t len, uint16_t nth)
@@ -467,31 +542,34 @@ static void select_i16(int16_t *array, uint16_t len, uint16_t nth)
   }
 }
 
-float mid_mean_i16(int16_t *buff, uint16_t len)
+int32_t mid_mean_i16(int16_t *buff, uint16_t len, uint32_t mul)
 {
-  if(len == 0) return 0.0f;
-  if(len <= 2) return avg_i16(buff, len);
+  if(len == 0) return 0;
+  if(len <= 2) return avg_i16(buff, len, mul);
   uint16_t size = len / 3;
-  if(size == 0) return avg_i16(buff, len);
+  if(size == 0) return avg_i16(buff, len, mul);
   uint16_t start = size;
   select_i16(buff, len, start);
   select_i16(&buff[start], len - start, size - 1);
-  return avg_i16(&buff[start], size);
+  return avg_i16(&buff[start], size, mul);
 }
 
-float rms_i32(int32_t *array, uint16_t len)
+uint32_t rms_i32(const int32_t *array, uint16_t len, uint32_t mul)
 {
-  if(len == 0) return 0.0f;
-  int64_t sum_square = 0;
+  if(len == 0) return 0;
+  uint64_t sum_square = 0;
   for(uint16_t i = 0; i < len; i++) {
     int64_t sample = array[i];
-    sum_square += sample * sample;
+    sum_square += (uint64_t)(sample * sample);
   }
-  float rms_adc = sqrtf((float)sum_square / len);
-  return rms_adc;
+  // Mean square lifted to Q16 before the root,
+  // so the scaled result keeps sub-unit precision.
+  // Mean square must fit 48 bits
+  uint32_t rms_q8 = sqrt_u64(((sum_square + len / 2) / len) << 16);
+  return (uint32_t)(((uint64_t)rms_q8 * mul + 128) >> 8);
 }
 
-//--------------------------------------------------------------------------------------------- shift
+//------------------------------------------------------------------------------------------- shift
 
 void shift_u16(uint16_t *array, uint16_t len, int16_t shift)
 {
@@ -557,7 +635,7 @@ void shift_u32(uint32_t *array, uint16_t len, int16_t shift)
   }
 }
 
-//------------------------------------------------------------------------------------------------- add
+//--------------------------------------------------------------------------------------------- add
 
 void add_scalar_u16(uint16_t *array, uint16_t len, int32_t value)
 {
@@ -606,97 +684,105 @@ void add_scalar_f32(float *array, uint16_t len, float value)
   }
 }
 
-//------------------------------------------------------------------------------------------------- standard-deviation
+//------------------------------------------------------------------------------ standard-deviation
 
 /**
- * @brief Calculates sample standard deviation of `uint16_t` data.
+ * @brief Sample standard deviation of `uint16_t` data as `stddev × mul`, all-integer.
+ * Mean is carried in Q8, so its fraction does not bias the squared differences,
+ * and the scaled result keeps sub-unit precision.
  * @param data Pointer to input array.
  * @param count Number of elements in `data`. Must be ≥ 2.
- * @param avg Optional pointer to store average (`float`).
- * @return Standard deviation as `float`. Returns `0` if `count <= 1`.
+ * @param avg Optional pointer to store the rounded `mean × mul`.
+ * @param mul Result scale factor (see `avg_u16`).
+ * @return Rounded `stddev × mul`. Returns `0` if `count <= 1`.
  */
-float stddev_u16(const uint16_t *data, uint16_t count, float *avg)
+uint32_t stddev_u16(const uint16_t *data, uint16_t count, uint32_t *avg, uint32_t mul)
 {
-  if(count <= 1) return 0.0f;
-  float mean = avg_u16(data, count);
-  if(avg) *avg = mean;
-
-  float sum_sq = 0.0f;
+  if(count <= 1) return 0;
+  uint32_t mean = avg_u16(data, count, 256);
+  if(avg) *avg = (uint32_t)(((uint64_t)mean * mul + 128) >> 8);
+  uint64_t sum_sq = 0;
   for(uint16_t i = 0; i < count; i++) {
-    float diff = (float)data[i] - mean;
-    sum_sq += diff * diff;
+    int32_t diff = (int32_t)((uint32_t)data[i] << 8) - (int32_t)mean;
+    sum_sq += (uint64_t)((int64_t)diff * diff);
   }
-
-  return sqrtf(sum_sq / (count - 1));
+  uint32_t dev_q8 = sqrt_u64(sum_sq / (count - 1));
+  return (uint32_t)(((uint64_t)dev_q8 * mul + 128) >> 8);
 }
 
 /**
- * @brief Calculates sample standard deviation of `int16_t` data.
+ * @brief Signed counterpart of `stddev_u16`: `stddev × mul`, all-integer, Q8 mean.
  * @param data Pointer to input array.
  * @param count Number of elements in `data`. Must be ≥ 2.
- * @param avg Optional pointer to store average (`float`).
- * @return Standard deviation as `float`. Returns `0` if `count <= 1`.
+ * @param avg Optional pointer to store the rounded `mean × mul`.
+ * @param mul Result scale factor (see `avg_u16`).
+ * @return Rounded `stddev × mul`. Returns `0` if `count <= 1`.
  */
-float stddev_i16(const int16_t *data, uint16_t count, float *avg)
+uint32_t stddev_i16(const int16_t *data, uint16_t count, int32_t *avg, uint32_t mul)
 {
-  if(count <= 1) return 0.0f;
-  float mean = avg_i16(data, count);
-  if(avg) *avg = mean;
-
-  float sum_sq = 0.0f;
+  if(count <= 1) return 0;
+  int32_t mean = avg_i16(data, count, 256);
+  if(avg) *avg = (int32_t)div_round((int64_t)mean * mul, 256);
+  uint64_t sum_sq = 0;
   for(uint16_t i = 0; i < count; i++) {
-    float diff = (float)data[i] - mean;
-    sum_sq += diff * diff;
+    int32_t diff = (int32_t)data[i] * 256 - mean;
+    sum_sq += (uint64_t)((int64_t)diff * diff);
   }
-
-  return sqrtf(sum_sq / (count - 1));
+  uint32_t dev_q8 = sqrt_u64(sum_sq / (count - 1));
+  return (uint32_t)(((uint64_t)dev_q8 * mul + 128) >> 8);
 }
 
 /**
- * @brief Calculates sample standard deviation of `uint32_t` data.
+ * @brief Sample standard deviation of `uint32_t` data as `stddev × mul`, all-integer.
+ * The variance is lifted to Q16 before the root, so it must fit 48 bits.
  * @param data Pointer to input array.
  * @param count Number of elements in `data`. Must be ≥ 2.
- * @param avg Optional pointer to store average (`float`).
- * @return Standard deviation as `float`. Returns `0` if `count <= 1`.
+ * @param avg Optional pointer to store the rounded `mean × mul`.
+ * @param mul Result scale factor (see `avg_u16`).
+ * @return Rounded `stddev × mul`. Returns `0` if `count <= 1`.
  */
-float stddev_u32(const uint32_t *data, uint16_t count, float *avg)
+uint32_t stddev_u32(const uint32_t *data, uint16_t count, uint32_t *avg, uint32_t mul)
 {
-  if(count <= 1) return 0.0f;
-  float mean = avg_u32(data, count);
-  if(avg) *avg = mean;
-
-  float sum_sq = 0.0f;
+  if(count <= 1) return 0;
+  uint64_t sum = 0;
+  for(uint16_t i = 0; i < count; i++) sum += data[i];
+  uint32_t mean = (uint32_t)((sum + count / 2) / count);
+  if(avg) *avg = (uint32_t)((sum * mul + count / 2) / count);
+  uint64_t sum_sq = 0;
   for(uint16_t i = 0; i < count; i++) {
-    float diff = (float)data[i] - mean;
-    sum_sq += diff * diff;
+    int64_t diff = (int64_t)data[i] - mean;
+    sum_sq += (uint64_t)(diff * diff);
   }
-
-  return sqrtf(sum_sq / (count - 1));
+  uint32_t dev_q8 = sqrt_u64((sum_sq / (count - 1)) << 16);
+  return (uint32_t)(((uint64_t)dev_q8 * mul + 128) >> 8);
 }
 
 /**
- * @brief Calculates sample standard deviation of `int32_t` data.
+ * @brief Signed counterpart of `stddev_u32`: `stddev × mul`, all-integer.
+ * The variance is lifted to Q16 before the root, so it must fit 48 bits.
  * @param data Pointer to input array.
  * @param count Number of elements in `data`. Must be ≥ 2.
- * @param avg Optional pointer to store average (`float`).
- * @return Standard deviation as `float`. Returns `0` if `count <= 1`.
+ * @param avg Optional pointer to store the rounded `mean × mul`.
+ * @param mul Result scale factor (see `avg_u16`).
+ * @return Rounded `stddev × mul`. Returns `0` if `count <= 1`.
  */
-float stddev_i32(const int32_t *data, uint16_t count, float *avg)
+uint32_t stddev_i32(const int32_t *data, uint16_t count, int32_t *avg, uint32_t mul)
 {
-  if(count <= 1) return 0.0f;
-  float mean = avg_i32(data, count);
-  if(avg) *avg = mean;
-
-  float sum_sq = 0.0f;
+  if(count <= 1) return 0;
+  int64_t sum = 0;
+  for(uint16_t i = 0; i < count; i++) sum += data[i];
+  int32_t mean = (int32_t)div_round(sum, count);
+  if(avg) *avg = (int32_t)div_round(sum * mul, count);
+  uint64_t sum_sq = 0;
   for(uint16_t i = 0; i < count; i++) {
-    float diff = (float)data[i] - mean;
-    sum_sq += diff * diff;
+    int64_t diff = (int64_t)data[i] - mean;
+    sum_sq += (uint64_t)(diff * diff);
   }
-
-  return sqrtf(sum_sq / (count - 1));
+  uint32_t dev_q8 = sqrt_u64((sum_sq / (count - 1)) << 16);
+  return (uint32_t)(((uint64_t)dev_q8 * mul + 128) >> 8);
 }
 
-//------------------------------------------------------------------------------------------------- contains
+//---------------------------------------------------------------------------------------- contains
 
 /**
  * @brief Checks if `value` exists in `uint8_t` array.
@@ -743,7 +829,7 @@ bool contains_u32(const uint32_t *array, uint16_t len, uint32_t value)
   return false;
 }
 
-//------------------------------------------------------------------------------------------------- median
+//------------------------------------------------------------------------------------------ median
 
 int16_t median3_i16(int16_t a, int16_t b, int16_t c)
 {
@@ -855,7 +941,7 @@ float median5_f32(float a, float b, float c, float d, float e)
   return c;
 }
 
-//------------------------------------------------------------------------ Filter: Step Limiter
+//---------------------------------------------------------------------------- Filter: Step Limiter
 
 int16_t step_limiter_i16(int16_t input, int16_t prev, uint16_t max_delta)
 {
@@ -889,8 +975,7 @@ float step_limiter_f32(float input, float prev, float max_delta)
   return prev;
 }
 
-//--------------------------------------------------------------------------------- Filter: EMA
-
+//------------------------------------------------------------------------------------- Filter: EMA
 
 int16_t ema_filter_i16(int16_t input, int16_t prev, uint8_t alpha_shift)
 {
@@ -950,7 +1035,7 @@ float ema_filter_f32(float input, float prev, float alpha)
   return prev + alpha * (input - prev);
 }
 
-//------------------------------------------------------------------------------ Filter: Hampel
+//---------------------------------------------------------------------------------- Filter: Hampel
 
 int16_t hampel_i16(int16_t input, int16_t z1, int16_t z2, uint8_t k)
 {
@@ -1011,7 +1096,7 @@ float hampel_f32(float input, float z1, float z2, float k)
   return (d0 > k * 1.4826f * mad) ? med : input;
 }
 
-//------------------------------------------------------------------------------------------------- Scale
+//------------------------------------------------------------------------------------------- Scale
 
 bool scale_fill(float start, float end, int n, float blend, float *scale_array)
 {

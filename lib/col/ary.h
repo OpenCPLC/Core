@@ -61,11 +61,13 @@ typedef struct {
  * @param type Element type.
  * @param capacity Maximum elements.
  * @param ... Initial values in braces, e.g. `{1, 2, 3}`.
+ * `_head` holds `(_tail + count) % limit`, so a list filling the array wraps it to `0`.
  */
 #define ary_init(name, type, capacity, ...) \
   type name##_data[capacity] = __VA_ARGS__; \
   ary_t name = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type), \
-    .overwrite = false, ._head = (uint16_t)(sizeof((type[])__VA_ARGS__) / sizeof(type)), \
+    .overwrite = false, \
+    ._head = (uint16_t)((sizeof((type[])__VA_ARGS__) / sizeof(type)) % (capacity)), \
     ._tail = 0, .count = (uint16_t)(sizeof((type[])__VA_ARGS__) / sizeof(type)) }
 
 /**

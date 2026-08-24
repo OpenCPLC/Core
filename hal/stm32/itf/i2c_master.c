@@ -46,13 +46,17 @@ static void I2C_Master_IRQHandler(I2C_Master_t *i2c)
     i2c->reg->ICR |= I2C_ICR_STOPCF;
     i2c->reg->CR1 &= ~I2C_CR1_STOPIE;
     i2c->_busy = false;
-    heap_free((void *)&i2c->_tx_buffer);
+    heap_free(i2c->_tx_buffer);
     i2c->_tx_buffer = NULL;
   }
   // NACK received
   if((i2c->reg->CR1 & I2C_CR1_NACKIE) && (i2c->reg->ISR & I2C_ISR_NACKF)) {
-    i2c->reg->ICR |= I2C_ICR_NACKCF;
-    i2c->reg->CR1 &= ~I2C_CR1_NACKIE;
+    // `AUTOEND` turns the NACK into a STOP, so `STOPF` is raised here too
+    i2c->reg->ICR |= I2C_ICR_NACKCF | I2C_ICR_STOPCF;
+    i2c->reg->CR1 &= ~(I2C_CR1_NACKIE | I2C_CR1_STOPIE |
+      I2C_CR1_TXIE | I2C_CR1_RXIE | I2C_CR1_TCIE);
+    heap_free(i2c->_tx_buffer);
+    i2c->_tx_buffer = NULL;
     i2c->_busy = false;
   }
 }
@@ -73,7 +77,7 @@ static void I2C_Master_DMA_RX_IRQHandler(I2C_Master_t *i2c)
   }
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 void I2C_Master_Init(I2C_Master_t *i2c)
 {
@@ -118,7 +122,7 @@ void I2C_Master_Disable(I2C_Master_t *i2c)
   RCC_DisableI2C(i2c->reg);
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 bool I2C_Master_IsBusy(I2C_Master_t *i2c)
 {
@@ -130,7 +134,7 @@ bool I2C_Master_IsFree(I2C_Master_t *i2c)
   return !i2c->_busy;
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 status_t I2C_Master_Write(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16_t len)
 {
@@ -146,9 +150,11 @@ status_t I2C_Master_Write(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16
     i2c->_tail = 1;
     i2c->_head = len;
     i2c->reg->TXDR = data[0];
-    if(len == 1) i2c->reg->CR1 |= I2C_CR1_STOPIE | I2C_CR1_NACKIE;
-    else i2c->reg->CR1 |= I2C_CR1_TXIE | I2C_CR1_NACKIE;
+    if(len == 1) i2c->reg->CR1 |= I2C_CR1_STOPIE;
+    else i2c->reg->CR1 |= I2C_CR1_TXIE;
   }
+  // An absent device produces an address NACK and nothing else
+  i2c->reg->CR1 |= I2C_CR1_NACKIE;
   i2c->reg->CR2 = I2C_CR2_AUTOEND | (len << 16) | (addr << 1) | I2C_CR2_START;
   i2c->_busy = true;
   return FREE;
@@ -169,12 +175,14 @@ status_t I2C_Master_Read(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16_
     i2c->_head = len;
     i2c->reg->CR1 |= I2C_CR1_RXIE;
   }
+  // An absent device produces an address NACK and nothing else
+  i2c->reg->CR1 |= I2C_CR1_NACKIE;
   i2c->reg->CR2 = I2C_CR2_AUTOEND | (len << 16) | I2C_CR2_RD_WRN | (addr << 1) | I2C_CR2_START;
   i2c->_busy = true;
   return FREE;
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 status_t I2C_Master_WriteReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
   uint8_t *data, uint16_t len
@@ -203,7 +211,7 @@ status_t I2C_Master_ReadReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
   return FREE;
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 status_t I2C_Master_WriteRead(I2C_Master_t *i2c, uint8_t addr,
   uint8_t *tx_data, uint16_t tx_len, uint8_t *rx_data, uint16_t rx_len

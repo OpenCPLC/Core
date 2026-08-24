@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "log.h"
 
 #if defined(_WIN32) || defined(_WIN64)
   #include <windows.h>
@@ -12,7 +13,7 @@
   #include <unistd.h>
 #endif
 
-//------------------------------------------------------------------------------------------------- Program path (for restart)
+//---------------------------------------------------------------------- Program path (for restart)
 
 static char pwr_exe_path[1024] = {0};
 static char **pwr_argv = NULL;
@@ -40,12 +41,13 @@ void PWR_StoreArgs(int argc, char **argv)
   }
 }
 
-//------------------------------------------------------------------------------------------------- PWR
+//--------------------------------------------------------------------------------------------- PWR
+
+// Printed directly: `DBG_Loop` gets no further pass once the process ends
 
 void PWR_Reset(void)
 {
-  printf("[PWR] Reset (program termination)\n");
-  fflush(stdout);
+  printf(LOG_TAG("PWR") " Reset (program termination)\r\n");
   exit(0);
 }
 
@@ -55,12 +57,11 @@ void PWR_Sleep(PWR_SleepMode_t mode)
     "Stop0", "Stop1", "Stop2", "StandbySRAM", "Standby", "Shutdown", "Error"
   };
   const char *name = (mode <= PWR_SleepMode_Error) ? mode_names[mode] : "Unknown";
-  printf("[PWR] Sleep mode: %s (program termination)\n", name);
-  fflush(stdout);
+  printf(LOG_TAG("PWR") " Sleep mode: %s (program termination)\r\n", name);
   exit(0);
 }
 
-//------------------------------------------------------------------------------------------------- BKPR (RAM-based, lost on restart)
+//--------------------------------------------------------------- BKPR (RAM-based, lost on restart)
 
 static uint32_t bkpr_regs[5] = {0};
 

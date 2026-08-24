@@ -15,7 +15,7 @@
   #include <sys/select.h>
 #endif
 
-//------------------------------------------------------------------------------------------------- Console setup
+//----------------------------------------------------------------------------------- Console setup
 #if defined(_WIN32) || defined(_WIN64)
 
 static HANDLE hStdin;
@@ -36,7 +36,7 @@ static void UART_DeinitConsole(void)
 static int console_kbhit(void) { return _kbhit(); }
 static int console_getch(void) { return _getch(); }
 
-#else //------------------------------------------------------------------------------------------- Linux
+#else //------------------------------------------------------------------------------- Linux
 
 static struct termios orig_termios;
 
@@ -74,7 +74,7 @@ static int console_getch(void)
 }
 
 #endif
-//------------------------------------------------------------------------------------------------- RX Thread
+//--------------------------------------------------------------------------------------- RX Thread
 #if defined(_WIN32) || defined(_WIN64)
 
 static DWORD WINAPI uart_rx_thread(LPVOID param)
@@ -93,7 +93,7 @@ static DWORD WINAPI uart_rx_thread(LPVOID param)
   return 0;
 }
 
-#else //------------------------------------------------------------------------------------------- Linux
+#else //------------------------------------------------------------------------------- Linux
 
 static void *uart_rx_thread(void *param)
 {
@@ -112,7 +112,7 @@ static void *uart_rx_thread(void *param)
 }
 
 #endif
-//------------------------------------------------------------------------------------------------- Internal
+//---------------------------------------------------------------------------------------- Internal
 
 static void UART_StartRxThread(UART_t *uart)
 {
@@ -141,7 +141,7 @@ static void UART_StopRxThread(UART_t *uart)
   #endif
 }
 
-//------------------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 status_t UART_Init(UART_t *uart)
 {
@@ -169,14 +169,14 @@ status_t UART_ReInit(UART_t *uart)
 
 void UART_SetTimeout(UART_t *uart, uint16_t timeout) { uart->timeout = timeout; }
 
-//------------------------------------------------------------------------------------------------- Status
+//------------------------------------------------------------------------------------------ Status
 
 bool UART_SendCompleted(UART_t *uart) { return !uart->_tx_busy; }
 bool UART_SendActive(UART_t *uart) { return uart->_tx_busy; }
 bool UART_IsBusy(UART_t *uart) { return uart->_tx_busy; }
 bool UART_IsFree(UART_t *uart) { return !uart->_tx_busy; }
 
-//------------------------------------------------------------------------------------------------- Send
+//-------------------------------------------------------------------------------------------- Send
 
 status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len)
 {
@@ -189,7 +189,7 @@ status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len)
   return OK;
 }
 
-//------------------------------------------------------------------------------------------------- Receive
+//----------------------------------------------------------------------------------------- Receive
 
 uint16_t UART_Size(UART_t *uart) { return BUFF_Size(uart->buff); }
 uint16_t UART_Read(UART_t *uart, uint8_t *data) { return BUFF_Read(uart->buff, data); }
@@ -197,7 +197,7 @@ char *UART_ReadString(UART_t *uart) { return BUFF_ReadString(uart->buff); }
 bool UART_Skip(UART_t *uart) { return BUFF_Skip(uart->buff); }
 void UART_Clear(UART_t *uart) { BUFF_Clear(uart->buff); }
 
-//------------------------------------------------------------------------------------------------- Utils
+//------------------------------------------------------------------------------------------- Utils
 
 uint32_t UART_CalcTime_ms(UART_t *uart, uint16_t len)
 {

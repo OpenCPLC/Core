@@ -2,7 +2,7 @@
 
 #include "flash.h"
 
-//------------------------------------------------------------------------- Compatibility Layer
+//----------------------------------------------------------------------------- Compatibility Layer
 
 #define FLASH_START_ADDR ((uint32_t)0x08000000)
 #define FLASH_KEY1 ((uint32_t)0x45670123)
@@ -16,30 +16,24 @@
   #else
     #define FLASH_PNB_MASK FLASH_CR_PNB
   #endif
-  // G0 error flags
-  #define FLASH_ERR_FLAGS (FLASH_SR_WRPERR | FLASH_SR_PGAERR | FLASH_SR_SIZERR | \
-    FLASH_SR_PGSERR | FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
-  #define FLASH_CLR_FLAGS (FLASH_SR_EOP | FLASH_ERR_FLAGS)
 #elif defined(STM32WB)
   #define FLASH_BSY FLASH_SR_BSY
   #define FLASH_PNB_POS FLASH_CR_PNB_Pos
   #define FLASH_PNB_MASK FLASH_CR_PNB
-  // WB error flags (includes OPERR, PROGERR)
-  #define FLASH_ERR_FLAGS (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | \
-    FLASH_SR_PGAERR | FLASH_SR_SIZERR | FLASH_SR_PGSERR | \
-    FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
-  #define FLASH_CLR_FLAGS (FLASH_SR_EOP | FLASH_ERR_FLAGS)
 #elif defined(STM32G4)
   #define FLASH_BSY FLASH_SR_BSY
   #define FLASH_PNB_POS FLASH_CR_PNB_Pos
   #define FLASH_PNB_MASK FLASH_CR_PNB
-  #define FLASH_ERR_FLAGS (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | \
-    FLASH_SR_PGAERR | FLASH_SR_SIZERR | FLASH_SR_PGSERR | \
-    FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
-  #define FLASH_CLR_FLAGS (FLASH_SR_EOP | FLASH_ERR_FLAGS)
 #endif
 
-//------------------------------------------------------------------------------------ Internal
+// Busy bit and page-number field move between families, the error set does not.
+// `PROGERR` reports a write into a location that was not erased.
+#define FLASH_ERR_FLAGS (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | \
+  FLASH_SR_PGAERR | FLASH_SR_SIZERR | FLASH_SR_PGSERR | \
+  FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
+#define FLASH_CLR_FLAGS (FLASH_SR_EOP | FLASH_ERR_FLAGS)
+
+//---------------------------------------------------------------------------------------- Internal
 
 static inline void flash_wait(void)
 {
@@ -50,7 +44,7 @@ static inline void flash_wait(void)
 /**
  * @brief Get bank bit for dual-bank G0C1.
  * @param[in] page Page index (0-255)
- * @return Bank selection bit (0 or 1)
+ * @return `BKER` mask (`0` or `1u << 13`)
  */
 static inline uint32_t flash_bank_bit(uint16_t page)
 {
@@ -58,7 +52,7 @@ static inline uint32_t flash_bank_bit(uint16_t page)
 }
 #endif
 
-//---------------------------------------------------------------------------------------- Init
+//-------------------------------------------------------------------------------------------- Init
 
 static inline status_t flash_unlock(void)
 {
@@ -77,16 +71,27 @@ static inline void flash_lock(void)
   FLASH->CR |= FLASH_CR_LOCK;
 }
 
-//--------------------------------------------------------------------------------------- Erase
+//------------------------------------------------------------------------------------------- Erase
 
 status_t FLASH_Erase(uint16_t page)
 {
   if(page >= FLASH_PAGES) return ERR;
+  // Erasing an already-erased page completes without `EOP`,
+  // which the check below reads as a failure.
+  // An empty page IS the erased state: skip the operation.
+  const uint32_t *word = (const uint32_t *)FLASH_GetAddress(page, 0);
+  bool empty = true;
+  for(uint32_t i = 0; i < FLASH_PAGE_SIZE / sizeof(uint32_t); i++) {
+    if(word[i] != 0xFFFFFFFFu) { empty = false; break; }
+  }
+  if(empty) return OK;
   if(flash_unlock()) return ERR;
   FLASH->SR = FLASH_CLR_FLAGS;
   FLASH->CR &= ~FLASH_PNB_MASK;
   #if defined(STM32G0) && defined(STM32G0C1xx)
-    FLASH->CR |= flash_bank_bit(page) | ((uint32_t)page << FLASH_PNB_POS) | FLASH_CR_PER;
+    // Dual-bank: BKER picks the bank, PNB is the page within it (0..127), not absolute.
+    FLASH->CR |= flash_bank_bit(page) |
+      ((uint32_t)(page & 0x7Fu) << FLASH_PNB_POS) | FLASH_CR_PER;
   #else
     FLASH->CR |= ((uint32_t)page << FLASH_PNB_POS) | FLASH_CR_PER;
   #endif
@@ -102,7 +107,7 @@ status_t FLASH_Erase(uint16_t page)
   return ERR;
 }
 
-//-------------------------------------------------------------------------------- Address/Read
+//------------------------------------------------------------------------------------ Address/Read
 
 uint32_t FLASH_GetAddress(uint16_t page, int16_t offset)
 {
@@ -114,7 +119,7 @@ uint32_t FLASH_Read(uint32_t addr)
   return *(uint32_t *)addr;
 }
 
-//--------------------------------------------------------------------------------------- Write
+//------------------------------------------------------------------------------------------- Write
 
 // Doubleword program: requires 8B-aligned address and uninterrupted store pair.
 // IRQ between `data1` and `data2` triggers `PROGERR`/`SIZERR` on G0/WB/G4.
@@ -142,7 +147,7 @@ status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2)
 }
 
 // Fast (row) program: 256B aligned, MUST execute from RAM (RWW conflict otherwise).
-// Linker must place this in `.RamFunc` and copy at startup.
+// Linker must place this in `.data#` and copy at startup.
 status_t FLASH_WriteFast(uint32_t addr, uint32_t *data)
 {
   if(addr & 0xFFu) return ERR;
@@ -157,7 +162,7 @@ status_t FLASH_WriteFast(uint32_t addr, uint32_t *data)
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
   for(int i = 0; i < 64; i++) {
-    *(uint32_t *)addr = data[i];
+    *(volatile uint32_t *)addr = data[i];
     addr += 4u;
   }
   flash_wait();
@@ -183,7 +188,7 @@ status_t FLASH_WritePage(uint16_t page, uint8_t *data)
   return OK;
 }
 
-//--------------------------------------------------------------------------- Compare/Save/Load
+//------------------------------------------------------------------------------- Compare/Save/Load
 
 bool FLASH_Compare(uint16_t page, uint8_t *data, uint16_t size)
 {
@@ -198,26 +203,28 @@ bool FLASH_Compare(uint16_t page, uint8_t *data, uint16_t size)
 }
 
 // Layout: [size:4B][data:size B] padded to 8B boundary per DW write.
-// Real footprint = `align_up(size + 4, 8)`. First DW = `(size, data[0..3])`.
+// Real footprint = `align_up(size + 4, 8)`. Header DW = `(size, data[0..3])`.
+// Header is written LAST as a commit marker: a torn save leaves it erased,
+// so `FLASH_Load`/`FLASH_Compare` reject the record instead of a half-written body.
+// Single-slot only; for CRC-grade torn-write safety use PDB/EEPROM.
 status_t FLASH_Save(uint16_t page, uint8_t *data, uint16_t size)
 {
   if(page >= FLASH_PAGES) return ERR;
   if(size == 0) return ERR;
   uint32_t total = ((uint32_t)size + 4u + 7u) & ~7u;
-  uint32_t addr = FLASH_GetAddress(page, 0);
+  uint32_t head = FLASH_GetAddress(page, 0);
   uint32_t flash_end = FLASH_GetAddress(FLASH_PAGES, 0);
   uint32_t end_page = FLASH_GetAddress(page + 1, 0);
-  if(flash_end - addr < total) return ERR;
+  if(flash_end - head < total) return ERR;
   if(FLASH_Erase(page)) return ERR;
+  uint16_t first = size > 4 ? 4 : size;
   uint32_t w1 = 0xFFFFFFFFu;
-  uint16_t chunk = size > 4 ? 4 : size;
-  memcpy(&w1, data, chunk);
-  if(FLASH_Write(addr, (uint32_t)size, w1)) return ERR;
-  addr += 8u;
-  data += chunk;
-  size -= chunk;
+  memcpy(&w1, data, first);
+  uint8_t *body = data + first;
+  uint16_t left = size - first;
+  uint32_t addr = head + 8u; // body begins after the reserved header doubleword
   uint32_t d[2];
-  while(size) {
+  while(left) {
     if(addr >= end_page) {
       page++;
       if(page >= FLASH_PAGES) return ERR;
@@ -226,13 +233,14 @@ status_t FLASH_Save(uint16_t page, uint8_t *data, uint16_t size)
     }
     d[0] = 0xFFFFFFFFu;
     d[1] = 0xFFFFFFFFu;
-    chunk = size > 8 ? 8 : size;
-    memcpy(d, data, chunk);
+    uint16_t chunk = left > 8 ? 8 : left;
+    memcpy(d, body, chunk);
     if(FLASH_Write(addr, d[0], d[1])) return ERR;
     addr += 8u;
-    data += chunk;
-    size -= chunk;
+    body += chunk;
+    left -= chunk;
   }
+  if(FLASH_Write(head, (uint32_t)size, w1)) return ERR; // commit marker LAST
   return OK;
 }
 
@@ -250,4 +258,4 @@ uint16_t FLASH_Load(uint16_t page, uint8_t *data)
   return size;
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------

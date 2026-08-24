@@ -59,7 +59,7 @@ status_t MBB_Lock2(MBB_t *primary, MBB_t *secondary)
   return OK;
 }
 
-//------------------------------------------------------------------------------------------------- str
+//--------------------------------------------------------------------------------------------- str
 
 int32_t MBB_Char(MBB_t *mbb, uint8_t data)
 {
@@ -150,9 +150,10 @@ int32_t MBB_Bool(MBB_t *mbb, bool value)
   return value ? MBB_String(mbb, "true") : MBB_String(mbb, "false");
 }
 
-//------------------------------------------------------------------------------------------------- nbr
+//--------------------------------------------------------------------------------------------- nbr
 
-int32_t MBB_Int(MBB_t *mbb, int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint8_t fill_space)
+int32_t MBB_Int(MBB_t *mbb, int64_t nbr, uint8_t base, bool sign,
+  uint8_t fill_zero, uint8_t fill_space)
 {
   if(mbb->lock) return 0;
   int32_t len = (int32_t)itoa_encode(nbr, StrTempMem, base, sign, fill_zero, fill_space);
@@ -188,9 +189,14 @@ int32_t MBB_Float(MBB_t *mbb, float nbr, uint8_t accuracy, uint8_t fill_space)
       return MBB_Char(mbb, '-');
     }
   #endif
+  bool negative = nbr < 0;
   for(uint16_t i = 0; i < accuracy; i++) nbr *= 10;
+  // Round half away from zero. Scaling lands just under the target, so a bare
+  // cast would print `0.01` at accuracy `2` as `0.00`
+  nbr += negative ? -0.5f : 0.5f;
   if(!fill_space) fill_space = 1;
-  int32_t length = (int32_t)itoa_encode((int32_t)nbr, StrTempMem, 10, true, nbr < 0 ? accuracy + 2 : accuracy + 1, fill_space - 1);
+  int32_t length = (int32_t)itoa_encode((int32_t)nbr, StrTempMem, 10, true,
+    negative ? accuracy + 2 : accuracy + 1, fill_space - 1);
   int32_t n = length + (accuracy ? 1 : 0);
   if(mbb->size + n > mbb->limit) return 0;
   while(length) {
@@ -237,7 +243,7 @@ int32_t MBB_Nbr(MBB_t *mbb, float nbr)
   return MBB_Float(mbb, nbr, 3, 0);
 }
 
-//------------------------------------------------------------------------------------------------- struct
+//------------------------------------------------------------------------------------------ struct
 
 int32_t MBB_StructAdd(MBB_t *mbb, const uint8_t *object)
 {
@@ -256,7 +262,10 @@ uint16_t MBB_StructCount(const MBB_t *mbb)
 uint16_t MBB_StructFree(const MBB_t *mbb, uint16_t margin)
 {
   if((int32_t)mbb->limit - margin <= 0) return 0;
-  return ((mbb->limit - margin) / mbb->struct_size) - (mbb->size / mbb->struct_size);
+  // `margin` is a query-time reserve, never enforced on writes
+  uint16_t capacity = (mbb->limit - margin) / mbb->struct_size;
+  uint16_t used = mbb->size / mbb->struct_size;
+  return capacity > used ? capacity - used : 0;
 }
 
 int32_t MBB_StructShift(MBB_t *mbb, uint16_t count)
@@ -265,7 +274,7 @@ int32_t MBB_StructShift(MBB_t *mbb, uint16_t count)
   int32_t shift_bytes = mbb->struct_size * count;
   int32_t remaining = (int32_t)mbb->size - shift_bytes;
   if(remaining > 0) {
-    memcpy(mbb->buffer, &mbb->buffer[shift_bytes], (size_t)remaining);
+    memmove(mbb->buffer, &mbb->buffer[shift_bytes], (size_t)remaining);
     mbb->size = remaining;
     return -shift_bytes;
   }
@@ -304,7 +313,7 @@ const uint8_t *MBB_StructPeek(const MBB_t *mbb, uint16_t index)
   return &mbb->buffer[pos];
 }
 
-//------------------------------------------------------------------------------------------------- offset
+//------------------------------------------------------------------------------------------ offset
 
 status_t MBB_OffsetRst(MBB_t *mbb)
 {
@@ -329,7 +338,7 @@ status_t MBB_OffsetSet(MBB_t *mbb, uint16_t offset)
   return OK;
 }
 
-//------------------------------------------------------------------------------------------------- flash
+//------------------------------------------------------------------------------------------- flash
 
 status_t MBB_FlashSave(MBB_t *mbb)
 {
@@ -347,11 +356,14 @@ status_t MBB_FlashLoad(MBB_t *mbb)
 {
   if(mbb->lock) return ERR;
   if(!mbb->flash_page) return ERR;
+  // Record length is the first word of the page and `FLASH_Load` copies it unchecked.
+  // A record written by a firmware with a larger buffer would overrun this one.
+  if((uint16_t)FLASH_Read(FLASH_GetAddress(mbb->flash_page, 0)) > mbb->limit) return ERR;
   mbb->size = FLASH_Load(mbb->flash_page, mbb->buffer);
   return mbb->size ? OK : ERR;
 }
 
-//------------------------------------------------------------------------------------------------- rtc
+//--------------------------------------------------------------------------------------------- rtc
 
 int32_t MBB_Date(MBB_t *mbb, const RTC_Datetime_t *dt)
 {
@@ -440,7 +452,7 @@ int32_t MBB_Alarm(MBB_t *mbb, const RTC_AlarmCfg_t *alarm)
   return 12;
 }
 
-//------------------------------------------------------------------------------------------------- crc
+//--------------------------------------------------------------------------------------------- crc
 
 int32_t MBB_CrcAppend(MBB_t *mbb, const CRC_t *crc)
 {

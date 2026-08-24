@@ -8,8 +8,26 @@
 
 //-------------------------------------------------------------------------------------------------
 
-#define PWM_ARR(freq_Hz, clock_Hz, center_aligned) \
-  ((clock_Hz) / (freq_Hz) / ((center_aligned) + 1))
+// Counter alignment; values map directly to the `CMS` field.
+// The center modes produce identical output waveforms
+// and differ only in when compare interrupt flags fire:
+// mode 1 on down-count, mode 2 on up-count, mode 3 in both directions.
+// Mode 3 makes the compare interrupt cadence depend on the compare position
+// (events near an extremum coalesce into one interrupt,
+// mid-range ones fire twice per period),
+// so time-critical users (`PWM_Trigger` interrupts) need mode 1, 2 or edge
+typedef enum {
+  PWM_Align_Edge = 0,
+  PWM_Align_Center1 = 1,
+  PWM_Align_Center2 = 2,
+  PWM_Align_Center3 = 3
+} PWM_Align_t;
+
+// Clocks per PWM period divider: center-aligned sweeps the range twice
+#define pwm_align_div(align) ((align) ? 2u : 1u)
+
+#define PWM_ARR(freq_Hz, clock_Hz, align) \
+  ((clock_Hz) / (freq_Hz) / pwm_align_div(align))
 
 /**
  * @brief PWM output configuration.
@@ -18,13 +36,15 @@
  * @param[in] auto_reload Period value (determines PWM frequency)
  * @param[in] channel[8] Channel pin mapping (CH1-4 at [0-3], CH1N-4N at [4-7])
  * @param[in] invert[8] Invert output polarity
- * @param[in] value[4] Initial duty cycle values
- * @param[in] center_aligned Center-aligned mode enable
- * @param[in] deadtime Dead-time in ticks (0-1024)
+ * @param[in] value[4] Compare values, kept current by `PWM_SetValue` and `PWM_Frequency`
+ * @param[in] align Counter alignment (`PWM_Align_...`)
+ * @param[in] deadtime Dead-time in ticks (0-1008)
  * @param[in] dma_trig Enable DMA trigger on update
  * @param[in] UpdateCallback Update interrupt callback (NULL = disabled)
  * @param[in] update_arg Callback argument
  * @param[in] irq_priority Interrupt priority
+ * Internal:
+ * @param _ccer_mask Enable bits of the configured outputs, for timers without `BDTR`
  */
 typedef struct {
   TIM_TypeDef *reg;
@@ -33,7 +53,7 @@ typedef struct {
   TIM_CHx_t channel[8];
   bool invert[8];
   uint32_t value[4];
-  bool center_aligned;
+  PWM_Align_t align;
   uint16_t deadtime;
   bool dma_trig;
   void (*UpdateCallback)(void *);
@@ -43,7 +63,7 @@ typedef struct {
   uint32_t _ccer_mask;
 } PWM_t;
 
-//------------------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 /**
  * @brief Initialize PWM output.
@@ -82,18 +102,37 @@ void PWM_SetValue(PWM_t *pwm, TIM_Channel_t channel, uint32_t value);
 uint32_t PWM_GetValue(PWM_t *pwm, TIM_Channel_t channel);
 
 /**
- * @brief Set dead-time for complementary outputs.
+ * @brief Set dead-time for complementary outputs. Values snap down to the nearest
+ * step the `DTG` encoding can express: 1 tick below 128, then 2, 8 and 16 ticks.
  * @param[in,out] pwm PWM instance
- * @param[in] deadtime Dead-time in ticks (0-1024)
+ * @param[in] deadtime Dead-time in ticks (0-1008)
  */
 void PWM_SetDeadtime(PWM_t *pwm, uint16_t deadtime);
 
 /**
- * @brief Enable/disable center-aligned mode.
- * @param[in,out] pwm PWM instance
- * @param[in] enable `true` for center-aligned, `false` for edge-aligned
+ * @brief Current output frequency computed from the prescaler and reload settings.
+ * @param[in] pwm PWM instance
+ * @return Frequency [Hz]
  */
-void PWM_CenterAlign(PWM_t *pwm, bool enable);
+float PWM_GetFrequency(const PWM_t *pwm);
+
+/**
+ * @brief Retune the timer to a target frequency:
+ * the smallest prescaler that fits the period in the 16-bit reload keeps duty resolution,
+ * and every active compare value is rescaled so the duty of each channel survives.
+ * One timer drives all its channels, so the change affects every output of this instance.
+ * @param[in,out] pwm PWM instance
+ * @param[in] frequency Target frequency [Hz]
+ * @return Actually applied frequency [Hz]
+ */
+float PWM_Frequency(PWM_t *pwm, float frequency);
+
+/**
+ * @brief Change the counter alignment; briefly stops the counter (`CMS` demands it).
+ * @param[in,out] pwm PWM instance
+ * @param[in] align Counter alignment (`PWM_Align_...`)
+ */
+void PWM_SetAlign(PWM_t *pwm, PWM_Align_t align);
 
 /**
  * @brief Enable/disable PWM output.
@@ -113,6 +152,22 @@ void PWM_InterruptEnable(PWM_t *pwm);
  * @param[in,out] pwm PWM instance
  */
 void PWM_InterruptDisable(PWM_t *pwm);
+
+/**
+ * @brief Route a spare compare channel to `TRGO2` as a hardware trigger point
+ * (the ADC external trigger line).
+ * `OCxREF` in PWM mode 2 rises exactly once per period at the up-count compare;
+ * the reference lives independently of `CCxE` and `MOE`,
+ * so it runs with the outputs disabled.
+ * Advanced timers only (`TRGO2`); call after `PWM_Init`.
+ * @param[in,out] pwm PWM instance
+ * @param[in] channel Spare compare channel (`TIM_CH1..4`), not mapped to any pin
+ * @param[in] compare Compare point in timer ticks;
+ * a center-aligned compare at `auto_reload` never fires, keep it below
+ * @param[in] irq Also raise the capture/compare interrupt on the event,
+ * routed to a handler with `IRQ_EnableTIMCC`
+ */
+void PWM_Trigger(PWM_t *pwm, TIM_Channel_t channel, uint16_t compare, bool irq);
 
 //-------------------------------------------------------------------------------------------------
 

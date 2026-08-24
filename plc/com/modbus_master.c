@@ -2,9 +2,11 @@
 
 #include "modbus_master.h"
 
-//------------------------------------------------------------------------------------------------- COMMON
+//------------------------------------------------------------------------------------------ COMMON
 
-static MODBUS_Error_t MODBUS_SendRead(UART_t *uart, uint8_t addr, MODBUS_Fnc_t fnc, uint8_t *buffer, uint16_t tx_length, uint16_t rx_length, uint32_t timeout_ms)
+static MODBUS_Error_t MODBUS_SendRead(UART_t *uart, uint8_t addr, MODBUS_Fnc_t fnc,
+  uint8_t *buffer, uint16_t tx_length, uint16_t rx_length, uint32_t timeout_ms
+)
 {
   CRC_Append(&crc16_modbus, buffer, tx_length - 2);
   UART_Clear(uart);
@@ -26,11 +28,14 @@ static MODBUS_Error_t MODBUS_SendRead(UART_t *uart, uint8_t addr, MODBUS_Fnc_t f
   return MODBUS_Ok;
 }
 
-//------------------------------------------------------------------------------------------------- BIRS
+//-------------------------------------------------------------------------------------------- BIRS
 
-#define MODBUS_READBITS_TXLEN 9
+// A read request carries no byte count: address, function, start, quantity, CRC.
+#define MODBUS_READBITS_TXLEN 8
 
-static MODBUS_Error_t MODBUS_ReadBin(UART_t *uart, uint8_t addr, MODBUS_Fnc_t fnc, uint16_t start, uint16_t count, bool *memory, uint32_t timeout_ms)
+static MODBUS_Error_t MODBUS_ReadBin(UART_t *uart, uint8_t addr, MODBUS_Fnc_t fnc,
+  uint16_t start, uint16_t count, bool *memory, uint32_t timeout_ms
+)
 {
   if(UART_IsBusy(uart)) return MODBUS_Error_Uart;
   uint8_t databyte_count = (count + 7) / 8;
@@ -43,8 +48,8 @@ static MODBUS_Error_t MODBUS_ReadBin(UART_t *uart, uint8_t addr, MODBUS_Fnc_t fn
   buffer[3] = (uint8_t)start;
   buffer[4] = (uint8_t)(count >> 8);
   buffer[5] = (uint8_t)count;
-  buffer[6] = databyte_count;
-  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, fnc, buffer, MODBUS_READBITS_TXLEN, rx_lenght, timeout_ms);
+  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, fnc, buffer,
+    MODBUS_READBITS_TXLEN, rx_lenght, timeout_ms);
   if(error) return error;
   if(buffer[2] != databyte_count) return MODBUS_Error_Count;
   uint8_t *byte = &buffer[3];
@@ -62,24 +67,32 @@ static MODBUS_Error_t MODBUS_ReadBin(UART_t *uart, uint8_t addr, MODBUS_Fnc_t fn
   return MODBUS_Ok;
 }
 
-MODBUS_Error_t MODBUS_ReadBits(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, bool *memory, uint32_t timeout_ms)
+MODBUS_Error_t MODBUS_ReadBits(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, bool *memory, uint32_t timeout_ms
+)
 {
-  MODBUS_Error_t error = MODBUS_ReadBin(uart, addr, MODBUS_Fnc_ReadBits, start, count, memory, timeout_ms);
+  MODBUS_Error_t error =
+    MODBUS_ReadBin(uart, addr, MODBUS_Fnc_ReadBits, start, count, memory, timeout_ms);
   heap_clear();
   return error;
 }
 
-MODBUS_Error_t MODBUS_ReadOuts(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, bool *memory, uint32_t timeout_ms)
+MODBUS_Error_t MODBUS_ReadOuts(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, bool *memory, uint32_t timeout_ms
+)
 {
-  MODBUS_Error_t error = MODBUS_ReadBin(uart, addr, MODBUS_Fnc_ReadOuts, start, count, memory, timeout_ms);
+  MODBUS_Error_t error =
+    MODBUS_ReadBin(uart, addr, MODBUS_Fnc_ReadOuts, start, count, memory, timeout_ms);
   heap_clear();
   return error;
 }
 
-#define MODBUS_PRESETBIT_TXLEN 7
-#define MODBUS_PRESETBIT_RXLEN 6
+#define MODBUS_PRESETBIT_TXLEN 8
+#define MODBUS_PRESETBIT_RXLEN 8
 
-static MODBUS_Error_t _MODBUS_PresetBit(UART_t *uart, uint8_t addr, uint16_t index, bool value, uint32_t timeout_ms)
+static MODBUS_Error_t _MODBUS_PresetBit(UART_t *uart, uint8_t addr, uint16_t index,
+  bool value, uint32_t timeout_ms
+)
 {
   if(UART_IsBusy(uart)) return MODBUS_Error_Uart;
   uint8_t *buffer = (uint8_t *)heap_new(MODBUS_PRESETBIT_TXLEN);
@@ -89,14 +102,17 @@ static MODBUS_Error_t _MODBUS_PresetBit(UART_t *uart, uint8_t addr, uint16_t ind
   buffer[3] = (uint8_t)index;
   buffer[4] = value ? 0xFF : 0x00;
   buffer[5] = 0x00;
-  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, MODBUS_Fnc_PresetBit, buffer, MODBUS_PRESETBIT_TXLEN, MODBUS_PRESETBIT_RXLEN, timeout_ms);
+  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, MODBUS_Fnc_PresetBit, buffer,
+    MODBUS_PRESETBIT_TXLEN, MODBUS_PRESETBIT_RXLEN, timeout_ms);
   if(error) return error;
   if(((uint16_t)buffer[2] << 8 | buffer[3]) != index) return MODBUS_Error_Index;
   if((buffer[4] ? true : false) != value) return MODBUS_Error_Value;
   return MODBUS_Ok;
 }
 
-MODBUS_Error_t MODBUS_PresetBit(UART_t *uart, uint8_t addr, uint16_t index, bool value, uint32_t timeout_ms)
+MODBUS_Error_t MODBUS_PresetBit(UART_t *uart, uint8_t addr, uint16_t index,
+  bool value, uint32_t timeout_ms
+)
 {
   MODBUS_Error_t error = _MODBUS_PresetBit(uart, addr, index, value, timeout_ms);
   heap_clear();
@@ -105,11 +121,14 @@ MODBUS_Error_t MODBUS_PresetBit(UART_t *uart, uint8_t addr, uint16_t index, bool
 
 #define MODBUS_WRITEBITS_RXLEN 8
 
-static MODBUS_Error_t _MODBUS_WriteBits(UART_t *uart, uint8_t addr, uint16_t count, uint16_t start, bool *memory, uint32_t timeout_ms)
+static MODBUS_Error_t _MODBUS_WriteBits(UART_t *uart, uint8_t addr, uint16_t count,
+  uint16_t start, bool *memory, uint32_t timeout_ms
+)
 {
   if(UART_IsBusy(uart)) return MODBUS_Error_Uart;
   uint16_t databyte_count = (count + 7) / 8;
-  uint16_t tx_lenght = databyte_count + 6;
+  // Header is 7 bytes through the byte count, then the data, then CRC.
+  uint16_t tx_lenght = databyte_count + 9;
   uint16_t len = tx_lenght > MODBUS_WRITEBITS_RXLEN ? tx_lenght : MODBUS_WRITEBITS_RXLEN;
   uint8_t *buffer = (uint8_t *)heap_new(len);
   buffer[0] = addr;
@@ -136,25 +155,30 @@ static MODBUS_Error_t _MODBUS_WriteBits(UART_t *uart, uint8_t addr, uint16_t cou
   if(bit != 0) {
     *buff++ = value;
   }
-  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, MODBUS_Fnc_WriteBits, buffer, tx_lenght, MODBUS_WRITEBITS_RXLEN, timeout_ms);
+  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, MODBUS_Fnc_WriteBits, buffer,
+    tx_lenght, MODBUS_WRITEBITS_RXLEN, timeout_ms);
   if(error) return error;
   if(((uint16_t)buffer[2] << 8 | buffer[3]) != start) return MODBUS_Error_Start;
   if(((uint16_t)buffer[4] << 8 | buffer[5]) != count) return MODBUS_Error_Count;
   return MODBUS_Ok;
 }
 
-MODBUS_Error_t MODBUS_WriteBits(UART_t *uart, uint8_t addr, uint16_t count, uint16_t start, bool *memory, uint32_t timeout_ms)
+MODBUS_Error_t MODBUS_WriteBits(UART_t *uart, uint8_t addr, uint16_t count,
+  uint16_t start, bool *memory, uint32_t timeout_ms
+)
 {
   MODBUS_Error_t error = _MODBUS_WriteBits(uart, addr, count, start, memory, timeout_ms);
   heap_clear();
   return error;
 }
 
-//------------------------------------------------------------------------------------------------- READ-REGS
+//--------------------------------------------------------------------------------------- READ-REGS
 
 #define MODBUS_READREGS_TXLEN 8
 
-static MODBUS_Error_t MODBUS_ReadRegs(UART_t *uart, uint8_t addr, MODBUS_Fnc_t fnc, uint16_t start, uint16_t count, uint16_t *memory, uint32_t timeout_ms)
+static MODBUS_Error_t MODBUS_ReadRegs(UART_t *uart, uint8_t addr, MODBUS_Fnc_t fnc,
+  uint16_t start, uint16_t count, uint16_t *memory, uint32_t timeout_ms
+)
 {
   if(UART_IsBusy(uart)) return MODBUS_Error_Uart;
   uint16_t databyte_count = 2 * count;
@@ -167,7 +191,8 @@ static MODBUS_Error_t MODBUS_ReadRegs(UART_t *uart, uint8_t addr, MODBUS_Fnc_t f
   buffer[3] = (uint8_t)start;
   buffer[4] = (uint8_t)(count >> 8);
   buffer[5] = (uint8_t)count;
-  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, fnc, buffer, MODBUS_READREGS_TXLEN, rx_lenght, timeout_ms);
+  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, fnc, buffer,
+    MODBUS_READREGS_TXLEN, rx_lenght, timeout_ms);
   if(error) return error;
   if(buffer[2] != databyte_count) return MODBUS_Error_Count;
   uint8_t *buff = &buffer[3];
@@ -180,26 +205,34 @@ static MODBUS_Error_t MODBUS_ReadRegs(UART_t *uart, uint8_t addr, MODBUS_Fnc_t f
   return MODBUS_Ok;
 }
 
-MODBUS_Error_t MODBUS_ReadInputRegisters(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, uint16_t *memory, uint32_t timeout_ms)
+MODBUS_Error_t MODBUS_ReadInputRegisters(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, uint16_t *memory, uint32_t timeout_ms
+)
 {
-  MODBUS_Error_t error = MODBUS_ReadRegs(uart, addr, MODBUS_Fnc_ReadInputRegisters, start, count, memory, timeout_ms);
+  MODBUS_Error_t error = MODBUS_ReadRegs(uart, addr, MODBUS_Fnc_ReadInputRegisters,
+    start, count, memory, timeout_ms);
   heap_clear();
   return error;
 }
 
-MODBUS_Error_t MODBUS_ReadHoldingRegisters(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, uint16_t *memory, uint32_t timeout_ms)
+MODBUS_Error_t MODBUS_ReadHoldingRegisters(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, uint16_t *memory, uint32_t timeout_ms
+)
 {
-  MODBUS_Error_t error = MODBUS_ReadRegs(uart, addr, MODBUS_Fnc_ReadHoldingRegisters, start, count, memory, timeout_ms);
+  MODBUS_Error_t error = MODBUS_ReadRegs(uart, addr, MODBUS_Fnc_ReadHoldingRegisters,
+    start, count, memory, timeout_ms);
   heap_clear();
   return error;
 }
 
-//------------------------------------------------------------------------------------------------- WRITE-REGS
+//-------------------------------------------------------------------------------------- WRITE-REGS
 
 #define MODBUS_PRESSREG_TXLEN 8
 #define MODBUS_PRESSREG_RXLEN 8
 
-static MODBUS_Error_t _MODBUS_PresetRegister(UART_t *uart, uint8_t addr, uint16_t index, uint16_t value, uint32_t timeout_ms)
+static MODBUS_Error_t _MODBUS_PresetRegister(UART_t *uart, uint8_t addr, uint16_t index,
+  uint16_t value, uint32_t timeout_ms
+)
 {
   if(UART_IsBusy(uart)) return MODBUS_Error_Uart;
   uint8_t *buffer = (uint8_t *)heap_new(MODBUS_PRESSREG_TXLEN);
@@ -209,23 +242,28 @@ static MODBUS_Error_t _MODBUS_PresetRegister(UART_t *uart, uint8_t addr, uint16_
   buffer[3] = (uint8_t)index;
   buffer[4] = (uint8_t)(value >> 8);
   buffer[5] = (uint8_t)value;
-  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, MODBUS_Fnc_PresetRegister, buffer, MODBUS_PRESSREG_TXLEN, MODBUS_PRESSREG_RXLEN, timeout_ms);
+  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, MODBUS_Fnc_PresetRegister, buffer,
+    MODBUS_PRESSREG_TXLEN, MODBUS_PRESSREG_RXLEN, timeout_ms);
   if(error) return error;
   if(((uint16_t)buffer[2] << 8 | buffer[3]) != index) return MODBUS_Error_Index;
   if(((uint16_t)buffer[4] << 8 | buffer[5]) != value) return MODBUS_Error_Value;
   return MODBUS_Ok;
 }
 
-MODBUS_Error_t MODBUS_PresetRegister(UART_t *uart, uint8_t addr, uint16_t index, uint16_t value, uint32_t timeout_ms)
+MODBUS_Error_t MODBUS_PresetRegister(UART_t *uart, uint8_t addr, uint16_t index,
+  uint16_t value, uint32_t timeout_ms
+)
 {
   MODBUS_Error_t error = _MODBUS_PresetRegister(uart, addr, index, value, timeout_ms);
   heap_clear();
   return error;
 }
 
-#define MODBUS_WRITEREGS_RXLEN 7
+#define MODBUS_WRITEREGS_RXLEN 8
 
-static MODBUS_Error_t _MODBUS_WriteRegisters(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, uint16_t *memory, uint32_t timeout_ms)
+static MODBUS_Error_t _MODBUS_WriteRegisters(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, uint16_t *memory, uint32_t timeout_ms
+)
 {
   if(UART_IsBusy(uart)) return MODBUS_Error_Uart;
   uint16_t databyte_count = 2 * count;
@@ -245,14 +283,17 @@ static MODBUS_Error_t _MODBUS_WriteRegisters(UART_t *uart, uint8_t addr, uint16_
     memory++;
     count--;
   }
-  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, MODBUS_Fnc_WriteRegisters, buffer, tx_lenght, MODBUS_WRITEREGS_RXLEN, timeout_ms);
-  if(error) return error; 
+  MODBUS_Error_t error = MODBUS_SendRead(uart, addr, MODBUS_Fnc_WriteRegisters, buffer,
+    tx_lenght, MODBUS_WRITEREGS_RXLEN, timeout_ms);
+  if(error) return error;
   if(((uint16_t)buffer[2] << 8 | buffer[3]) != start) return MODBUS_Error_Start;
   if(((uint16_t)buffer[4] << 8 | buffer[5]) != count) return MODBUS_Error_Count;
   return MODBUS_Ok;
 }
 
-MODBUS_Error_t MODBUS_WriteRegisters(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, uint16_t *memory, uint32_t timeout_ms)
+MODBUS_Error_t MODBUS_WriteRegisters(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, uint16_t *memory, uint32_t timeout_ms
+)
 {
   MODBUS_Error_t error = _MODBUS_WriteRegisters(uart, addr, start, count, memory, timeout_ms);
   heap_clear();

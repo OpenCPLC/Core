@@ -93,6 +93,12 @@ void TASK_ClearAll(void);
 /**
  * @brief Main scheduler loop (never returns).
  */
+/**
+ * @brief Run the earliest due task, if any: one pass of the queue.
+ * @return `true` when a handler ran, `false` when nothing was due
+ */
+bool TASK_Step(void);
+
 void TASK_Main(void);
 
 //-------------------------------------------------------------------------------------------------

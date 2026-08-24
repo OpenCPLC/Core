@@ -1,4 +1,11 @@
-// hal/stm32/per/eeprom.c
+// hal/host/eeprom.c
+
+// Port of `hal/stm32/per/eeprom.c`. The algorithm is unchanged: only the flash
+// reads differ, because host flash is emulated instead of memory-mapped.
+//   *(volatile uint32_t *)addr -> FLASH_Read(addr)
+//   *(volatile uint64_t *)addr -> _read64(addr)
+// A variable's address is also 64-bit here, so `_key` narrows it explicitly
+// instead of relying on the implicit 32-bit cast the target can afford.
 
 #include "eeprom.h"
 
@@ -9,6 +16,20 @@
 #define EEPROM_MARKER_MAGIC 0x5A5Au // Low 16b of marker value. Detects partial marker write.
 
 //-------------------------------------------------------------------------------------------------
+
+// Slot read. A single memory-mapped access on target, two emulated reads here.
+// Flash is little-endian on both, and an out-of-range read yields the erased
+// pattern, so the caller sees the same value either way.
+static inline uint64_t _read64(uint32_t addr)
+{
+  return ((uint64_t)FLASH_Read(addr + 4) << 32) | FLASH_Read(addr);
+}
+
+// Variable address as entry key. See `EEPROM_Save` note in the header.
+static inline uint32_t _key(const void *var)
+{
+  return (uint32_t)(uintptr_t)var;
+}
 
 static inline uint32_t _marker_addr(EEPROM_t *e, EEPROM_Storage_t s)
 {
@@ -23,22 +44,22 @@ static EEPROM_State_t _storage_status(EEPROM_t *e, EEPROM_Storage_t s, uint16_t 
 {
   uint32_t start = e->_addr_start[s];
   uint32_t marker = _marker_addr(e, s);
-  uint32_t marker_key = *(volatile uint32_t *)marker;
-  uint32_t marker_val = *(volatile uint32_t *)(marker + 4);
+  uint32_t marker_key = FLASH_Read(marker);
+  uint32_t marker_val = FLASH_Read(marker + 4);
   if(marker_key == EEPROM_MARKER_KEY && (marker_val & 0xFFFFu) == EEPROM_MARKER_MAGIC) {
     if(gen_out) *gen_out = (uint16_t)(marker_val >> 16);
     return EEPROM_State_Complete;
   }
   // BEGIN tag overrides Full/Filled/Empty. Storage is a rewrite-target regardless
   // of how much got copied or whether marker write was torn.
-  uint32_t slot0_key = *(volatile uint32_t *)start;
+  uint32_t slot0_key = FLASH_Read(start);
   if(slot0_key == EEPROM_BEGIN_KEY) return EEPROM_State_InProgress;
-  uint64_t marker_word = *(volatile uint64_t *)marker;
+  uint64_t marker_word = _read64(marker);
   if(marker_word != EEPROM_ERASED_WORD) return EEPROM_State_Full;
   uint32_t last_data = marker - 8;
-  if(*(volatile uint64_t *)last_data != EEPROM_ERASED_WORD) return EEPROM_State_Full;
+  if(_read64(last_data) != EEPROM_ERASED_WORD) return EEPROM_State_Full;
   for(uint32_t addr = start; addr < last_data; addr += 8) {
-    if(*(volatile uint64_t *)addr != EEPROM_ERASED_WORD) return EEPROM_State_Filled;
+    if(_read64(addr) != EEPROM_ERASED_WORD) return EEPROM_State_Filled;
   }
   return EEPROM_State_Empty;
 }
@@ -51,7 +72,7 @@ static uint32_t _find_cursor(EEPROM_t *e)
   uint32_t marker = _marker_addr(e, e->_active);
   uint32_t cursor = start;
   for(uint32_t addr = start; addr < marker; addr += 8) {
-    if(*(volatile uint64_t *)addr != EEPROM_ERASED_WORD) cursor = addr + 8;
+    if(_read64(addr) != EEPROM_ERASED_WORD) cursor = addr + 8;
   }
   return cursor;
 }
@@ -65,12 +86,12 @@ static status_t _read_key(EEPROM_t *e, uint32_t key, uint32_t *out)
   uint32_t marker = _marker_addr(e, e->_active);
   for(uint32_t addr = marker; addr > start; ) {
     addr -= 8;
-    uint32_t k = *(volatile uint32_t *)addr;
+    uint32_t k = FLASH_Read(addr);
     if(k == EEPROM_ERASED_KEY) continue;
     if(k == EEPROM_MARKER_KEY) continue;
     if(k == EEPROM_BEGIN_KEY) continue;
     if(k == key) {
-      *out = *(volatile uint32_t *)(addr + 4);
+      *out = FLASH_Read(addr + 4);
       return OK;
     }
   }
@@ -120,20 +141,20 @@ static status_t _rewrite(EEPROM_t *e, EEPROM_Storage_t src_s)
   uint32_t src = src_end;
   while(src > src_start) {
     src -= 8;
-    uint32_t key = *(volatile uint32_t *)src;
+    uint32_t key = FLASH_Read(src);
     if(key == EEPROM_ERASED_KEY) continue;
     if(key == EEPROM_MARKER_KEY) continue;
     if(key == EEPROM_BEGIN_KEY) continue;
     bool dup = false;
     for(uint32_t d = dst_start + 8; d < dst_cursor; d += 8) {
-      if(*(volatile uint32_t *)d == key) { dup = true; break; }
+      if(FLASH_Read(d) == key) { dup = true; break; }
     }
     if(dup) continue;
     // Keep one data slot free: the cursor must stay < marker,
     // so the write that triggered this rewrite lands on flash,
     // not the (non-erased) marker slot.
     if(dst_cursor + 8 >= dst_marker) break; // dst full, drop oldest remaining
-    uint32_t value = *(volatile uint32_t *)(src + 4);
+    uint32_t value = FLASH_Read(src + 4);
     if(FLASH_Write(dst_cursor, key, value)) return ERR;
     dst_cursor += 8;
   }
@@ -341,12 +362,12 @@ uint32_t EEPROM_Read(EEPROM_t *e, uint32_t key, uint32_t default_value)
 // so the reserved-key guard `EEPROM_Write` needs is unnecessary here.
 status_t EEPROM_Save(EEPROM_t *e, uint32_t *var)
 {
-  return _store_kv(e, (uint32_t)var, *var);
+  return _store_kv(e, _key(var), *var);
 }
 
 status_t EEPROM_Load(EEPROM_t *e, uint32_t *var)
 {
-  return _read_key(e, (uint32_t)var, var);
+  return _read_key(e, _key(var), var);
 }
 
 status_t EEPROM_SaveList(EEPROM_t *e, uint32_t *var, ...)
@@ -385,8 +406,8 @@ status_t EEPROM_Load64(EEPROM_t *e, uint64_t *var)
 {
   uint32_t *p = (uint32_t *)var;
   uint32_t lo, hi;
-  if(_read_key(e, (uint32_t)&p[0], &lo)) return ERR;
-  if(_read_key(e, (uint32_t)&p[1], &hi)) return ERR;
+  if(_read_key(e, _key(&p[0]), &lo)) return ERR;
+  if(_read_key(e, _key(&p[1]), &hi)) return ERR;
   p[0] = lo;
   p[1] = hi;
   return OK;

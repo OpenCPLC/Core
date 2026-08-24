@@ -5,7 +5,7 @@
 #include "log.h"
 #include "pwr.h"
 
-//------------------------------------------------------------------------------------------------- Basic
+//------------------------------------------------------------------------------------------- Basic
 
 static uint8_t dbg_buffer_rx[DBG_RX_SIZE];
 static uint8_t dbg_buffer_tx[DBG_TX_SIZE];
@@ -57,16 +57,26 @@ void DBG_Init(UART_t *uart)
 
 volatile bool DbgReset;
 
-bool BUFF_EchoIdle(BUFF_t *buff)
+// Holds `CMD_Step` back until pending input has been echoed,
+// so the echoed line always precedes the command output.
+// With `DBG_ECHO_MODE` off nothing calls `BUFF_Echo`, so `_echo` never follows `_head`
+// (console mode skips the auto-advance in `BUFF_Push`):
+// the gate has to stay open or the shell stops reacting after the first byte.
+static bool BUFF_EchoIdle(BUFF_t *buff)
 {
-  return buff->_echo == buff->_head;
+  #if(DBG_ECHO_MODE)
+    return buff->_echo == buff->_head;
+  #else
+    unused(buff);
+    return true;
+  #endif
 }
 
 #if(DBG_ECHO_MODE)
 
-char EchoValue;
-bool EchoEnter = false;
-bool EchoInput = false;
+static char EchoValue;
+static bool EchoEnter = false;
+static bool EchoInput = false;
 
 void DBG_Echo(void)
 {
@@ -155,7 +165,7 @@ void DBG_SetFile(MBB_t *file)
   DbgFile = file;
 }
 
-//------------------------------------------------------------------------------------------------- Read
+//-------------------------------------------------------------------------------------------- Read
 
 uint16_t DBG_Size(void)
 {
@@ -172,7 +182,7 @@ char *DBG_ReadString(void)
   return UART_ReadString(DbgUart);
 }
 
-//------------------------------------------------------------------------------------------------- Add
+//--------------------------------------------------------------------------------------------- Add
 
 int32_t DBG_Char(uint8_t data) { return MBB_Char(DbgFile, data); }
 int32_t DBG_Char16(uint16_t data) { return MBB_Char16(DbgFile, data); }
@@ -183,9 +193,13 @@ int32_t DBG_String(char *string) { return MBB_String(DbgFile, string); }
 int32_t DBG_Enter(void) { return MBB_Enter(DbgFile); }
 int32_t DBG_DropLastLine(void) { return MBB_DropLastLine(DbgFile); }
 int32_t DBG_Bool(bool value) { return MBB_Bool(DbgFile, value); }
-int32_t DBG_Int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint8_t fill_space) { return MBB_Int(DbgFile, nbr, base, sign, fill_zero, fill_space); }
+int32_t DBG_Int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint8_t fill_space) {
+  return MBB_Int(DbgFile, nbr, base, sign, fill_zero, fill_space);
+}
 int32_t DBG_Float(float nbr, uint8_t accuracy) { return MBB_Float(DbgFile, nbr, accuracy, 1); }
-int32_t DBG_FloatSpace(float nbr, uint8_t accuracy, uint8_t fill_space) { return MBB_Float(DbgFile, nbr, accuracy, fill_space); }
+int32_t DBG_FloatSpace(float nbr, uint8_t accuracy, uint8_t fill_space) {
+  return MBB_Float(DbgFile, nbr, accuracy, fill_space);
+}
 int32_t DBG_Dec(int64_t nbr) { return MBB_Dec(DbgFile, nbr); }
 int32_t DBG_uDec(uint64_t nbr) { return MBB_uDec(DbgFile, nbr); }
 int32_t DBG_Hex8(uint8_t nbr) { return MBB_Hex8(DbgFile, nbr); }

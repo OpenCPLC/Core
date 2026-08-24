@@ -57,8 +57,6 @@ typedef struct {
 void DOUT_Init(DOUT_t *dout);
 void DOUT_Loop(DOUT_t *dout);
 
-float PWM_GetFrequency(const PWM_t *pwm);
-float PWM_Frequency(PWM_t *pwm, float frequency);
 float DOUT_GetFrequency(const DOUT_t *dout);
 float DOUT_Frequency(DOUT_t *dout, float frequency);
 float DOUT_GetDuty(const DOUT_t *dout);
@@ -68,7 +66,8 @@ void DOUT_Rst(DOUT_t *dout);
 void DOUT_Tgl(DOUT_t *dout);
 void DOUT_Preset(DOUT_t *dout, bool value);
 bool DOUT_Pulse(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms);
-bool DOUT_PulseFreeze(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms, uint16_t freeze_ms);
+bool DOUT_PulseFreeze(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms,
+  uint16_t freeze_ms);
 bool DOUT_State(const DOUT_t *dout);
 bool DOUT_IsPulse(DOUT_t *dout);
 void DOUT_SaveValue(DOUT_t *dout, bool save);

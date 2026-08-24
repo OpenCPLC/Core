@@ -3,7 +3,7 @@
 #include "startup.h"
 #define __weak __attribute__((weak))
 
-//------------------------------------------------------------------------------------------------- Linker symbols
+//---------------------------------------------------------------------------------- Linker symbols
 
 extern uint32_t _sidata;
 extern uint32_t _sdata;
@@ -15,7 +15,7 @@ extern uint32_t _estack;
 extern void __libc_init_array(void);
 extern int main(void);
 
-//------------------------------------------------------------------------------------------------- Default handlers
+//-------------------------------------------------------------------------------- Default handlers
 
 void Reset_Handler(void)
 {
@@ -34,12 +34,12 @@ void Default_Handler(void) { while(1); }
 
 static void Void_Handler(void *object) { (void)object; }
 
-//------------------------------------------------------------------------------------------------- IRQ callbacks: ADC
+//------------------------------------------------------------------------------ IRQ callbacks: ADC
 
 void (* volatile ADC_Cb)(void *) = Void_Handler;
 void * volatile ADC_CbArg;
 
-//------------------------------------------------------------------------------------------------- IRQ callbacks: EXTI
+//----------------------------------------------------------------------------- IRQ callbacks: EXTI
 
 void (* volatile EXTI0_Cb)(void *) = Void_Handler;  void * volatile EXTI0_CbArg;
 void (* volatile EXTI1_Cb)(void *) = Void_Handler;  void * volatile EXTI1_CbArg;
@@ -58,7 +58,7 @@ void (* volatile EXTI13_Cb)(void *) = Void_Handler; void * volatile EXTI13_CbArg
 void (* volatile EXTI14_Cb)(void *) = Void_Handler; void * volatile EXTI14_CbArg;
 void (* volatile EXTI15_Cb)(void *) = Void_Handler; void * volatile EXTI15_CbArg;
 
-//------------------------------------------------------------------------------------------------- IRQ callbacks: DMA
+//------------------------------------------------------------------------------ IRQ callbacks: DMA
 
 void (* volatile DMA_CH1_Cb)(void *) = Void_Handler;  void * volatile DMA_CH1_CbArg;
 void (* volatile DMA_CH2_Cb)(void *) = Void_Handler;  void * volatile DMA_CH2_CbArg;
@@ -75,7 +75,7 @@ void (* volatile DMA_CH11_Cb)(void *) = Void_Handler; void * volatile DMA_CH11_C
 void (* volatile DMA_CH12_Cb)(void *) = Void_Handler; void * volatile DMA_CH12_CbArg;
 #endif
 
-//------------------------------------------------------------------------------------------------- IRQ callbacks: TIM
+//------------------------------------------------------------------------------ IRQ callbacks: TIM
 
 void (* volatile TIM1_Cb)(void *) = Void_Handler;  void * volatile TIM1_CbArg;
 void (* volatile TIM2_Cb)(void *) = Void_Handler;  void * volatile TIM2_CbArg;
@@ -90,7 +90,7 @@ void (* volatile TIM15_Cb)(void *) = Void_Handler; void * volatile TIM15_CbArg;
 void (* volatile TIM16_Cb)(void *) = Void_Handler; void * volatile TIM16_CbArg;
 void (* volatile TIM17_Cb)(void *) = Void_Handler; void * volatile TIM17_CbArg;
 
-//------------------------------------------------------------------------------------------------- IRQ callbacks: I2C
+//------------------------------------------------------------------------------ IRQ callbacks: I2C
 
 void (* volatile I2C1_Cb)(void *) = Void_Handler; void * volatile I2C1_CbArg;
 void (* volatile I2C2_Cb)(void *) = Void_Handler; void * volatile I2C2_CbArg;
@@ -98,7 +98,7 @@ void (* volatile I2C2_Cb)(void *) = Void_Handler; void * volatile I2C2_CbArg;
 void (* volatile I2C3_Cb)(void *) = Void_Handler; void * volatile I2C3_CbArg;
 #endif
 
-//------------------------------------------------------------------------------------------------- IRQ callbacks: SPI
+//------------------------------------------------------------------------------ IRQ callbacks: SPI
 
 void (* volatile SPI1_Cb)(void *) = Void_Handler; void * volatile SPI1_CbArg;
 void (* volatile SPI2_Cb)(void *) = Void_Handler; void * volatile SPI2_CbArg;
@@ -106,7 +106,7 @@ void (* volatile SPI2_Cb)(void *) = Void_Handler; void * volatile SPI2_CbArg;
 void (* volatile SPI3_Cb)(void *) = Void_Handler; void * volatile SPI3_CbArg;
 #endif
 
-//------------------------------------------------------------------------------------------------- IRQ callbacks: UART
+//----------------------------------------------------------------------------- IRQ callbacks: UART
 
 void (* volatile USART1_Cb)(void *) = Void_Handler;  void * volatile USART1_CbArg;
 void (* volatile USART2_Cb)(void *) = Void_Handler;  void * volatile USART2_CbArg;
@@ -123,7 +123,7 @@ void (* volatile LPUART1_Cb)(void *) = Void_Handler; void * volatile LPUART1_CbA
 void (* volatile LPUART2_Cb)(void *) = Void_Handler; void * volatile LPUART2_CbArg;
 #endif
 
-//------------------------------------------------------------------------------------------------- Weak IRQ handlers
+//------------------------------------------------------------------------------- Weak IRQ handlers
 
 __weak void HardFault_Handler(void) { while(1); }
 __weak void NMI_Handler(void) { Default_Handler(); }
@@ -132,7 +132,7 @@ __weak void PendSV_Handler(void) { Default_Handler(); }
 __weak void SysTick_Handler(void) { Default_Handler(); }
 __weak void WWDG_IRQHandler(void) { Default_Handler(); }
 __weak void PVD_IRQHandler(void) { Default_Handler(); }
-__weak void RTC_STAMP_IRQHandler(void) { Default_Handler(); }
+__weak void RTC_TAMP_IRQHandler(void) { Default_Handler(); }
 __weak void FLASH_IRQHandler(void) { Default_Handler(); }
 __weak void RCC_IRQHandler(void) { Default_Handler(); }
 __weak void USB_UCPD_IRQHandler(void) { Default_Handler(); }
@@ -260,11 +260,11 @@ __weak void USART3456_LPUART1_IRQHandler(void)
   LPUART1_Cb(LPUART1_CbArg);
 }
 
-//------------------------------------------------------------------------------------------------- Vector table
+//------------------------------------------------------------------------------------ Vector table
 
 __attribute__((section(".isr_vector")))
-const void (* const IRQ[])(void) = {
-  (const void (*)(void))&_estack,
+void (* const IRQ[])(void) = {
+  (void (*)(void))&_estack,
   Reset_Handler,
   NMI_Handler,
   HardFault_Handler,
@@ -275,7 +275,7 @@ const void (* const IRQ[])(void) = {
   SysTick_Handler,
   WWDG_IRQHandler,                    // 0  IRQ_Watchdog
   PVD_IRQHandler,                     // 1  IRQ_PVD
-  RTC_STAMP_IRQHandler,               // 2  IRQ_RTC
+  RTC_TAMP_IRQHandler,               // 2  IRQ_RTC
   FLASH_IRQHandler,                   // 3  IRQ_FLASH
   RCC_IRQHandler,                     // 4  IRQ_RCC
   EXTI0_1_IRQHandler,                 // 5  IRQ_EXTI01

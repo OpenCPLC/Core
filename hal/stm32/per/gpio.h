@@ -20,7 +20,7 @@
   #define GPIO_INCLUDE_WAKEUP 0
 #endif
 
-//------------------------------------------------------------------------------------------------- GPIO Types
+//-------------------------------------------------------------------------------------- GPIO Types
 
 typedef enum {
   GPIO_Mode_Input = 0,
@@ -55,17 +55,21 @@ typedef enum {
 } GPIO_WakeupPull_t;
 #endif
 
-//------------------------------------------------------------------------------------------------- GPIO Presets
+//------------------------------------------------------------------------------------ GPIO Presets
 
 #if(GPIO_INCLUDE_WAKEUP)
-  #define GPIO_DEFAULT { NULL, 0, false, GPIO_Mode_Input, GPIO_Pull_None, GPIO_OutType_PushPull, GPIO_Speed_VeryLow, GPIO_WakeupPull_None, 0, false }
-  #define GPIO_ALTERNATE { NULL, 0, false, GPIO_Mode_Alternate, GPIO_Pull_None, GPIO_OutType_PushPull, GPIO_Speed_VeryHigh, GPIO_WakeupPull_None, 0, false }
+  #define GPIO_DEFAULT { NULL, 0, false, GPIO_Mode_Input, GPIO_Pull_None, \
+    GPIO_OutType_PushPull, GPIO_Speed_VeryLow, GPIO_WakeupPull_None, 0, false }
+  #define GPIO_ALTERNATE { NULL, 0, false, GPIO_Mode_Alternate, GPIO_Pull_None, \
+    GPIO_OutType_PushPull, GPIO_Speed_VeryHigh, GPIO_WakeupPull_None, 0, false }
 #else
-  #define GPIO_DEFAULT { NULL, 0, false, GPIO_Mode_Input, GPIO_Pull_None, GPIO_OutType_PushPull, GPIO_Speed_VeryLow, 0, false }
-  #define GPIO_ALTERNATE { NULL, 0, false, GPIO_Mode_Alternate, GPIO_Pull_None, GPIO_OutType_PushPull, GPIO_Speed_VeryHigh, 0, false }
+  #define GPIO_DEFAULT { NULL, 0, false, GPIO_Mode_Input, GPIO_Pull_None, \
+    GPIO_OutType_PushPull, GPIO_Speed_VeryLow, 0, false }
+  #define GPIO_ALTERNATE { NULL, 0, false, GPIO_Mode_Alternate, GPIO_Pull_None, \
+    GPIO_OutType_PushPull, GPIO_Speed_VeryHigh, 0, false }
 #endif
 
-//------------------------------------------------------------------------------------------------- GPIO Structure
+//---------------------------------------------------------------------------------- GPIO Structure
 
 /**
  * @brief GPIO pin configuration and state.
@@ -109,7 +113,7 @@ typedef struct {
 } GPIO_Map_t;
 #pragma pack()
 
-//------------------------------------------------------------------------------------------------- GPIO API
+//---------------------------------------------------------------------------------------- GPIO API
 
 /**
  * @brief Initialize GPIO pin.
@@ -187,7 +191,7 @@ bool GPIO_In(GPIO_t *gpio);
  */
 bool GPIO_NotIn(GPIO_t *gpio);
 
-//------------------------------------------------------------------------------------------------- EXTI Types
+//-------------------------------------------------------------------------------------- EXTI Types
 
 typedef void (*EXTI_Handler_t)(void *arg);
 
@@ -231,7 +235,7 @@ typedef struct {
   bool _state;
 } EXTI_t;
 
-//------------------------------------------------------------------------------------------------- EXTI API
+//---------------------------------------------------------------------------------------- EXTI API
 
 /**
  * @brief Initialize external interrupt.
@@ -278,126 +282,6 @@ uint16_t EXTI_Fall(EXTI_t *exti);
  * @return `true` if high
  */
 bool EXTI_In(EXTI_t *exti);
-
-//------------------------------------------------------------------------------------------------- GPIF Types
-
-#define GPIF_DEFAULT_TON_ms       50
-#define GPIF_DEFAULT_TOFF_ms      50
-#define GPIF_DEFAULT_TON_LONG_ms  2000
-#define GPIF_DEFAULT_TOFF_LONG_ms 2000
-#define GPIF_DEFAULT_TOGGLE_ms    400
-
-/**
- * @brief Filtered GPIO input with debounce, edge detection and toggle.
- * @param[in] gpio Underlying GPIO configuration
- * @param[in] ton_ms Debounce time for ON [ms]
- * @param[in] toff_ms Debounce time for OFF [ms]
- * @param[in] ton_long_ms Long press threshold [ms]
- * @param[in] toff_long_ms Long release threshold [ms]
- * @param[in] toggle_ms Double-click window for toggle [ms]
- * Internal:
- * @param _rise Rising edge flag
- * @param _fall Falling edge flag
- * @param _rise_long Long press flag
- * @param _fall_long Long release flag
- * @param _input Debounced input state
- * @param _toggle Toggle output state
- * @param _toggle_changed Toggle state changed flag
- * @param _tick_debounce Debounce timer
- * @param _tick_long Long threshold timer
- * @param _tick_toggle Toggle window timer
- * @param _tick_reset Toggle reset timer
- */
-typedef struct {
-  GPIO_t gpio;
-  uint32_t ton_ms;
-  uint32_t toff_ms;
-  uint32_t ton_long_ms;
-  uint32_t toff_long_ms;
-  uint32_t toggle_ms;
-  // internal
-  bool _rise;
-  bool _fall;
-  bool _rise_long;
-  bool _fall_long;
-  bool _input;
-  bool _toggle;
-  bool _toggle_changed;
-  uint64_t _tick_debounce;
-  uint64_t _tick_long;
-  uint64_t _tick_toggle;
-  uint64_t _tick_reset;
-} GPIF_t;
-
-//------------------------------------------------------------------------------------------------- GPIF API
-
-/**
- * @brief Initialize GPIF (sets GPIO as input, applies defaults).
- * @param[in,out] gpif Pointer to GPIF structure
- */
-void GPIF_Init(GPIF_t *gpif);
-
-/**
- * @brief Update GPIF state (call periodically).
- * @param[in,out] gpif Pointer to GPIF structure
- */
-void GPIF_Loop(GPIF_t *gpif);
-
-/**
- * @brief Get debounced input state.
- * @param[in] gpif Pointer to GPIF structure
- * @return Current input state
- */
-bool GPIF_Input(GPIF_t *gpif);
-
-/**
- * @brief Get toggle output state.
- * @param[in] gpif Pointer to GPIF structure
- * @return Current toggle state
- */
-bool GPIF_Toggle(GPIF_t *gpif);
-
-/**
- * @brief Check and clear rising edge flag.
- * @param[in,out] gpif Pointer to GPIF structure
- * @return `true` if rising edge occurred
- */
-bool GPIF_Rise(GPIF_t *gpif);
-
-/**
- * @brief Check and clear falling edge flag.
- * @param[in,out] gpif Pointer to GPIF structure
- * @return `true` if falling edge occurred
- */
-bool GPIF_Fall(GPIF_t *gpif);
-
-/**
- * @brief Check and clear any edge flag.
- * @param[in,out] gpif Pointer to GPIF structure
- * @return `true` if any edge occurred
- */
-bool GPIF_Edge(GPIF_t *gpif);
-
-/**
- * @brief Check and clear long press flag.
- * @param[in,out] gpif Pointer to GPIF structure
- * @return `true` if long press occurred
- */
-bool GPIF_RiseLong(GPIF_t *gpif);
-
-/**
- * @brief Check and clear long release flag.
- * @param[in,out] gpif Pointer to GPIF structure
- * @return `true` if long release occurred
- */
-bool GPIF_FallLong(GPIF_t *gpif);
-
-/**
- * @brief Check and clear any long edge flag.
- * @param[in,out] gpif Pointer to GPIF structure
- * @return `true` if any long edge occurred
- */
-bool GPIF_EdgeLong(GPIF_t *gpif);
 
 //-------------------------------------------------------------------------------------------------
 

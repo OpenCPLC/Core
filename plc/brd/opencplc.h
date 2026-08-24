@@ -8,12 +8,13 @@
 #ifdef PRO_BOARD_UNO
   #include "opencplc_uno.h"
 #endif
-#ifdef PRO_BOARD_ECO
-  #include "opencplc_eco.h"
-#endif
 
+// ECO and DIO have not been retargeted to the current HAL. Sources stay in the tree
+#ifdef PRO_BOARD_ECO
+  #error "Board ECO targets an older HAL and does not build. Only UNO is supported."
+#endif
 #ifdef PRO_BOARD_DIO
-  #include "opencplc_dio.h"
+  #error "Board DIO targets an older HAL and does not build. Only UNO is supported."
 #endif
 
 #endif

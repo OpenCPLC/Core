@@ -117,7 +117,8 @@ status_t I2C_Master_Read(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16_
  * @param[in] len Number of data bytes
  * @return `FREE` if started, `BUSY`/`ERR` on failure
  */
-status_t I2C_Master_WriteReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);
+status_t I2C_Master_WriteReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
+  uint8_t *data, uint16_t len);
 
 /**
  * @brief Read from device register (sends `reg` address, restarts, reads).
@@ -128,7 +129,8 @@ status_t I2C_Master_WriteReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg, uint8
  * @param[in] len Number of bytes to read
  * @return `FREE` if started, `BUSY` if transfer in progress
  */
-status_t I2C_Master_ReadReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);
+status_t I2C_Master_ReadReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
+  uint8_t *data, uint16_t len);
 
 /**
  * @brief Combined write-then-read transaction.
@@ -140,7 +142,8 @@ status_t I2C_Master_ReadReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg, uint8_
  * @param[in] rx_len Number of bytes to read
  * @return `FREE` if started, `BUSY` if transfer in progress
  */
-status_t I2C_Master_WriteRead(I2C_Master_t *i2c, uint8_t addr, uint8_t *tx_data, uint16_t tx_len, uint8_t *rx_data, uint16_t rx_len);
+status_t I2C_Master_WriteRead(I2C_Master_t *i2c, uint8_t addr, uint8_t *tx_data,
+  uint16_t tx_len, uint8_t *rx_data, uint16_t rx_len);
 
 //-------------------------------------------------------------------------------------------------
 #endif

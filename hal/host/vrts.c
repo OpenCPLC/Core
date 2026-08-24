@@ -12,21 +12,28 @@
   #include <unistd.h>
 #endif
 
-//------------------------------------------------------------------------------------------------- Panic
+//------------------------------------------------------------------------------------------- Panic
 
+// `__attribute__((weak))` is not usable on PE/COFF: a weak definition
+// in a separate translation unit stays an undefined weak symbol at link time.
+#if defined(_WIN32) || defined(_WIN64)
+void vrts_panic(const char *msg)
+#else
 __attribute__((weak)) void vrts_panic(const char *msg)
+#endif
 {
   fprintf(stderr, "vrts_panic: %s\n", msg);
   while(1);
 }
 
-//------------------------------------------------------------------------------------------------- Globals
+//----------------------------------------------------------------------------------------- Globals
 
 volatile uint64_t VrtsTicker;
+bool VrtsVirtualTime = false;
 static uint32_t tick_ms = 1;
 static uint64_t start_time_ms;
 
-//------------------------------------------------------------------------------------------------- Time
+//-------------------------------------------------------------------------------------------- Time
 
 static uint64_t time_ms_get(void)
 {
@@ -44,10 +51,11 @@ static uint64_t time_ms_get(void)
 
 static inline uint64_t vrts_ticker_get(void)
 {
+  if(VrtsVirtualTime) return VrtsTicker;
   return (time_ms_get() - start_time_ms) / tick_ms;
 }
 
-//------------------------------------------------------------------------------------------------- Threading
+//--------------------------------------------------------------------------------------- Threading
 
 #if(VRTS_SWITCHING)
 
@@ -84,7 +92,8 @@ bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
   if(vrts.count >= VRTS_THREAD_LIMIT) return false;
   vrts.handlers[vrts.count] = handler;
   #if defined(_WIN32) || defined(_WIN64)
-    vrts.threads[vrts.count] = CreateThread(NULL, 0, vrts_wrapper, (LPVOID)handler, CREATE_SUSPENDED, NULL);
+    vrts.threads[vrts.count] =
+      CreateThread(NULL, 0, vrts_wrapper, (LPVOID)handler, CREATE_SUSPENDED, NULL);
     if(!vrts.threads[vrts.count]) return false;
   #endif
   vrts.count++;
@@ -135,7 +144,7 @@ uint8_t vrts_active_thread(void) { return 0; }
 
 #endif
 
-//------------------------------------------------------------------------------------------------- Tick
+//-------------------------------------------------------------------------------------------- Tick
 
 uint64_t tick_keep(uint32_t offset_ms)
 {
@@ -164,7 +173,7 @@ int32_t tick_diff(uint64_t tick)
   return (int32_t)(((int64_t)vrts_ticker_get() - tick) * tick_ms);
 }
 
-//------------------------------------------------------------------------------------------------- Delay
+//------------------------------------------------------------------------------------------- Delay
 
 void delay(uint32_t ms)
 {
@@ -206,7 +215,7 @@ void sleep_until(uint64_t *tick)
   *tick = 0;
 }
 
-//------------------------------------------------------------------------------------------------- Init
+//-------------------------------------------------------------------------------------------- Init
 
 bool systick_init(uint32_t systick_ms)
 {

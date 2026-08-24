@@ -9,7 +9,7 @@
 #include <string.h>
 #include "main.h"
 
-//------------------------------------------------------------------------------------------------- Config
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef HEAP_SIZE
   // Heap memory region size in bytes
@@ -21,7 +21,7 @@
   #define HEAP_ALIGN 8
 #endif
 
-//------------------------------------------------------------------------------------------------- Allocator
+//--------------------------------------------------------------------------------------- Allocator
 
 /**
  * @brief Heap memory block header.
@@ -59,7 +59,7 @@ void *heap_reloc(void *ptr, size_t size);
  */
 void heap_free(void *ptr);
 
-//------------------------------------------------------------------------------------------------- Garbage-collector
+//------------------------------------------------------------------------------- Garbage-collector
 
 #ifndef HEAP_NEW_BLOCK
   // Initial and growth step for GC stack capacity

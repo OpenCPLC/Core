@@ -7,12 +7,12 @@
 #include "system_stm32g0xx.h"
 #include "stm32g0xx.h"
 
-//------------------------------------------------------------------------------------------------- ADC
+//--------------------------------------------------------------------------------------------- ADC
 
 extern void (* volatile ADC_Cb)(void *);
 extern void * volatile ADC_CbArg;
 
-//------------------------------------------------------------------------------------------------- EXTI
+//-------------------------------------------------------------------------------------------- EXTI
 
 extern void (* volatile EXTI0_Cb)(void *);  extern void * volatile EXTI0_CbArg;
 extern void (* volatile EXTI1_Cb)(void *);  extern void * volatile EXTI1_CbArg;
@@ -31,7 +31,7 @@ extern void (* volatile EXTI13_Cb)(void *); extern void * volatile EXTI13_CbArg;
 extern void (* volatile EXTI14_Cb)(void *); extern void * volatile EXTI14_CbArg;
 extern void (* volatile EXTI15_Cb)(void *); extern void * volatile EXTI15_CbArg;
 
-//------------------------------------------------------------------------------------------------- DMA
+//--------------------------------------------------------------------------------------------- DMA
 
 extern void (* volatile DMA_CH1_Cb)(void *);  extern void * volatile DMA_CH1_CbArg;
 extern void (* volatile DMA_CH2_Cb)(void *);  extern void * volatile DMA_CH2_CbArg;
@@ -48,7 +48,7 @@ extern void (* volatile DMA_CH11_Cb)(void *); extern void * volatile DMA_CH11_Cb
 extern void (* volatile DMA_CH12_Cb)(void *); extern void * volatile DMA_CH12_CbArg;
 #endif
 
-//------------------------------------------------------------------------------------------------- TIM
+//--------------------------------------------------------------------------------------------- TIM
 
 extern void (* volatile TIM1_Cb)(void *);  extern void * volatile TIM1_CbArg;
 extern void (* volatile TIM2_Cb)(void *);  extern void * volatile TIM2_CbArg;
@@ -63,7 +63,7 @@ extern void (* volatile TIM15_Cb)(void *); extern void * volatile TIM15_CbArg;
 extern void (* volatile TIM16_Cb)(void *); extern void * volatile TIM16_CbArg;
 extern void (* volatile TIM17_Cb)(void *); extern void * volatile TIM17_CbArg;
 
-//------------------------------------------------------------------------------------------------- I2C
+//--------------------------------------------------------------------------------------------- I2C
 
 extern void (* volatile I2C1_Cb)(void *); extern void * volatile I2C1_CbArg;
 extern void (* volatile I2C2_Cb)(void *); extern void * volatile I2C2_CbArg;
@@ -71,7 +71,7 @@ extern void (* volatile I2C2_Cb)(void *); extern void * volatile I2C2_CbArg;
 extern void (* volatile I2C3_Cb)(void *); extern void * volatile I2C3_CbArg;
 #endif
 
-//------------------------------------------------------------------------------------------------- SPI
+//--------------------------------------------------------------------------------------------- SPI
 
 extern void (* volatile SPI1_Cb)(void *); extern void * volatile SPI1_CbArg;
 extern void (* volatile SPI2_Cb)(void *); extern void * volatile SPI2_CbArg;
@@ -79,7 +79,7 @@ extern void (* volatile SPI2_Cb)(void *); extern void * volatile SPI2_CbArg;
 extern void (* volatile SPI3_Cb)(void *); extern void * volatile SPI3_CbArg;
 #endif
 
-//------------------------------------------------------------------------------------------------- UART
+//-------------------------------------------------------------------------------------------- UART
 
 extern void (* volatile USART1_Cb)(void *);  extern void * volatile USART1_CbArg;
 extern void (* volatile USART2_Cb)(void *);  extern void * volatile USART2_CbArg;

@@ -2,167 +2,156 @@
 
 #include "ain.h"
 
-/**
- * @brief Split ADC buffer into separate AIN channel arrays.
- * @param buff Pointer to ADC buffer.
- * @param data Output 2D array [channels][samples].
- * @param channels Number of ADC channels.
- * @param samples Number of samples per channel.
- */
-void AIN_Sort(uint16_t *buff, uint16_t channels, uint16_t samples, uint16_t data[channels][samples])
+// Working range of the voltage input and the 4-20mA live-zero window, in microvolts
+#define AIN_RANGE_uV      10000000u
+#define AIN_OVERRANGE_uV  10250000u
+#define AIN_420_OFFSET_uV 2000000u
+#define AIN_420_SPAN_uV   8000000u
+#define AIN_420_BREAK_uV  100000u
+
+static AIN_t *ain_vref = NULL;
+
+void AIN_SetVref(AIN_t *vref)
 {
-  for(uint16_t n = 0; n < samples; n++) {
-    for(uint8_t cha = 0; cha < channels; cha++) {
-      data[cha][n] = buff[(n * channels) + cha];
+  ain_vref = vref;
+}
+
+uint32_t AIN_Raw(AIN_t *ain)
+{
+  if(tick_away(&ain->tick)) return ain->_raw;
+  // Window mean carried in Q16: the fractional part feeds the EMA, so resolution
+  // accumulates over time instead of being cut at every window
+  uint32_t mean = mid_mean_u16(ain->data, ain->count, 65536);
+  if(ain->ema && ain->_init) ain->_raw = ema_filter_u32(mean, ain->_raw, ain->ema);
+  else {
+    ain->_raw = mean; // first window seeds the filter, no ramp-up from zero
+    ain->_init = true;
+  }
+  ain->tick = tick_keep(AIN_AVERAGE_TIME_ms); // one filter step per recording window
+  LOG_Debug("Analog input %s raw-value: %d", ain->name, (ain->_raw + 32768) >> 16);
+  return ain->_raw;
+}
+
+// Voltage at the ADC pin in microvolts, all-integer: the single place the ratiometric
+// conversion lives. Q8 inputs leave 64-bit headroom for the resistor macros in any unit
+static uint32_t AIN_Pin_uV(AIN_t *ain)
+{
+  uint32_t raw = AIN_Raw(ain) >> 8;
+  if(ain_vref && ain_vref != ain) {
+    uint32_t vref = AIN_Raw(ain_vref) >> 8;
+    if(vref) {
+      uint64_t num = (uint64_t)raw * 3000000 * ADC_VREFINT_CAL;
+      uint64_t den = (uint64_t)vref * 4095;
+      uint64_t uv = (num + den / 2) / den;
+      return uv > 4000000 ? 4000000 : (uint32_t)uv; // a dying VREF cannot blow the scale
     }
   }
+  uint64_t full = (uint64_t)AIN_FULL_SCALE * 256;
+  return (uint32_t)(((uint64_t)raw * 3300000 + full / 2) / full);
 }
 
-/**
- * @brief Set lower and upper threshold for analog input.
- * @param ain Pointer to `AIN_t` structure.
- * @param low Lower threshold value.
- * @param high Upper threshold value.
- * @param scale Threshold unit: voltage `[V]`, current `[mA]`, or percent `[%]`.
- */
-void AIN_Threshold(AIN_t *ain, float low, float high, AIN_Thresh_t scale)
+// Input voltage in microvolts, after divider scaling:
+// the full-precision value both the integer and the float conversions start from
+static uint32_t AIN_uV(AIN_t *ain)
 {
-  ain->threshold_low = low / scale;
-  ain->threshold_high = high / scale;
+  return (uint32_t)(((uint64_t)AIN_Pin_uV(ain) * (AIN_RESISTOR_UP + AIN_RESISTOR_DOWN)
+    + AIN_RESISTOR_DOWN / 2) / AIN_RESISTOR_DOWN);
 }
 
-/**
- * @brief Get filtered ADC value without unit conversion.
- * @param ain Pointer to `AIN_t` structure representing analog input.
- * @return Filtered 16-bit ADC value as `float`.
- */
-float AIN_Raw(AIN_t *ain)
+// Range verdict: `0` in range, `±Inf` out of range.
+// Logs the violation, so every unit function reports errors the same way
+static float AIN_RangeError(AIN_t *ain, uint32_t uv)
 {
-  if(tick_over(&ain->tick)) return ain->value;
-  uint16_t size = ain->count / 3;
-  sort_asc_u16(ain->data, ain->count);
-  ain->value = avg_u16(&(ain->data[size]), size);
-  ain->tick = tick_keep(AIN_AVERAGE_TIME_ms / 2);
-  LOG_Debug("Analog input %s raw-value: %F", ain->name, ain->value);
-  return ain->value;
-}
-
-/**
- * @brief Get input voltage `[V]` after ADC conversion and scaling.
- * @param ain Pointer to `AIN_t` structure.
- * @return Voltage `[V]`; returns `+Inf` if over-range, `-Inf` if under-range.
- */
-static float AIN_Volts(AIN_t *ain)
-{
-  float raw = AIN_Raw(ain);
-  float volts = resistor_divider_factor(3.3, AIN_RESISTOR_UP, AIN_RESISTOR_DOWN, 16) * raw;
-  if(volts > 10.25 || (ain->threshold_high && volts > ain->threshold_high)) return Inf;
-  if((ain->mode_4_20mA && (volts < 0.1)) || volts < ain->threshold_low) return -Inf;
-  return volts;
-}
-
-/**
- * @brief Print error message for analog input if value is out of range.
- * @param ain Pointer to `AIN_t`.
- * @param value Result from `AIN_Volts()`.
- * @param subject Error context string (e.g. "voltage", "current").
- */
-static void AIN_LogError(AIN_t *ain, float value, const char *subject)
-{
-  if(isInf(value)) {
-    if(value > 0.0f) LOG_Message(AIN_LOG_LEVEL, "Analog input %s over-%s", ain->name, subject);
-    else LOG_Message(AIN_LOG_LEVEL, "Analog input %s under-%s", ain->name, subject);
+  if(uv > AIN_OVERRANGE_uV || (ain->thresh_high_uV && uv > ain->thresh_high_uV)) {
+    LOG_Message(AIN_LOG_LEVEL, "Analog input %s over-range", ain->name);
+    return Inf;
   }
-  else if(isNaN(value)) {
-    LOG_Message(AIN_LOG_LEVEL, "Analog input %s invalid %s", ain->name, subject);
+  if((ain->mode_4_20mA && uv < AIN_420_BREAK_uV) || uv < ain->thresh_low_uV) {
+    LOG_Message(AIN_LOG_LEVEL, "Analog input %s under-range", ain->name);
+    return -Inf;
   }
+  return 0.0f;
 }
 
-/**
- * @brief Get input voltage `[V]` with error check.
- * @param ain Pointer to `AIN_t` structure.
- * @return Value in `[V]`, `+Inf` if over-range, `-Inf` if under-range.
- */
+//--------------------------------------------------------------------------------------- Threshold
+
+// Threshold value in `unit` back to internal microvolts,
+// the unit of the whole conversion path;
+// zero passes through, keeping the threshold disabled.
+// Percent honors the 4-20mA window
+static uint32_t AIN_ThreshTo_uV(AIN_t *ain, float value, AIN_Thresh_t unit)
+{
+  if(value <= 0.0f) return 0;
+  float uv;
+  switch(unit) {
+    case AIN_Thresh_mA: uv = 500000.0f * value; break; // 500Ω: 20mA is 10V
+    case AIN_Thresh_Percent:
+      uv = ain->mode_4_20mA
+        ? AIN_420_OFFSET_uV + value * (AIN_420_SPAN_uV / 100)
+        : value * (AIN_RANGE_uV / 100);
+      break;
+    default: uv = 1000000.0f * value; // volts
+  }
+  return (uint32_t)(uv + 0.5f);
+}
+
+void AIN_Threshold(AIN_t *ain, float low, float high, AIN_Thresh_t unit)
+{
+  ain->thresh_low_uV = AIN_ThreshTo_uV(ain, low, unit);
+  ain->thresh_high_uV = AIN_ThreshTo_uV(ain, high, unit);
+}
+
+//--------------------------------------------------------------------------------------- Float API
+
+float AIN_PinVoltage_V(AIN_t *ain)
+{
+  return (float)AIN_Pin_uV(ain) / 1000000;
+}
+
 float AIN_Voltage_V(AIN_t *ain)
 {
-  float volts = AIN_Volts(ain);
-  if(AIN_IsError(volts)) return volts;
-  AIN_LogError(ain, volts, "voltage");
-  return volts;  
+  uint32_t uv = AIN_uV(ain);
+  float error = AIN_RangeError(ain, uv);
+  if(error) return error;
+  return (float)uv / 1000000;
 }
 
-/**
- * @brief Get input current `[mA]` with error check.
- * @param ain Pointer to `AIN_t` structure.
- * @return Value in `[mA]`, `+Inf` if over-range, `-Inf` if under-range.
- */
 float AIN_Current_mA(AIN_t *ain)
 {
-  float volts = AIN_Volts(ain);
-  if(AIN_IsError(volts)) return volts;
-  AIN_LogError(ain, volts, "current");
-  return volts * 2.0f;
+  uint32_t uv = AIN_uV(ain);
+  float error = AIN_RangeError(ain, uv);
+  if(error) return error;
+  return (float)uv / 500000;
 }
 
-/**
- * @brief Get analog input as percent `[%]` with error check.
- * @param ain Pointer to `AIN_t` structure.
- * @return Value in `[0–100%]`, `+Inf` if over-range, `-Inf` if under-range.
- */
-float AIN_Percent(AIN_t *ain)
-{
-  float volts = AIN_Volts(ain);
-  if(AIN_IsError(volts)) return volts;
-  AIN_LogError(ain, volts, "value");
-  float percent = volts * 10.0f;
-  if(ain->mode_4_20mA) {
-    percent = (percent - 20.0f) * 5.0f / 4.0f;
-    if(percent < 0.0f) percent = 0.0f;
-  }
-  if(percent > 100.0f) percent = 100.0f;
-  return percent;
-}
-
-/**
- * @brief Get analog input as normalized value `[0–1]` with error check.
- * @param ain Pointer to `AIN_t` structure.
- * @return Value in `[0–1]`, `+INF` if over-range, `-INF` if under-range.
- */
 float AIN_Normalized(AIN_t *ain)
 {
-  float percent = AIN_Percent(ain);
-  if(AIN_IsError(percent)) return percent;
-  return percent / 100.0f;
+  uint32_t uv = AIN_uV(ain);
+  float error = AIN_RangeError(ain, uv);
+  if(error) return error;
+  float norm = ain->mode_4_20mA
+    ? ((float)uv - AIN_420_OFFSET_uV) / AIN_420_SPAN_uV : (float)uv / AIN_RANGE_uV;
+  if(norm < 0.0f) norm = 0.0f;
+  if(norm > 1.0f) norm = 1.0f;
+  return norm;
 }
 
-/**
- * @brief Get potentiometer voltage `[V]` from ADC raw value.
- * @param ain Pointer to `AIN_t` structure.
- * @return Voltage in range `[0–3.3V]`.
- */
-float POT_Voltage_V(AIN_t *ain)
+float AIN_Percent(AIN_t *ain)
 {
-  float raw = AIN_Raw(ain);
-  return volts_factor(3.3f, 16) * raw;
+  return 100.0f * AIN_Normalized(ain);
 }
 
-/**
- * @brief Get potentiometer value as percent `[%]`.
- * @param ain Pointer to `AIN_t` structure.
- * @return Value in range `[0–100%]`.
- */
-float POT_Percent(AIN_t *ain)
-{
-  float volts = POT_Voltage_V(ain);
-  return volts * 100.0f / 3.3f;
-}
-
-/**
- * @brief Get potentiometer value as normalized `[0–1]`.
- * @param ain Pointer to `AIN_t` structure.
- * @return Value in range `[0–1]`.
- */
 float POT_Normalized(AIN_t *ain)
 {
-  return POT_Percent(ain) / 100.0f;
+  return (float)AIN_Raw(ain) / ((float)AIN_FULL_SCALE * 65536);
+}
+
+float POT_Percent(AIN_t *ain)
+{
+  return 100.0f * POT_Normalized(ain);
+}
+
+float POT_Voltage_V(AIN_t *ain)
+{
+  return 3.3f * POT_Normalized(ain);
 }

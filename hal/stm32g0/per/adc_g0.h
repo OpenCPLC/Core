@@ -5,7 +5,7 @@
 
 #include "stm32g0xx.h"
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 typedef enum {
   ADC_IN_PA0 = 0,
@@ -38,7 +38,8 @@ typedef enum {
   ADC_SamplingTime_32 = 4,
   ADC_SamplingTime_52 = 5,
   ADC_SamplingTime_92 = 6,
-  ADC_SamplingTime_173 = 7
+  ADC_SamplingTime_173 = 7,
+  ADC_SamplingTime_Max = ADC_SamplingTime_173
 } ADC_SamplingTime_t;
 
 typedef enum {
@@ -52,5 +53,12 @@ typedef enum {
   ADC_ExtTrig_EXTI11 = 7
 } ADC_ExtTrig_t;
 
-//---------------------------------------------------------------------------------------------
+// G0 errata: hardware oversampling combined with the configurable sequencer corrupts
+// the last conversion of a multi-channel sequence. The driver appends one sacrificial
+// repeat of the last channel, so every scan carries one extra word: size record
+// buffers and frame strides with this
+#define adc_scan_len(channel_count, ovs_enable) \
+  ((uint16_t)(channel_count) + (((ovs_enable) && (channel_count) > 1) ? 1 : 0))
+
+//-------------------------------------------------------------------------------------------------
 #endif

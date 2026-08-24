@@ -2,7 +2,6 @@
 
 #include "sys.h"
 
-
 /**
  * @brief Initialize system clock, SysTick and heap.
  */
@@ -31,7 +30,7 @@ void clock_init(void)
   #elif(SYS_CLOCK_FREQ == 64000000)
     RCC_64MHz();
   #elif(SYS_CLOCK_FREQ == 18432000)
-    RCC_HSE(18432000);
+    RCC_SetHSE(18432000);
   #elif(SYS_CLOCK_FREQ == 59904000)
     RCC_SetPLL(18432000, 2, 13, 2);
   #else
@@ -60,7 +59,7 @@ void panic(const char *message)
 {
   if(panic_handler) panic_handler();
   LOG_Panic(message);
-  __disable_irq(); // Disable interrupts
+  __disable_irq();
   #if(SYS_PANIC_RESET)
     PWR_Reset();
   #endif
@@ -70,10 +69,12 @@ void panic(const char *message)
   }
 }
 
-// Canary checked by `memory_guard` thread. `volatile` is required: without it the
-// compiler would constant-fold the `!= 0xA5A5DEAD` check to always-false. The point
-// is to detect external modification (stack overflow, DMA misconfig, wild pointer).
-volatile static uint32_t memory_guard_code = 0xA5A5DEAD;
+// Canary checked by `memory_guard` thread.
+// `volatile` is required: without it the compiler would constant-fold
+// the `!= 0xA5A5DEAD` check to always-false.
+// The point is to detect external modification
+// (stack overflow, DMA misconfig, wild pointer).
+static volatile uint32_t memory_guard_code = 0xA5A5DEAD;
 
 /**
  * @brief Memory guard thread.
@@ -84,7 +85,7 @@ void memory_guard(void)
 {
   while(1) {
     if(memory_guard_code != 0xA5A5DEAD) {
-      panic("Memory corruption" LOG_LIB("SYS"));
+      panic("Memory corruption " LOG_TAG("SYS"));
     }
     delay(500);
   }

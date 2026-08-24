@@ -18,7 +18,7 @@
 #define RCC_PLLSRC_HSI  2u
 #define RCC_PLLSRC_HSE  3u
 
-//------------------------------------------------------------------------------------------------- RCC: Clock Enable
+//------------------------------------------------------------------------------- RCC: Clock Enable
 
 void RCC_EnableTIM(void *tim)
 {
@@ -93,10 +93,11 @@ void RCC_EnableDMA(void *dma)
   RCC->AHB1ENR |= RCC_AHB1ENR_DMAMUX1EN;
 }
 
-//------------------------------------------------------------------------------------------------- RCC: System Clock
+//------------------------------------------------------------------------------- RCC: System Clock
 
 uint32_t RCC_GetClock(void) { return SystemCoreClock; }
 
+// Wait states are raised before the clock and lowered after it
 static void RCC_SetFlashLatency(uint32_t freq_Hz)
 {
   uint32_t latency;
@@ -105,6 +106,8 @@ static void RCC_SetFlashLatency(uint32_t freq_Hz)
   else if(freq_Hz > 16000000) latency = FLASH_ACR_LATENCY_1WS;
   else latency = FLASH_ACR_LATENCY_0WS;
   FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY) | latency;
+  // Field must read back before the clock rises
+  while((FLASH->ACR & FLASH_ACR_LATENCY) != latency);
 }
 
 static void RCC_SetVoltageScale(uint32_t freq_Hz)
@@ -182,22 +185,25 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
 
 uint32_t RCC_2MHz(void)
 {
-  RCC_SetVoltageScale(2000000);
+  uint32_t freq_Hz = RCC_SetMSI(RCC_CR_MSIRANGE_5, 2000000);
   RCC_SetFlashLatency(2000000);
-  return RCC_SetMSI(RCC_CR_MSIRANGE_5, 2000000);
+  // Voltage scale last, a lower range caps the frequency
+  RCC_SetVoltageScale(2000000);
+  return freq_Hz;
 }
 
 uint32_t RCC_16MHz(void)
 {
-  RCC_SetVoltageScale(16000000);
+  uint32_t freq_Hz = RCC_SetHSI16();
   RCC_SetFlashLatency(16000000);
-  return RCC_SetHSI16();
+  RCC_SetVoltageScale(16000000);
+  return freq_Hz;
 }
 
 uint32_t RCC_48MHz(void) { return RCC_SetPLL(0, 2, 12, 2); }
 uint32_t RCC_64MHz(void) { return RCC_SetPLL(0, 2, 16, 2); }
 
-//------------------------------------------------------------------------------------------------- PWR
+//--------------------------------------------------------------------------------------------- PWR
 
 void PWR_Reset(void) { NVIC_SystemReset(); }
 
@@ -206,6 +212,8 @@ void PWR_Sleep(PWR_SleepMode_t mode)
   // WB: PWR is always accessible (no enable bit)
   // WB: Stop0=000, Stop1=001, Stop2=010, Standby=011, Shutdown=100
   static const uint8_t mode_bits[] = { 0b000, 0b001, 0b010, 0b011, 0b011, 0b100 };
+  // `PWR_SleepMode_Error` names a wakeup cause, not a mode, and sits past the table.
+  if(mode >= PWR_SleepMode_Error) return;
   if((PWR->SR2 & PWR_SR2_REGLPF) && (mode == PWR_SleepMode_Stop0)) return;
   PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | mode_bits[mode];
   if(mode == PWR_SleepMode_StandbySRAM) PWR->CR3 |= PWR_CR3_RRS;
@@ -213,6 +221,8 @@ void PWR_Sleep(PWR_SleepMode_t mode)
   SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
   PWR->SCR = 0x001F; // Clear wakeup flags (CWUF1-5)
   __SEV(); __WFE(); __WFE();
+  // `SLEEPDEEP` must not outlive the call: a later `__WFI` would enter Stop
+  SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
 }
 
 void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
@@ -223,7 +233,7 @@ void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
   else PWR->CR4 &= ~(1u << pin);
 }
 
-//------------------------------------------------------------------------------------------------- BKPR
+//-------------------------------------------------------------------------------------------- BKPR
 
 void BKPR_Write(BKPR_t reg, uint32_t value)
 {
@@ -254,7 +264,7 @@ void BKP_DomainReset(void)
   RCC->BDCR = 0; // release reset
 }
 
-//------------------------------------------------------------------------------------------------- IWDG
+//-------------------------------------------------------------------------------------------- IWDG
 
 void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 {
@@ -289,7 +299,7 @@ static uint32_t rst_flags(void)
 
 bool IWDG_WasReset(void) { return (rst_flags() & RCC_CSR_IWDGRSTF) != 0; }
 
-//------------------------------------------------------------------------------------------------- BOR
+//--------------------------------------------------------------------------------------------- BOR
 
 #define FLASH_KEY1    0x45670123u
 #define FLASH_KEY2    0xCDEF89ABu

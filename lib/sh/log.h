@@ -43,7 +43,6 @@ extern bool LogPrintFlag;
  * Format: `%[flags][width][.precision][length]conversion`
  * Flags:
  *   `0`: Zero-pad numeric output (default: space-pad)
- *   `-`: Left-align (parsed, not yet honored)
  * Standard conversions (printf-compatible):
  *   `%d` `%i` `%u` Integer (use `l`/`ll` for 64-bit)
  *   `%x` `%X`      Hexadecimal
@@ -67,9 +66,9 @@ extern bool LogPrintFlag;
  *   `%5d`          5-char field, space-padded   (e.g. `"   42"`)
  *   `%05d`         5-char field, zero-padded    (e.g. `"00042"`)
  *   `%.3d`        Minimum 3 digits, zero-pad   (e.g. `"042"`)
- * Logs do NOT include automatic timestamp prefix. Use `%t` or `%T` explicitly
- * when timing is needed. When RTC is not initialized, `%t`/`%T` fall back to
- * the current tick value.
+ * Logs do NOT include an automatic timestamp prefix.
+ * Use `%t` or `%T` explicitly when timing is needed.
+ * When RTC is not initialized, `%t`/`%T` fall back to the current tick value.
  * Unknown specifiers are echoed raw (e.g. `%q` -> `%q`) so typos are visible.
  * @param[in] template Format string
  * @param[in] ... Format arguments
@@ -102,18 +101,18 @@ void LOG_Message(LOG_Level_t lvl, char *message, ...);
 #define LOG_PNC LOG_Panic     // Log panic message and flush blocking
 #define LOG_MSG LOG_Message   // Log message with specified level
 
-// Library name tag (cream brackets, append at end of message)
-#define LOG_LIB(name) " " ANSI_GREY "[" ANSI_CREAM name ANSI_GREY "]" ANSI_END
-// Debug log with library tag
-#define LOG_LIB_DBG(name, fmt, ...) LOG_DBG(fmt LOG_LIB(name), ##__VA_ARGS__)
-// Info log with library tag
-#define LOG_LIB_INF(name, fmt, ...) LOG_INF(fmt LOG_LIB(name), ##__VA_ARGS__)
-// Warning log with library tag
-#define LOG_LIB_WRN(name, fmt, ...) LOG_WRN(fmt LOG_LIB(name), ##__VA_ARGS__)
-// Error log with library tag
-#define LOG_LIB_ERR(name, fmt, ...) LOG_ERR(fmt LOG_LIB(name), ##__VA_ARGS__)
-// Critical log with library tag
-#define LOG_LIB_CRT(name, fmt, ...) LOG_CRT(fmt LOG_LIB(name), ##__VA_ARGS__)
+// Context tag: a module, command or any short phrase. Caller adds the spacing
+#define LOG_TAG(name) ANSI_GREY "[" ANSI_CREAM name ANSI_GREY "]" ANSI_END
+// Debug log with context tag
+#define LOG_TAG_DBG(name, fmt, ...) LOG_DBG(fmt " " LOG_TAG(name), ##__VA_ARGS__)
+// Info log with context tag
+#define LOG_TAG_INF(name, fmt, ...) LOG_INF(fmt " " LOG_TAG(name), ##__VA_ARGS__)
+// Warning log with context tag
+#define LOG_TAG_WRN(name, fmt, ...) LOG_WRN(fmt " " LOG_TAG(name), ##__VA_ARGS__)
+// Error log with context tag
+#define LOG_TAG_ERR(name, fmt, ...) LOG_ERR(fmt " " LOG_TAG(name), ##__VA_ARGS__)
+// Critical log with context tag
+#define LOG_TAG_CRT(name, fmt, ...) LOG_CRT(fmt " " LOG_TAG(name), ##__VA_ARGS__)
 
 /**
  * @brief Log parse error.

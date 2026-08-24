@@ -2,7 +2,7 @@
 
 #include "cmd.h"
 
-//------------------------------------------------------------------------------------ Internal
+//---------------------------------------------------------------------------------------- Internal
 
 static struct {
   MBB_t *mbbs[CMD_MBB_LIMIT];
@@ -16,12 +16,12 @@ static struct {
   MBB_t *mbb_active;
   void (*Sleep)(PWR_SleepMode_t);
   void (*Reset)(void);
-  uint16_t trig;
+  volatile uint16_t trig;
 } cmd;
 
 MBB_t *cmd_mbb;
 
-//----------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 void CMD_AddMemBuff(MBB_t *mbb)
 {
@@ -95,7 +95,7 @@ void CMD_WrongArgv(char *name, char *argv, uint16_t pos)
     " on " ANSI_LIME "%u" ANSI_END " position", argv, pos);
 }
 
-//---------------------------------------------------------------------------------------- Data
+//-------------------------------------------------------------------------------------------- Data
 
 static void CMD_Data(uint8_t *data, uint16_t size, STREAM_t *stream)
 {
@@ -113,7 +113,7 @@ static void CMD_Data(uint8_t *data, uint16_t size, STREAM_t *stream)
   }
 }
 
-//----------------------------------------------------------------------------------------- MBB
+//--------------------------------------------------------------------------------------------- MBB
 
 static MBB_t *CMD_FindMbb(char *mbb_name)
 {
@@ -184,6 +184,7 @@ static void CMD_Mbb(char **argv, uint16_t argc, STREAM_t *stream)
             CMD_ArgvExit(2);
           }
           packages = str_to_int(argv[2]);
+          if(!packages) packages = 1;
         }
         STREAM_DataMode(stream);
         stream->_packages = packages;
@@ -202,6 +203,7 @@ static void CMD_Mbb(char **argv, uint16_t argc, STREAM_t *stream)
           CMD_ArgvExit(2);
         }
         packages = str_to_int(argv[2]);
+        if(!packages) packages = 1;
       }
       STREAM_DataMode(stream);
       stream->_packages = packages;
@@ -281,7 +283,7 @@ static void CMD_Mbb(char **argv, uint16_t argc, STREAM_t *stream)
     }
     case HASH_Print: { // mbb print
       CMD_Argc(2);
-      LOG_Bash("%02a %d", 50, cmd.mbb_active->buffer);
+      LOG_Bash("%02a %d", cmd.mbb_active->size / 2, cmd.mbb_active->buffer);
       break;
     }
     default: {
@@ -290,7 +292,7 @@ static void CMD_Mbb(char **argv, uint16_t argc, STREAM_t *stream)
   }
 }
 
-//----------------------------------------------------------------------------------------- UID
+//--------------------------------------------------------------------------------------------- UID
 
 static void CMD_Uid(char **argv, uint16_t argc)
 {
@@ -300,7 +302,7 @@ static void CMD_Uid(char **argv, uint16_t argc)
   LOG_Bash("UID %a%02x", 12, uid);
 }
 
-//----------------------------------------------------------------------------------------- RTC
+//--------------------------------------------------------------------------------------------- RTC
 
 #ifdef RTC_H_
 
@@ -458,7 +460,7 @@ static void CMD_Alarm(char **argv, uint16_t argc)
 
 #endif
 
-//----------------------------------------------------------------------------------------- PWR
+//--------------------------------------------------------------------------------------------- PWR
 
 static PWR_SleepMode_t PWR_StrSleepMode(const char *str)
 {
@@ -514,21 +516,25 @@ static void CMD_Power(char **argv, uint16_t argc)
   }
 }
 
-//---------------------------------------------------------------------------------------- Addr
+//-------------------------------------------------------------------------------------------- Addr
 
 #if(STREAM_ADDRESS)
 static void CMD_Addr(char **argv, uint16_t argc, STREAM_t *stream)
 {
   CMD_Argc(1, 2);
   if(argc == 2) {
-    stream->address = atoi(argv[1]);
+    if(!str_is_u16(argv[1])) {
+      LOG_ErrorParse(argv[1], "uint8_t");
+      CMD_ArgvExit(1);
+    }
+    stream->address = str_to_int(argv[1]);
     if(stream->Readdress) stream->Readdress(stream->address);
   }
   LOG_Bash("ADDR %u", stream->address);
 }
 #endif
 
-//---------------------------------------------------------------------------------------- Ping
+//-------------------------------------------------------------------------------------------- Ping
 
 static void CMD_Ping(char **argv, uint16_t argc)
 {
@@ -537,7 +543,7 @@ static void CMD_Ping(char **argv, uint16_t argc)
   LOG_Bash("PING pong");
 }
 
-//---------------------------------------------------------------------------------------- Trig
+//-------------------------------------------------------------------------------------------- Trig
 
 uint16_t TRIG_Event(void)
 {
@@ -578,7 +584,7 @@ static void CMD_Trig(char **argv, uint16_t argc)
   }
 }
 
-//---------------------------------------------------------------------------------------- Step
+//-------------------------------------------------------------------------------------------- Step
 
 bool CMD_Step(STREAM_t *stream)
 {
@@ -624,4 +630,4 @@ bool CMD_Step(STREAM_t *stream)
   return false;
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------

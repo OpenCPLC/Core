@@ -19,7 +19,7 @@ typedef enum {
   SPI_Prescaler_256 = 7
 } SPI_Prescaler_t;
 
-//------------------------------------------------------------------------------------------------- Family Include
+//---------------------------------------------------------------------------------- Family Include
 
 #if defined(STM32G0)
   #include "spi_g0.h"
@@ -27,13 +27,13 @@ typedef enum {
   #include "spi_wb.h"
 #endif
 
-//------------------------------------------------------------------------------------------------- Pin Maps
+//---------------------------------------------------------------------------------------- Pin Maps
 
 extern const GPIO_Map_t SPI_SCK_MAP[];
 extern const GPIO_Map_t SPI_MISO_MAP[];
 extern const GPIO_Map_t SPI_MOSI_MAP[];
 
-//------------------------------------------------------------------------------------------------- Internal API
+//------------------------------------------------------------------------------------ Internal API
 
 void SPI_DmaSetRxRequest(SPI_TypeDef *reg, DMA_t *dma);
 void SPI_DmaSetTxRequest(SPI_TypeDef *reg, DMA_t *dma);

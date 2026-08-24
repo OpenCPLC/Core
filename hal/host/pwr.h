@@ -7,7 +7,7 @@
 #include <stdbool.h>
 #include "xdef.h"
 
-//------------------------------------------------------------------------------------------------- RCC: Clock Enable (stubs)
+//----------------------------------------------------------------------- RCC: Clock Enable (stubs)
 
 static inline void RCC_EnableTIM(void *tim) { (void)tim; }
 static inline void RCC_EnableGPIO(void *gpio) { (void)gpio; }
@@ -18,7 +18,7 @@ static inline void RCC_DisableI2C(void *i2c) { (void)i2c; }
 static inline void RCC_EnableSPI(void *spi) { (void)spi; }
 static inline void RCC_EnableDMA(void *dma) { (void)dma; }
 
-//------------------------------------------------------------------------------------------------- RCC: System Clock (stubs)
+//----------------------------------------------------------------------- RCC: System Clock (stubs)
 
 static inline uint32_t RCC_GetClock(void) { return 64000000; } // Fake 64MHz
 static inline uint32_t RCC_SetHSE(uint32_t xtal_Hz) { return xtal_Hz; }
@@ -33,7 +33,7 @@ static inline uint32_t RCC_16MHz(void) { return 16000000; }
 static inline uint32_t RCC_48MHz(void) { return 48000000; }
 static inline uint32_t RCC_64MHz(void) { return 64000000; }
 
-//------------------------------------------------------------------------------------------------- PWR: Sleep modes
+//-------------------------------------------------------------------------------- PWR: Sleep modes
 
 /**
  * @brief Store program path for PWR_Reset()
@@ -89,7 +89,7 @@ static inline void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
   (void)pin; (void)edge;
 }
 
-//------------------------------------------------------------------------------------------------- PWR: Backup registers (RAM-based simulation)
+//---------------------------------------------------- PWR: Backup registers (RAM-based simulation)
 
 typedef enum {
   BKPR_0 = 0, BKPR_1, BKPR_2, BKPR_3, BKPR_4
@@ -101,7 +101,7 @@ uint32_t BKPR_Read(BKPR_t reg);
 // No backup domain on host, reset is a no-op
 static inline void BKP_DomainReset(void) {}
 
-//------------------------------------------------------------------------------------------------- IWDG: Watchdog (stubs)
+//-------------------------------------------------------------------------- IWDG: Watchdog (stubs)
 
 typedef enum {
   IWDG_Prescaler_4 = 0,
@@ -121,7 +121,7 @@ static inline void IWDG_Init(IWDG_Prescaler_t prescaler, uint16_t reload)
 static inline void IWDG_Refresh(void) {}
 static inline bool IWDG_WasReset(void) { return false; }
 
-//------------------------------------------------------------------------------------------------- BOR: Brown-Out Reset (stubs)
+//-------------------------------------------------------------------- BOR: Brown-Out Reset (stubs)
 
 // No supply rail to guard on host, BOR is a no-op
 typedef enum {

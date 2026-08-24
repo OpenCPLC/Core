@@ -34,13 +34,14 @@ uint16_t STREAM_Read(STREAM_t *stream, char ***argv)
     else {
       buffer = str_trim(buffer);
       int argc = str_explode(argv, buffer, ' ');
-      if(stream->modify == STREAM_Modify_Lowercase || stream->modify == STREAM_Modify_Uppercase) {
+      if(stream->modify == STREAM_Modify_Lowercase ||
+        stream->modify == STREAM_Modify_Uppercase) {
         for(int i = 0; i < argc; i++) {
           if(stream->modify == STREAM_Modify_Lowercase) str_lower_this((*argv)[i]);
           else if(stream->modify == STREAM_Modify_Uppercase) str_upper_this((*argv)[i]);
         }
       }
-      return (uint8_t)argc;
+      return (uint16_t)argc;
     }
   }
   return 0;

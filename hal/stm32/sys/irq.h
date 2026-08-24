@@ -13,21 +13,25 @@
   #include "irq_wb.h"
 #endif
 
-//------------------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
 typedef void (*IRQ_Handler_t)(void *);
 
-//------------------------------------------------------------------------------------------------- Enable
+//------------------------------------------------------------------------------------------ Enable
 
 void IRQ_EnableTIM(void *tim, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
+void IRQ_EnableTIMCC(void *tim, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
 void IRQ_EnableUART(void *uart, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
-void IRQ_EnableI2C(void *i2c, IRQ_Priority_t priority, IRQ_Handler_t event, IRQ_Handler_t error, void *object);
+void IRQ_EnableI2C(void *i2c, IRQ_Priority_t priority, IRQ_Handler_t event,
+  IRQ_Handler_t error, void *object);
 void IRQ_EnableSPI(void *spi, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
 void IRQ_EnableADC(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
-void IRQ_EnableDMA(DMA_CHx_t channel, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
-void IRQ_EnableEXTI(uint8_t line, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
+void IRQ_EnableDMA(DMA_CHx_t channel, IRQ_Priority_t priority, IRQ_Handler_t handler,
+  void *object);
+void IRQ_EnableEXTI(uint8_t line, IRQ_Priority_t priority, IRQ_Handler_t handler,
+  void *object);
 
-//------------------------------------------------------------------------------------------------- Disable
+//----------------------------------------------------------------------------------------- Disable
 
 void IRQ_DisableTIM(void *tim);
 void IRQ_DisableUART(void *uart);
@@ -37,7 +41,7 @@ void IRQ_DisableADC(void);
 void IRQ_DisableDMA(DMA_CHx_t channel);
 void IRQ_DisableEXTI(uint8_t line);
 
-//------------------------------------------------------------------------------------------------- Clear pending
+//----------------------------------------------------------------------------------- Clear pending
 
 void IRQ_ClearPendingTIM(void *tim);
 void IRQ_ClearPendingUART(void *uart);

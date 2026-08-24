@@ -13,7 +13,7 @@
   #include "dma_wb.h"
 #endif
 
-//------------------------------------------------------------------------------------------------- DMA Register Set
+//-------------------------------------------------------------------------------- DMA Register Set
 
 typedef struct {
   DMA_TypeDef *reg;
@@ -22,14 +22,14 @@ typedef struct {
   uint8_t pos;
 } DMA_t;
 
-//------------------------------------------------------------------------------------------------- DMA ISR Flags
+//----------------------------------------------------------------------------------- DMA ISR Flags
 
 #define DMA_ISR_GIF(pos)  (DMA_ISR_GIF1  << ((pos) * 4))
 #define DMA_ISR_TCIF(pos) (DMA_ISR_TCIF1 << ((pos) * 4))
 #define DMA_ISR_HTIF(pos) (DMA_ISR_HTIF1 << ((pos) * 4))
 #define DMA_ISR_TEIF(pos) (DMA_ISR_TEIF1 << ((pos) * 4))
 
-//------------------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 void DMA_SetRegisters(DMA_CHx_t nbr, DMA_t *dma);
 void DMA_ClearFlags(DMA_t *dma);

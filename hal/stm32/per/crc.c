@@ -8,7 +8,6 @@ uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
 {
   uint32_t out;
   uint8_t *pointner = (uint8_t *)&out;
-  CRC->CR &= 0xFFFFFF07;
   RCC_CRC_EN();
   CRC->POL = crc->polynomial;
   CRC->INIT = crc->initial;
@@ -31,7 +30,8 @@ uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
   out = (CRC->DR ^ crc->final_xor);
   if(crc->invert_out) {
     switch(crc->width) {
-      case 32: return (pointner[0] << 24) | (pointner[1] << 16) | (pointner[2] << 8) | pointner[3];
+      case 32:
+        return (pointner[0] << 24) | (pointner[1] << 16) | (pointner[2] << 8) | pointner[3];
       case 16: return (pointner[0] << 8) | pointner[1];
     }
   }
@@ -59,6 +59,8 @@ uint16_t CRC_Append(const CRC_t *crc, uint8_t *data, uint16_t count)
 
 status_t CRC_Error(const CRC_t *crc, uint8_t *data, uint16_t count)
 {
+  // `count` spans the frame including its checksum, shorter would wrap the subtraction
+  if(count < crc->width / 8) return ERR;
   count -= crc->width / 8;
   uint32_t code = CRC_Run(crc, (void *)data, count);
 
@@ -66,8 +68,10 @@ status_t CRC_Error(const CRC_t *crc, uint8_t *data, uint16_t count)
     case 32:
       if(data[count++] != (uint8_t)(code >> 24)) return ERR;
       if(data[count++] != (uint8_t)(code >> 16)) return ERR;
+      fallthrough;
     case 16:
       if(data[count++] != (uint8_t)(code >> 8)) return ERR;
+      fallthrough;
     case 8:
       if(data[count++] != (uint8_t)code) return ERR;
   }

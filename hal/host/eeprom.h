@@ -1,4 +1,4 @@
-// hal/stm32/per/eeprom.h
+// hal/host/eeprom.h
 
 #ifndef EEPROM_H_
 #define EEPROM_H_
@@ -39,6 +39,8 @@ typedef enum {
  * `_read_key` may return a garbage value
  * if a corrupted slot's key field accidentally matches a user key
  * (probability ~2^-32 per bad write).
+ * Host build: runs on the emulated Flash of `hal/host/flash.h`,
+ * which keeps NOR rules and persists every page, so behaviour matches the target.
  * @param[in] page_start First flash page reserved for EEPROM
  * @param[in] page_count Number of flash pages (must be even and >= 2)
  */
@@ -92,6 +94,9 @@ uint32_t EEPROM_Read(EEPROM_t *eeprom, uint32_t key, uint32_t default_value);
 
 /**
  * @brief Save variable (uses address as key).
+ * @note Host build: the key is the low 32 bits of a 64-bit address.
+ * Two variables whose addresses differ only above bit 31 would collide,
+ * which cannot happen on the 32-bit target.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
  * @param[in] var Pointer to variable
  * @return `OK` on success, `ERR` on error

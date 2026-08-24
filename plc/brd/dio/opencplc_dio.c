@@ -2,7 +2,7 @@
 
 #include "opencplc.h"
 
-//------------------------------------------------------------------------------------------------- EEPROM
+//------------------------------------------------------------------------------------------ EEPROM
 
 #ifdef STM32G081xx
   EEPROM_t io_eeprom[] = {
@@ -21,7 +21,7 @@
   };
 #endif
 
-//------------------------------------------------------------------------------------------------- DOUT-TO
+//----------------------------------------------------------------------------------------- DOUT-TO
 
 PWM_t to149c_pwm = {
   .reg = TIM1,
@@ -30,7 +30,7 @@ PWM_t to149c_pwm = {
   .channel[TIM_CH2] = TIM1_CH2_PA9,
   .channel[TIM_CH3] = TIM1_CH3_PC10,
   .channel[TIM_CH4] = TIM1_CH4_PC11,
-  .center_aligned = true
+  .align = PWM_Align_Center3
 };
 
 DOUT_t TO1 = { .name = "TO1", .pwm = &to149c_pwm, .channel = TIM_CH4, .eeprom = &io_eeprom[0], .save = false };
@@ -47,7 +47,7 @@ PWM_t to5_pwm = {
   .reg = TIM3,
   .auto_reload = PLC_ARR_INIT(SYS_CLOCK_FREQ, true),
   .channel[TIM_CH1] = TIM3_CH1_PB4,
-  .center_aligned = false
+  .align = PWM_Align_Edge
 };
 
 DOUT_t TO5 = { .name = "TO5", .pwm = &to5_pwm, .channel = TIM_CH1, .eeprom = &io_eeprom[0], .save = false };
@@ -56,7 +56,7 @@ PWM_t to2_pwm = {
   .reg = TIM14,
   .auto_reload = PLC_ARR_INIT(SYS_CLOCK_FREQ, false),
   .channel[TIM_CH1] = TIM14_CH1_PC12,
-  .center_aligned = false
+  .align = PWM_Align_Edge
 };
 
 DOUT_t TO2 = { .name = "TO2", .pwm = &to2_pwm, .channel = TIM_CH1, .eeprom = &io_eeprom[0], .save = false };
@@ -70,7 +70,7 @@ PWM_t to3_pwm = {
   .reg = TIM17,
   .auto_reload = PLC_ARR_INIT(SYS_CLOCK_FREQ, false),
   .channel[TIM_CH1] = TIM17_CH1_PB9,
-  .center_aligned = false
+  .align = PWM_Align_Edge
 };
 
 DOUT_t TO3 = { .name = "TO3", .pwm = &to3_pwm, .channel = TIM_CH1, .eeprom = &io_eeprom[0], .save = false };
@@ -84,7 +84,7 @@ PWM_t to6_pwm = {
   .reg = TIM16,
   .auto_reload = PLC_ARR_INIT(SYS_CLOCK_FREQ, false),
   .channel[TIM_CH1] = TIM16_CH1_PB8,
-  .center_aligned = false
+  .align = PWM_Align_Edge
 };
 
 DOUT_t TO6 = { .name = "TO6", .pwm = &to6_pwm, .channel = TIM_CH1, .eeprom = &io_eeprom[0], .save = false };
@@ -99,7 +99,7 @@ PWM_t to7a_pwm = {
   .auto_reload = PLC_ARR_INIT(SYS_CLOCK_FREQ, false),
   .channel[TIM_CH1] = TIM15_CH1_PB14,
   .channel[TIM_CH2] = TIM15_CH2_PB15,
-  .center_aligned = false
+  .align = PWM_Align_Edge
 };
 
 DOUT_t TO7 = { .name = "TO7", .pwm = &to7a_pwm, .channel = TIM_CH1, .eeprom = &io_eeprom[1], .save = false };
@@ -122,14 +122,13 @@ void TO_Frequency(float frequency)
   TO7A_Frequency(frequency);
 }
 
-//------------------------------------------------------------------------------------------------- DIN
+//--------------------------------------------------------------------------------------------- DIN
 
 // EXTI_t din_trig3, din_trig4;
 
 // PWMI_t din_pwmi3 = {
 //   .reg = TIM3,
 //   .prescaler = 49,
-//   .capture_prescaler = PWMI_CapturePrescaler_1,
 //   .filter = TIM_Filter_FCLK_N2,
 //   #if(!PWMI_AUTO_OVERSAMPLING)
 //     .oversampling = 16,
@@ -141,76 +140,82 @@ void TO_Frequency(float frequency)
 // PWMI_t din_pwmi2 = {
 //   .reg = TIM2,
 //   .prescaler = 49,
-//   .capture_prescaler = PWMI_CapturePrescaler_1,
 //   .filter = TIM_Filter_FCLK_N2,
 //   #if(!PWMI_AUTO_OVERSAMPLING)
 //     .oversampling = 16,
 //   #endif
 // };
 
-DIN_t DI12 = { .name = "DI12", .gpif = { .gpio = { .port = GPIOA, .pin = 6, .reverse = true } }, .eeprom = &io_eeprom[2] };
-DIN_t DI11 = { .name = "DI11", .gpif = { .gpio = { .port = GPIOA, .pin = 7, .reverse = true } }, .eeprom = &io_eeprom[2] };
-DIN_t DI10 = { .name = "DI10", .gpif = { .gpio = { .port = GPIOB, .pin = 0, .reverse = true } }, .eeprom = &io_eeprom[2] };
-DIN_t DI9 = { .name = "DI9", .gpif = { .gpio = { .port = GPIOB, .pin = 1, .reverse = true } }, .eeprom = &io_eeprom[2] };
+DIN_t DI12 = { .name = "DI12", .gpio = { .port = GPIOA, .pin = 6, .reverse = true }, .eeprom = &io_eeprom[2] };
+DIN_t DI11 = { .name = "DI11", .gpio = { .port = GPIOA, .pin = 7, .reverse = true }, .eeprom = &io_eeprom[2] };
+DIN_t DI10 = { .name = "DI10", .gpio = { .port = GPIOB, .pin = 0, .reverse = true }, .eeprom = &io_eeprom[2] };
+DIN_t DI9 = { .name = "DI9", .gpio = { .port = GPIOB, .pin = 1, .reverse = true }, .eeprom = &io_eeprom[2] };
 
-DIN_t DI1 = { .name = "DI1", .gpif = { .gpio = { .port = GPIOA, .pin = 15, .reverse = true } }, .eeprom = &io_eeprom[2] };
-DIN_t DI6 = { .name = "DI6", .gpif = { .gpio = { .port = GPIOB, .pin = 3, .reverse = true } }, .eeprom = &io_eeprom[2] };
+DIN_t DI1 = { .name = "DI1", .gpio = { .port = GPIOA, .pin = 15, .reverse = true }, .eeprom = &io_eeprom[2] };
+DIN_t DI6 = { .name = "DI6", .gpio = { .port = GPIOB, .pin = 3, .reverse = true }, .eeprom = &io_eeprom[2] };
 
-DIN_t DI2 = { .name = "DI2", .gpif = { .gpio = { .port = GPIOD, .pin = 3, .reverse = true } }, .eeprom = &io_eeprom[2] };
-DIN_t DI3 = { .name = "DI3", .gpif = { .gpio = { .port = GPIOD, .pin = 2, .reverse = true } }, .eeprom = &io_eeprom[2] };
-DIN_t DI4 = { .name = "DI4", .gpif = { .gpio = { .port = GPIOD, .pin = 1, .reverse = true } }, .eeprom = &io_eeprom[2] };
-DIN_t DI5 = { .name = "DI5", .gpif = { .gpio = { .port = GPIOD, .pin = 0, .reverse = true } }, .eeprom = &io_eeprom[2] };
-DIN_t DI7 = { .name = "DI7", .gpif = { .gpio = { .port = GPIOC, .pin = 1, .reverse = true } }, .eeprom = &io_eeprom[2] };
-DIN_t DI8 = { .name = "DI8", .gpif = { .gpio = { .port = GPIOC, .pin = 2, .reverse = true } }, .eeprom = &io_eeprom[2] };
+DIN_t DI2 = { .name = "DI2", .gpio = { .port = GPIOD, .pin = 3, .reverse = true }, .eeprom = &io_eeprom[2] };
+DIN_t DI3 = { .name = "DI3", .gpio = { .port = GPIOD, .pin = 2, .reverse = true }, .eeprom = &io_eeprom[2] };
+DIN_t DI4 = { .name = "DI4", .gpio = { .port = GPIOD, .pin = 1, .reverse = true }, .eeprom = &io_eeprom[2] };
+DIN_t DI5 = { .name = "DI5", .gpio = { .port = GPIOD, .pin = 0, .reverse = true }, .eeprom = &io_eeprom[2] };
+DIN_t DI7 = { .name = "DI7", .gpio = { .port = GPIOC, .pin = 1, .reverse = true }, .eeprom = &io_eeprom[2] };
+DIN_t DI8 = { .name = "DI8", .gpio = { .port = GPIOC, .pin = 2, .reverse = true }, .eeprom = &io_eeprom[2] };
 
 // bool din_pwmi2_init = false;
 // bool din_pwmi3_init = false;
 
-//------------------------------------------------------------------------------------------------- AIN
+//--------------------------------------------------------------------------------------------- AIN
 
+// PC4/PC5 sit above the sequencer's channel range, so the scan falls back to the bitmask
+// mode and converts in ascending channel-number order; the list mirrors that order,
+// VREFINT (13) makes the unit conversions ratiometric
 uint8_t ain_channels[] = {
-  ADC_IN_PA0, ADC_IN_PA1, ADC_IN_PA2, ADC_IN_PA3, ADC_IN_PA5, ADC_IN_PC4, ADC_IN_PC5, ADC_IN_PB2
+  ADC_IN_PA0, ADC_IN_PA1, ADC_IN_PA2, ADC_IN_PA3, ADC_IN_PA5,
+  ADC_IN_PB2, ADC_IN_VREFEN, ADC_IN_PC4, ADC_IN_PC5
 };
 
-#define AIN_BUFFER_SIZE adc_record_buffer_size(AIN_AVERAGE_TIME_MS, 160, 64, sizeof(ain_channels))
+#define AIN_BUFFER_SIZE adc_record_buffer_size(AIN_AVERAGE_TIME_ms, AIN_SAMPLING_CYCLES, \
+  adc_oversampling_samples(AIN_OVERSAMPLING_RATIO), sizeof(ain_channels))
 #define AIN_SAMPLES (AIN_BUFFER_SIZE / sizeof(ain_channels))
 
 uint16_t ain_buffer[AIN_BUFFER_SIZE];
 uint16_t ain_data[sizeof(ain_channels)][AIN_SAMPLES];
 
+// HSI16 keeps the ADC at exactly 16 MHz regardless of the system clock, which is what
+// the adc_record_buffer_size window math assumes
 ADC_t ain_adc = {
-  .frequency = ADC_Frequency_16MHz,
-  .int_prioryty = INT_Prioryty_Low,
+  .irq_priority = IRQ_Priority_Low,
+  .use_hsi = true,
+  .prescaler = ADC_Prescaler_1,
   .record = {
-    .channels = ain_channels,
-    .count = sizeof(ain_channels),
-    .dma_nbr = DMA_Nbr_1,
-    .sampling_time = ADC_SamplingTime_160,
-    .oversampling_enable = true,
-    .oversampling_ratio = ADC_OversamplingRatio_64,
-    .oversampling_shift = 2,
-    .buffer = ain_buffer,
-    .buffer_length = AIN_BUFFER_SIZE
+    .chan = ain_channels,
+    .chan_count = sizeof(ain_channels),
+    .dma = DMA_CH1,
+    .sampling_time = AIN_SAMPLING_TIME,
+    .oversampling.enable = true,
+    .oversampling.ratio = AIN_OVERSAMPLING_RATIO,
+    .oversampling.shift = AIN_OVERSAMPLING_SHIFT,
+    .buff = ain_buffer,
+    .buff_len = AIN_BUFFER_SIZE
   }
 };
 
 AIN_t AI1 = { .name = "AI1", .data = ain_data[2], .count = AIN_SAMPLES };
 AIN_t AI2 = { .name = "AI2", .data = ain_data[3], .count = AIN_SAMPLES };
-AIN_t AI3 = { .name = "AI3", .data = ain_data[5], .count = AIN_SAMPLES };
-AIN_t AI4 = { .name = "AI4", .data = ain_data[6], .count = AIN_SAMPLES };
+AIN_t AI3 = { .name = "AI3", .data = ain_data[7], .count = AIN_SAMPLES };
+AIN_t AI4 = { .name = "AI4", .data = ain_data[8], .count = AIN_SAMPLES };
 AIN_t POT1 = { .name = "POT1", .data = ain_data[0], .count = AIN_SAMPLES };
 AIN_t POT2 = { .name = "POT2", .data = ain_data[1], .count = AIN_SAMPLES };
-AIN_t POT3 = { .name = "POT3", .data = ain_data[7], .count = AIN_SAMPLES };
+AIN_t POT3 = { .name = "POT3", .data = ain_data[5], .count = AIN_SAMPLES };
 AIN_t VCC = { .name = "VCC", .data = ain_data[4], .count = AIN_SAMPLES };
+AIN_t VREF = { .name = "VREF", .data = ain_data[6], .count = AIN_SAMPLES };
 
-float VCC_Value(void)
+float VCC_Voltage_V(void)
 {
-  uint16_t raw = ain_adc.measurements.output[4];
-  float value = resistor_divider_factor(3.3, 110, 10, 16) * raw;
-  return value;
+  return (float)(110 + 10) / 10 * AIN_PinVoltage_V(&VCC);
 }
 
-//------------------------------------------------------------------------------------------------- RS485
+//------------------------------------------------------------------------------------------- RS485
 
 uint8_t rs_buff_buffer[RS_BUFFER_SIZE];
 BUFF_t rs_buff = { .mem = rs_buff_buffer, .size = RS_BUFFER_SIZE };
@@ -226,7 +231,7 @@ UART_t RS = {
   .timeout = 40
 };
 
-//------------------------------------------------------------------------------------------------- RGB+BTN
+//----------------------------------------------------------------------------------------- RGB+BTN
 
 GPIO_t rgb_gpio_red = { .port = GPIOC, .pin = 7 };
 GPIO_t rgb_gpio_green = { .port = GPIOA, .pin = 11 };
@@ -234,7 +239,7 @@ GPIO_t rgb_gpio_blue = { .port = GPIOA, .pin = 12 };
 
 RGB_t RGB = { .red = &rgb_gpio_red, .green = &rgb_gpio_green, .blue = &rgb_gpio_blue };
 
-//------------------------------------------------------------------------------------------------- DBG+Bash
+//---------------------------------------------------------------------------------------- DBG+Bash
 
 UART_t dbg_uart = {
   .reg = USART2,
@@ -253,7 +258,7 @@ UART_t dbg_uart = {
 uint8_t cache_file_buffer[2048];
 FILE_t cache_file = { .name = "cache", .buffer = cache_file_buffer, .limit = sizeof(cache_file_buffer) };
 
-//------------------------------------------------------------------------------------------------- PLC
+//--------------------------------------------------------------------------------------------- PLC
 
 void PLC_Init(void)
 {
@@ -290,22 +295,23 @@ void PLC_Init(void)
   PWM_Init(&to6_pwm);
   PWM_Init(&to7a_pwm);
   // Digital inputs (DI)
-  // DIN_Init(&DI1);
-  // DIN_Init(&DI2);
-  // DIN_Init(&DI3);
-  // DIN_Init(&DI4);
-  // DIN_Init(&DI5);
-  // DIN_Init(&DI6);
-  // DIN_Init(&DI7);
-  // DIN_Init(&DI8);
-  // DIN_Init(&DI9);
-  // DIN_Init(&DI10);
-  // DIN_Init(&DI11);
-  // DIN_Init(&DI12);
+  DIN_Init(&DI1);
+  DIN_Init(&DI2);
+  DIN_Init(&DI3);
+  DIN_Init(&DI4);
+  DIN_Init(&DI5);
+  DIN_Init(&DI6);
+  DIN_Init(&DI7);
+  DIN_Init(&DI8);
+  DIN_Init(&DI9);
+  DIN_Init(&DI10);
+  DIN_Init(&DI11);
+  DIN_Init(&DI12);
   // Analog inputs (AI)
   ADC_Init(&ain_adc);
   ADC_Record(&ain_adc);
   ADC_Wait(&ain_adc);
+  AIN_SetVref(&VREF);
   // Interfejsy RS485
   UART_Init(&RS);
   LOG_Init(PLC_GREETING, PRO_VERSION);
@@ -329,26 +335,24 @@ void PLC_Loop(void)
   DOUT_Loop(&TO11);
   DOUT_Loop(&TO12);
   // Digital inputs (DI)
-  // DIN_Loop(&DI1);
-  // DIN_Loop(&DI2);
-  // DIN_Loop(&DI3);
-  // DIN_Loop(&DI4);
-  // DIN_Loop(&DI5);
-  // DIN_Loop(&DI6);
-  // DIN_Loop(&DI7);
-  // DIN_Loop(&DI8);
-  // DIN_Loop(&DI9);
-  // DIN_Loop(&DI10);
-  // DIN_Loop(&DI11);
-  // DIN_Loop(&DI12);
+  DIN_Loop(&DI1);
+  DIN_Loop(&DI2);
+  DIN_Loop(&DI3);
+  DIN_Loop(&DI4);
+  DIN_Loop(&DI5);
+  DIN_Loop(&DI6);
+  DIN_Loop(&DI7);
+  DIN_Loop(&DI8);
+  DIN_Loop(&DI9);
+  DIN_Loop(&DI10);
+  DIN_Loop(&DI11);
+  DIN_Loop(&DI12);
   // Analog inputs (AI)
   if(ADC_IsFree(&ain_adc)) {
-    AIN_Sort(ain_buffer, sizeof(ain_channels), AIN_SAMPLES, ain_data);
+    uint16_t overruns = ADC_Overruns(&ain_adc);
+    if(overruns) LOG_Warning("ADC over-run %d", overruns);
+    else ADC_LastSamples(&ain_adc, (uint16_t *)ain_data, AIN_BUFFER_SIZE, true);
     ADC_Record(&ain_adc);
-  }
-  if(ain_adc.overrun) {
-    LOG_Warning("ADC over-run %d", ain_adc.overrun);
-    ain_adc.overrun = 0;
   }
 }
 

@@ -1,7 +1,7 @@
 // lib/ext/xdef.h
 
 #define ON  1 // Enabled
-#define OFF 0 // Disables
+#define OFF 0 // Disabled
 
 #ifndef XDEF_H_
 #define XDEF_H_
@@ -53,11 +53,11 @@ typedef enum {
  */
 #define bit_get(reg, bit)  (((reg) >> (bit)) & 1U)
 
-//------------------------------------------------------------------------------------------------- ANSI
+//-------------------------------------------------------------------------------------------- ANSI
 
 #ifndef ANSI_MODE
   // Terminal color mode: `0`:disabled, `1`:basic 16-color, `2`:256-color
-  #define ANSI_MODE 2  
+  #define ANSI_MODE 2
 #endif
 
 #if(ANSI_MODE == 0)
@@ -133,7 +133,7 @@ typedef enum {
 
 #define ANSI_OK " " ANSI_GREEN "OK" ANSI_END
 
-//------------------------------------------------------------------------------------------------- macros
+//------------------------------------------------------------------------------------------ macros
 
 #define _args6(a,b,c,d,e,f,name,...) name
 #define _args5(a,b,c,d,e,name,...) name
@@ -257,7 +257,8 @@ typedef enum {
  * @return Element count (e.g. 4 for `int x[4]`).
  */
 #define array_len(x) (sizeof(x) / sizeof((x)[0]) + \
-  0 * sizeof(struct { _Static_assert(!__builtin_types_compatible_p(__typeof__(x), __typeof__(&(x)[0])), "not array"); }))
+  0 * sizeof(struct { _Static_assert(!__builtin_types_compatible_p( \
+    __typeof__(x), __typeof__(&(x)[0])), "not array"); }))
 
 /**
  * @brief Suppress unused variable/parameter warning.
@@ -277,11 +278,12 @@ typedef enum {
   #define fallthrough ((void)0)
 #endif
 
-//------------------------------------------------------------------------------------------------- TRY
+//--------------------------------------------------------------------------------------------- TRY
 
 #define _try2(err, fn) { (err) = (fn); if(err) break; }
 #define _try3(err, fn, code) { (err) = (fn); if(err) { (err) = (code); break; } }
-#define _try5(err, fn, code, log_fn, msg) { (err) = (fn); if(err) { log_fn(msg); (err) = (code); break; } }
+#define _try5(err, fn, code, log_fn, msg) \
+  { (err) = (fn); if(err) { log_fn(msg); (err) = (code); break; } }
 
 /**
  * @brief Break on error (variadic macro).
@@ -290,7 +292,6 @@ typedef enum {
  * @example try_break(err, fn, code, log_fn, msg): Break on error, override with code and log
  */
 #define try_break(...) _args5(__VA_ARGS__, _try5, _try3, _try3, _try2)(__VA_ARGS__)
-
 
 //-------------------------------------------------------------------------------------------------
 #endif

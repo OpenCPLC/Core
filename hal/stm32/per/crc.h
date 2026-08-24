@@ -15,7 +15,7 @@
 #include "xdef.h"
 #include "main.h"
 
-//------------------------------------------------------------------------------- Compatibility
+//----------------------------------------------------------------------------------- Compatibility
 
 #if defined(STM32G0)
   #define RCC_CRC_EN()  (RCC->AHBENR |= RCC_AHBENR_CRCEN)
@@ -23,13 +23,13 @@
   #define RCC_CRC_EN()  (RCC->AHB1ENR |= RCC_AHB1ENR_CRCEN)
 #endif
 
-//-------------------------------------------------------------------------------------- Config
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef CRC_PRESETS
   #define CRC_PRESETS 1
 #endif
 
-//--------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
 /**
  * @brief CRC algorithm configuration.
@@ -51,7 +51,7 @@ typedef struct {
   bool invert_out;
 } CRC_t;
 
-//---------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 /**
  * @brief Calculate CRC checksum.
@@ -85,11 +85,11 @@ status_t CRC_Error(const CRC_t *crc, uint8_t *data, uint16_t count);
  * @param[in] crc CRC algorithm configuration
  * @param[in] data Data buffer with CRC appended
  * @param[in] count Total length including CRC bytes
- * @return `OK` if valid, `ERR` if mismatch
+ * @return Non-zero if CRC valid, `0` if mismatch
  */
 status_t CRC_Ok(const CRC_t *crc, uint8_t *data, uint16_t count);
 
-//------------------------------------------------------------------------------------- Presets
+//----------------------------------------------------------------------------------------- Presets
 
 #if(CRC_PRESETS)
   extern const CRC_t crc32_iso;
@@ -103,5 +103,5 @@ status_t CRC_Ok(const CRC_t *crc, uint8_t *data, uint16_t count);
   extern const CRC_t crc8_smbus;
 #endif
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 #endif

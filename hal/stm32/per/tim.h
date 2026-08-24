@@ -5,7 +5,7 @@
 
 #include "gpio.h"
 
-//------------------------------------------------------------------------------------------------- Family-specific
+//--------------------------------------------------------------------------------- Family-specific
 
 #if defined(STM32G0)
   #include "tim_g0.h"
@@ -15,7 +15,7 @@
   #include "tim_g4.h"
 #endif
 
-//------------------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
 typedef enum {
   TIM_CH1 = 0,
@@ -95,7 +95,7 @@ typedef struct {
   uint32_t _base_time;
 } TIM_t;
 
-//------------------------------------------------------------------------------------------------- Helpers
+//----------------------------------------------------------------------------------------- Helpers
 
 /**
  * @brief Check if timer is 32-bit.
@@ -111,7 +111,7 @@ static inline bool TIM_Is32bit(TIM_TypeDef *reg)
   return false;
 }
 
-//------------------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 /**
  * @brief Initialize timer.
@@ -238,7 +238,7 @@ uint16_t TIM_Event(TIM_t *tim);
  */
 void TIM_MasterMode(TIM_t *tim, TIM_MasterMode_t mode);
 
-//------------------------------------------------------------------------------------------------- Delay
+//------------------------------------------------------------------------------------------- Delay
 
 /**
  * @brief Initialize timer for blocking delays.
@@ -252,15 +252,9 @@ void DELAY_Init(TIM_t *tim, TIM_BaseTime_t base_time);
  * @param[in,out] tim Timer instance
  * @param[in] value Delay in `base_time` units
  */
-static inline void DELAY_Wait(TIM_t *tim, uint32_t value)
-{
-  tim->reg->ARR = value;
-  tim->reg->CR1 = TIM_CR1_CEN;
-  while(!tim->reg->SR);
-  tim->reg->SR = 0;
-}
+void DELAY_Wait(TIM_t *tim, uint32_t value);
 
-//------------------------------------------------------------------------------------------------- Channel Map
+//------------------------------------------------------------------------------------- Channel Map
 
 extern const GPIO_Map_t TIM_CHx_MAP[];
 

@@ -25,19 +25,21 @@ typedef enum {
 
 //-------------------------------------------------------------------------------------------------
 
+// Entry Mode Set operands: bit 1 = I/D (cursor direction), bit 0 = S (autoscroll)
 typedef enum {
-  HD44780_Entry_Right = 0x01,
+  HD44780_Entry_Right = 0x00,
   HD44780_Entry_Left = 0x02,
-  HD44780_Entry_ShiftIncrement = 0x04,
-  HD44780_Entry_ShiftDecrement = 0x08
+  HD44780_Entry_ShiftIncrement = 0x01,
+  HD44780_Entry_ShiftDecrement = 0x00
 } HD44780_Entry_t;
 
+// Display Control operands: bit 2 = display, bit 1 = cursor, bit 0 = blink
 typedef enum {
   HD44780_Display_ScreanOn = 0x04,
   HD44780_Display_ScreanOff = 0x00,
   HD44780_Display_CursorOn = 0x02,
   HD44780_Display_CursorOff = 0x00,
-  HD44780_Display_BlinkOn = 0x02,
+  HD44780_Display_BlinkOn = 0x01,
   HD44780_Display_BlinkOff = 0x00,
 } HD44780_Display_t;
 

@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-//------------------------------------------------------------------------------------------------- Config
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef VRTS_THREAD_LIMIT
   // Max number of threads
@@ -18,7 +18,7 @@
   #define VRTS_SWITCHING 1
 #endif
 
-//------------------------------------------------------------------------------------------------- Macros
+//------------------------------------------------------------------------------------------ Macros
 
 // Type cast for timeout function
 #define WAIT_ (bool (*)(void *))
@@ -34,7 +34,7 @@
 // Registers a thread (stack ignored on host)
 #define thread(fnc, stack_name) vrts_thread(&fnc, (uint32_t *)stack_name, 0)
 
-//------------------------------------------------------------------------------------------------- Tick
+//-------------------------------------------------------------------------------------------- Tick
 
 // Sets a deadline at current time + offset, returns tick value
 uint64_t tick_keep(uint32_t offset_ms);
@@ -63,7 +63,7 @@ bool tick_away(uint64_t *tick);
  */
 int32_t tick_diff(uint64_t tick);
 
-//------------------------------------------------------------------------------------------------- Delay
+//------------------------------------------------------------------------------------------- Delay
 
 // Delays for `ms` milliseconds, yields to other threads
 void delay(uint32_t ms);
@@ -86,7 +86,7 @@ void delay_until(uint64_t *tick);
 // Sleeps until tick reached, blocks thread switching. Resets `*tick` to 0
 void sleep_until(uint64_t *tick);
 
-//------------------------------------------------------------------------------------------------- Threads
+//----------------------------------------------------------------------------------------- Threads
 
 /**
  * @brief Registers a new thread
@@ -103,7 +103,7 @@ void let(void);
 // Alias for `let()`
 #define yield let
 
-//------------------------------------------------------------------------------------------------- Init
+//-------------------------------------------------------------------------------------------- Init
 
 // Initializes SysTick. Call before `vrts_init()`
 bool systick_init(uint32_t systick_ms);
@@ -125,6 +125,13 @@ void vrts_panic(const char *msg);
 
 //-------------------------------------------------------------------------------------------------
 
+// Tick counter. Under `VrtsVirtualTime` the program owns it
 extern volatile uint64_t VrtsTicker;
+
+// Clock source. `false` (default): ticks follow the wall clock.
+// `true`: the program advances `VrtsTicker` itself,
+// so a simulation runs deterministic virtual time
+// as fast as the CPU allows instead of in real seconds
+extern bool VrtsVirtualTime;
 
 #endif

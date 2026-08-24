@@ -2,23 +2,7 @@
 
 #include "uart.h"
 
-//------------------------------------------------------------------------------------------------- DMAMUX Requests
-
-#if defined(STM32G0)
-  #ifndef DMAMUX_REQ_USART1_TX
-    #define DMAMUX_REQ_USART1_TX  51
-    #define DMAMUX_REQ_USART2_TX  53
-    #define DMAMUX_REQ_USART3_TX  55
-    #define DMAMUX_REQ_USART4_TX  57
-    #define DMAMUX_REQ_LPUART1_TX 59
-    #define DMAMUX_REQ_LPUART2_TX 61
-  #endif
-#elif defined(STM32WB)
-  #define DMAMUX_REQ_USART1_TX  15
-  #define DMAMUX_REQ_LPUART1_TX 17
-#endif
-
-//------------------------------------------------------------------------------------------------- IRQ Handlers
+//------------------------------------------------------------------------------------ IRQ Handlers
 
 static void UART_DMA_IRQHandler(UART_t *uart)
 {
@@ -64,7 +48,7 @@ static void UART_IRQHandler(UART_t *uart)
   }
 }
 
-//------------------------------------------------------------------------------------------------- Internal
+//---------------------------------------------------------------------------------------- Internal
 
 static void UART_DmaSetup(UART_t *uart)
 {
@@ -112,7 +96,7 @@ static bool UART_IsReady(UART_t *uart)
   return (isr & USART_ISR_TEACK) && (isr & USART_ISR_REACK);
 }
 
-//------------------------------------------------------------------------------------------------- Init
+//-------------------------------------------------------------------------------------------- Init
 
 void UART_Init(UART_t *uart)
 {
@@ -156,9 +140,11 @@ void UART_Init(UART_t *uart)
   // Timeout (timer or hardware RTO)
   if(uart->tim) {
     uart->tim->prescaler = 100;
-    uint64_t nbr = ((uint64_t)SystemCoreClock / uart->tim->prescaler) * uart->timeout + uart->baud / 2;
+    uint64_t nbr =
+      ((uint64_t)SystemCoreClock / uart->tim->prescaler) * uart->timeout + uart->baud / 2;
     uart->tim->auto_reload = (uint32_t)(nbr / uart->baud);
-    uart->tim->Callback = (void (*)(void *))BUFF_Break;
+    // Frame closes on the inter-character timeout
+    uart->tim->Callback = (void (*)(void *))(void (*)(void))BUFF_Break;
     uart->tim->callback_arg = (void *)uart->buff;
     uart->tim->irq_priority = uart->irq_priority;
     uart->tim->one_pulse_mode = true;
@@ -261,19 +247,21 @@ void UART_SetTimeout(UART_t *uart, uint16_t timeout)
   }
 }
 
-//------------------------------------------------------------------------------------------------- Status
+//------------------------------------------------------------------------------------------ Status
 
 bool UART_SendCompleted(UART_t *uart) { return !uart->_tc_pending; }
 bool UART_SendActive(UART_t *uart) { return uart->_tc_pending; }
 bool UART_IsBusy(UART_t *uart) { return uart->_tx_busy; }
 bool UART_IsFree(UART_t *uart) { return !uart->_tx_busy; }
 
-//------------------------------------------------------------------------------------------------- Send
+//-------------------------------------------------------------------------------------------- Send
 
 status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len)
 {
   if(!uart->_init) return ERR;
   if(uart->_tx_busy) return BUSY;
+  // A zero-length transfer never raises transfer-complete, `_tx_busy` would stay set
+  if(!len) return ERR;
   if(uart->dir) GPIO_Set(uart->dir);
   uart->_dma.cha->CCR &= ~DMA_CCR_EN;
   uart->_dma.cha->CMAR = (uint32_t)data;
@@ -285,7 +273,7 @@ status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len)
   return OK;
 }
 
-//------------------------------------------------------------------------------------------------- Receive
+//----------------------------------------------------------------------------------------- Receive
 
 uint16_t UART_Size(UART_t *uart) { return BUFF_Size(uart->buff); }
 uint16_t UART_MessageCount(UART_t *uart) { return BUFF_MessageCount(uart->buff); }
@@ -294,7 +282,7 @@ char *UART_ReadString(UART_t *uart) { return BUFF_ReadString(uart->buff); }
 bool UART_Skip(UART_t *uart) { return BUFF_Skip(uart->buff); }
 void UART_Clear(UART_t *uart) { BUFF_Clear(uart->buff); }
 
-//------------------------------------------------------------------------------------------------- Utils
+//------------------------------------------------------------------------------------------- Utils
 
 uint32_t UART_CalcTime_ms(UART_t *uart, uint16_t len)
 {

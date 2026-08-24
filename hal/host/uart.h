@@ -8,20 +8,20 @@
 #include "xdef.h"
 #include "buff.h"
 
-//------------------------------------------------------------------------------------------------- Config
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef UART_PORT_NAME_MAX
   #define UART_PORT_NAME_MAX 32
 #endif
 
-//------------------------------------------------------------------------------------------------- Presets
+//----------------------------------------------------------------------------------------- Presets
 
 #define UART_115200  baud = 115200, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_57600   baud = 57600,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_19200   baud = 19200,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_9600    baud = 9600,   .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 
-//------------------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
 typedef enum {
   UART_Parity_None = 0,
@@ -36,7 +36,7 @@ typedef enum {
   UART_StopBits_1_5 = 3
 } UART_StopBits_t;
 
-//------------------------------------------------------------------------------------------------- Structure
+//--------------------------------------------------------------------------------------- Structure
 
 typedef struct {
   uint32_t baud;
@@ -55,7 +55,7 @@ typedef struct {
   bool _init;
 } UART_t;
 
-//------------------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 status_t UART_Init(UART_t *uart);
 void UART_DeInit(UART_t *uart);

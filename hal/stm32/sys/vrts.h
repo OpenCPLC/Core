@@ -13,7 +13,7 @@
 #endif
 #include "main.h"
 
-//-------------------------------------------------------------------------------------- Config
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef VRTS_THREAD_LIMIT
   // Max number of threads
@@ -30,10 +30,10 @@
   #define VRTS_THREAD_TIMEOUT_MS 2000
 #endif
 
-//-------------------------------------------------------------------------------------- Macros
+//------------------------------------------------------------------------------------------ Macros
 
 // Type cast for timeout function
-#define WAIT_ (bool (*)(void *))
+#define WAIT_ (bool (*)(void *))(void (*)(void))
 // Convert seconds to milliseconds
 #define seconds(s) (1000 * (s))
 // Convert minutes to milliseconds
@@ -41,7 +41,7 @@
 // Wait until `flag` is `true`
 #define wait_for(flag) while(!(flag)) let()
 
-//--------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
 /**
  * @brief Struct to represent a thread in VRTS.
@@ -53,7 +53,7 @@ typedef struct {
   void (*handler)(void);
 } VRTS_Task_t;
 
-//---------------------------------------------------------------------------------------- Tick
+//-------------------------------------------------------------------------------------------- Tick
 
 // Sets a deadline at current time + offset, returns tick value
 uint64_t tick_keep(uint32_t offset_ms);
@@ -82,7 +82,7 @@ bool tick_away(uint64_t *tick);
  */
 int32_t tick_diff(uint64_t tick);
 
-//--------------------------------------------------------------------------------------- Delay
+//------------------------------------------------------------------------------------------- Delay
 
 // Delays for `ms` milliseconds, yields to other threads
 void delay(uint32_t ms);
@@ -105,7 +105,7 @@ void delay_until(uint64_t *tick);
 // Sleeps until tick reached, blocks thread switching. Resets `*tick` to 0
 void sleep_until(uint64_t *tick);
 
-//------------------------------------------------------------------------------------- Threads
+//----------------------------------------------------------------------------------------- Threads
 
 /**
  * @brief Registers a new thread
@@ -130,7 +130,7 @@ void let(void);
 // Alias for `let()`
 #define yield let
 
-//---------------------------------------------------------------------------------------- Init
+//-------------------------------------------------------------------------------------------- Init
 
 // Initializes SysTick. Call before `vrts_init()`
 bool systick_init(uint32_t systick_ms);
@@ -150,7 +150,7 @@ uint8_t vrts_active_thread(void);
 // Called on fatal VRTS error. Weak, override to handle panics
 void vrts_panic(const char *msg);
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 extern volatile uint64_t VrtsTicker;
 

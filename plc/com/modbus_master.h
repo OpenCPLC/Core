@@ -25,14 +25,22 @@ typedef enum {
 
 //-------------------------------------------------------------------------------------------------
 
-MODBUS_Error_t MODBUS_ReadBits(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, bool *memory, uint32_t timeout_ms);
-MODBUS_Error_t MODBUS_ReadOuts(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, bool *memory, uint32_t timeout_ms);
-MODBUS_Error_t MODBUS_PresetBit(UART_t *uart, uint8_t addr, uint16_t index, bool value, uint32_t timeout_ms);
-MODBUS_Error_t MODBUS_WriteBits(UART_t *uart, uint8_t addr, uint16_t count, uint16_t start, bool *memory, uint32_t timeout_ms);
-MODBUS_Error_t MODBUS_ReadInputRegisters(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, uint16_t *memory, uint32_t timeout_ms);
-MODBUS_Error_t MODBUS_ReadHoldingRegisters(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, uint16_t *memory, uint32_t timeout_ms);
-MODBUS_Error_t MODBUS_PresetRegister(UART_t *uart, uint8_t addr, uint16_t index, uint16_t value, uint32_t timeout_ms);
-MODBUS_Error_t MODBUS_WriteRegisters(UART_t *uart, uint8_t addr, uint16_t start, uint16_t count, uint16_t *memory, uint32_t timeout_ms);
+MODBUS_Error_t MODBUS_ReadBits(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, bool *memory, uint32_t timeout_ms);
+MODBUS_Error_t MODBUS_ReadOuts(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, bool *memory, uint32_t timeout_ms);
+MODBUS_Error_t MODBUS_PresetBit(UART_t *uart, uint8_t addr, uint16_t index,
+  bool value, uint32_t timeout_ms);
+MODBUS_Error_t MODBUS_WriteBits(UART_t *uart, uint8_t addr, uint16_t count,
+  uint16_t start, bool *memory, uint32_t timeout_ms);
+MODBUS_Error_t MODBUS_ReadInputRegisters(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, uint16_t *memory, uint32_t timeout_ms);
+MODBUS_Error_t MODBUS_ReadHoldingRegisters(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, uint16_t *memory, uint32_t timeout_ms);
+MODBUS_Error_t MODBUS_PresetRegister(UART_t *uart, uint8_t addr, uint16_t index,
+  uint16_t value, uint32_t timeout_ms);
+MODBUS_Error_t MODBUS_WriteRegisters(UART_t *uart, uint8_t addr, uint16_t start,
+  uint16_t count, uint16_t *memory, uint32_t timeout_ms);
 
 //-------------------------------------------------------------------------------------------------
 #endif

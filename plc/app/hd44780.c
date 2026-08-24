@@ -99,7 +99,7 @@ bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_t exec)
     case HD44780_Exec_EntryLeft2Right: hd->_entry |= HD44780_Entry_Left; break;
     case HD44780_Exec_EntryRight2Left: hd->_entry &= ~HD44780_Entry_Left; break;
     case HD44780_Exec_AutoscrollOn: hd->_entry |= HD44780_Entry_ShiftIncrement; break;
-    case HD44780_Exec_AutoscrollOff: hd->_entry &= ~HD44780_Entry_ShiftDecrement; break;
+    case HD44780_Exec_AutoscrollOff: hd->_entry &= ~HD44780_Entry_ShiftIncrement; break;
     case HD44780_Exec_BacklightOn: hd->_backlight = HD44780_Backlight_On; break;
     case HD44780_Exec_BacklightOff: hd->_backlight = HD44780_Backlight_Off; break;
     default: break;
@@ -114,10 +114,12 @@ bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_t exec)
       if(!HD44780_Command(hd, HD44780_CMD_DisplayControl | hd->_display)) return false;
       break;
     case HD44780_Exec_ScrollLeft:
-      if(!HD44780_Command(hd, HD44780_CMD_CursorShift | HD44780_Move_Display | HD44780_Move_Left)) return false;
+      if(!HD44780_Command(hd, HD44780_CMD_CursorShift | HD44780_Move_Display |
+        HD44780_Move_Left)) return false;
       break;
     case HD44780_Exec_ScrollRight:
-      if(!HD44780_Command(hd, HD44780_CMD_CursorShift | HD44780_Move_Display | HD44780_Move_Right)) return false;
+      if(!HD44780_Command(hd, HD44780_CMD_CursorShift | HD44780_Move_Display |
+        HD44780_Move_Right)) return false;
       break;
     case HD44780_Exec_EntryLeft2Right:
     case HD44780_Exec_EntryRight2Left:

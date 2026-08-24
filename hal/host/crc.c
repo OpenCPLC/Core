@@ -2,7 +2,7 @@
 
 #include "crc.h"
 
-//------------------------------------------------------------------------------------------------- Internal
+//---------------------------------------------------------------------------------------- Internal
 
 static uint32_t get_crc_mask(uint8_t width)
 {
@@ -57,7 +57,8 @@ uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
   if(crc->invert_out) {
     uint8_t *p = (uint8_t *)&remainder;
     switch(crc->width) {
-      case 32: return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
+      case 32:
+        return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
       case 16: return ((uint32_t)p[0] << 8) | p[1];
     }
   }
@@ -85,6 +86,8 @@ uint16_t CRC_Append(const CRC_t *crc, uint8_t *data, uint16_t count)
 
 status_t CRC_Error(const CRC_t *crc, uint8_t *data, uint16_t count)
 {
+  // `count` spans the frame including its checksum, shorter would wrap the subtraction
+  if(count < crc->width / 8) return ERR;
   count -= crc->width / 8;
   uint32_t code = CRC_Run(crc, (void *)data, count);
   switch(crc->width) {

@@ -6,7 +6,7 @@
 #define IWDG_KEY_ACCESS  0x5555
 #define IWDG_KEY_START   0xCCCC
 
-//------------------------------------------------------------------------------------------------- Platform-specific
+//------------------------------------------------------------------------------- Platform-specific
 
 void RAMP_PA11_PA12(void)
 {
@@ -14,7 +14,7 @@ void RAMP_PA11_PA12(void)
   SYSCFG->CFGR1 |= SYSCFG_CFGR1_PA12_RMP | SYSCFG_CFGR1_PA11_RMP;
 }
 
-//------------------------------------------------------------------------------------------------- RCC: Clock Enable
+//------------------------------------------------------------------------------- RCC: Clock Enable
 
 void RCC_EnableTIM(void *tim)
 {
@@ -98,17 +98,21 @@ void RCC_EnableDMA(void *dma)
   }
 }
 
-//------------------------------------------------------------------------------------------------- RCC: System Clock
+//------------------------------------------------------------------------------- RCC: System Clock
 
 uint32_t RCC_GetClock(void) { return SystemCoreClock; }
 
+// Wait-state count, not a bit mask: the header's `FLASH_ACR_LATENCY_0/1/2` are masks.
+// Raised before the clock and lowered after it.
 static void RCC_SetFlashLatency(uint32_t freq_Hz)
 {
   uint32_t latency;
-  if(freq_Hz > 48000000) latency = FLASH_ACR_LATENCY_2;
-  else if(freq_Hz > 24000000) latency = FLASH_ACR_LATENCY_1;
-  else latency = FLASH_ACR_LATENCY_0;
+  if(freq_Hz > 48000000) latency = 2;
+  else if(freq_Hz > 24000000) latency = 1;
+  else latency = 0;
   FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY) | latency;
+  // Field must read back before the clock rises
+  while((FLASH->ACR & FLASH_ACR_LATENCY) != latency);
 }
 
 static uint32_t RCC_SetHSI(uint8_t div)
@@ -152,10 +156,10 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
   RCC->CR &= ~RCC_CR_PLLON;
   while(RCC->CR & RCC_CR_PLLRDY);
   RCC->PLLCFGR = ((m - 1) << RCC_PLLCFGR_PLLM_Pos) |
-                 (n << RCC_PLLCFGR_PLLN_Pos) |
-                 (((r / 2) - 1) << RCC_PLLCFGR_PLLR_Pos) |
-                 RCC_PLLCFGR_PLLREN |
-                 (hse_Hz ? RCC_PLLCFGR_PLLSRC_HSE : RCC_PLLCFGR_PLLSRC_HSI);
+    (n << RCC_PLLCFGR_PLLN_Pos) |
+    (((r / 2) - 1) << RCC_PLLCFGR_PLLR_Pos) |
+    RCC_PLLCFGR_PLLREN |
+    (hse_Hz ? RCC_PLLCFGR_PLLSRC_HSE : RCC_PLLCFGR_PLLSRC_HSI);
   RCC->CR |= RCC_CR_PLLON;
   while(!(RCC->CR & RCC_CR_PLLRDY));
   RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_1;
@@ -167,8 +171,9 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
 uint32_t RCC_2MHz(void)
 {
   RCC->APBENR1 |= RCC_APBENR1_PWREN;
-  RCC_SetFlashLatency(2000000);
   RCC_SetHSI(3);
+  RCC_SetFlashLatency(2000000);
+  // Low-power run comes last, it caps the frequency further still.
   PWR->CR1 |= PWR_CR1_LPR;
   while(!(PWR->SR2 & PWR_SR2_REGLPF));
   return SystemCoreClock;
@@ -176,14 +181,15 @@ uint32_t RCC_2MHz(void)
 
 uint32_t RCC_16MHz(void)
 {
+  uint32_t freq_Hz = RCC_SetHSI(0);
   RCC_SetFlashLatency(16000000);
-  return RCC_SetHSI(0);
+  return freq_Hz;
 }
 
 uint32_t RCC_48MHz(void) { return RCC_SetPLL(0, 2, 12, 2); }
 uint32_t RCC_64MHz(void) { return RCC_SetPLL(0, 2, 16, 2); }
 
-//------------------------------------------------------------------------------------------------- PWR
+//--------------------------------------------------------------------------------------------- PWR
 
 void PWR_Reset(void) { NVIC_SystemReset(); }
 
@@ -193,6 +199,8 @@ void PWR_Sleep(PWR_SleepMode_t mode)
   // G0: Stop0=000, Stop1=001, Standby=011, Shutdown=100
   // Stop2 not available on G0, map to Stop1
   static const uint8_t mode_bits[] = { 0b000, 0b001, 0b001, 0b011, 0b011, 0b100 };
+  // `PWR_SleepMode_Error` names a wakeup cause, not a mode, and sits past the table.
+  if(mode >= PWR_SleepMode_Error) return;
   if((PWR->SR2 & PWR_SR2_REGLPF) && (mode == PWR_SleepMode_Stop0)) return;
   PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | mode_bits[mode];
   if(mode == PWR_SleepMode_StandbySRAM) PWR->CR3 |= PWR_CR3_RRS;
@@ -200,6 +208,8 @@ void PWR_Sleep(PWR_SleepMode_t mode)
   SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
   PWR->SCR = 0x013F; // Clear all wakeup flags
   __SEV(); __WFE(); __WFE();
+  // `SLEEPDEEP` must not outlive the call: a later `__WFI` would enter Stop
+  SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
 }
 
 void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
@@ -210,7 +220,7 @@ void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
   else PWR->CR4 &= ~(1u << pin);
 }
 
-//------------------------------------------------------------------------------------------------- BKPR
+//-------------------------------------------------------------------------------------------- BKPR
 
 void BKPR_Write(BKPR_t reg, uint32_t value)
 {
@@ -237,7 +247,7 @@ void BKP_DomainReset(void)
   RCC->BDCR = 0; // release reset
 }
 
-//------------------------------------------------------------------------------------------------- IWDG
+//-------------------------------------------------------------------------------------------- IWDG
 
 void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 {
@@ -271,7 +281,7 @@ static uint32_t rst_flags(void)
 
 bool IWDG_WasReset(void) { return (rst_flags() & RCC_CSR_IWDGRSTF) != 0; }
 
-//------------------------------------------------------------------------------------------------- BOR
+//--------------------------------------------------------------------------------------------- BOR
 
 #define FLASH_KEY1    0x45670123u
 #define FLASH_KEY2    0xCDEF89ABu

@@ -15,7 +15,7 @@
   #include "pwr_wb.h"
 #endif
 
-//------------------------------------------------------------------------------------------------- RCC: Clock Enable
+//------------------------------------------------------------------------------- RCC: Clock Enable
 
 void RCC_EnableTIM(void *tim);
 void RCC_EnableGPIO(void *gpio);
@@ -26,7 +26,7 @@ void RCC_DisableI2C(void *i2c);
 void RCC_EnableSPI(void *spi);
 void RCC_EnableDMA(void *dma);
 
-//------------------------------------------------------------------------------------------------- RCC: System Clock
+//------------------------------------------------------------------------------- RCC: System Clock
 
 uint32_t RCC_GetClock(void);
 uint32_t RCC_SetHSE(uint32_t xtal_Hz);
@@ -37,7 +37,7 @@ uint32_t RCC_16MHz(void);
 uint32_t RCC_48MHz(void);
 uint32_t RCC_64MHz(void);
 
-//------------------------------------------------------------------------------------------------- PWR: Sleep modes
+//-------------------------------------------------------------------------------- PWR: Sleep modes
 
 typedef enum {
   PWR_SleepMode_Stop0 = 0,
@@ -58,7 +58,7 @@ void PWR_Reset(void);
 void PWR_Sleep(PWR_SleepMode_t mode);
 void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge);
 
-//------------------------------------------------------------------------------------------------- PWR: Backup registers
+//--------------------------------------------------------------------------- PWR: Backup registers
 
 typedef enum {
   BKPR_0 = 0, BKPR_1, BKPR_2, BKPR_3, BKPR_4
@@ -74,7 +74,7 @@ uint32_t BKPR_Read(BKPR_t reg);
  */
 void BKP_DomainReset(void);
 
-//------------------------------------------------------------------------------------------------- IWDG: Watchdog
+//---------------------------------------------------------------------------------- IWDG: Watchdog
 
 typedef enum {
   IWDG_Time_125us = 0,
@@ -90,7 +90,7 @@ void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload);
 void IWDG_Refresh(void);
 bool IWDG_WasReset(void);
 
-//------------------------------------------------------------------------------------------------- BOR: Brown-Out Reset
+//---------------------------------------------------------------------------- BOR: Brown-Out Reset
 
 // Brown-out reset threshold, stored in option bytes (`FLASH->OPTR`), non-volatile.
 // Higher level resets earlier on supply droop, before MCU enters undefined state.

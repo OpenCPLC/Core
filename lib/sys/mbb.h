@@ -23,46 +23,46 @@
 
 //-------------------------------------------------------------------------------------------------
 
-#define MBB_Init2(name, size) \
-  static uint8_t name##_buffer[size]; \
-  MBB_t name = { \
-    .name = #name, \
-    .buffer = name##_buffer, \
+#define MBB_Init2(id, size) \
+  static uint8_t id##_buffer[size]; \
+  MBB_t id = { \
+    .name = #id, \
+    .buffer = id##_buffer, \
     .limit = (size), \
-    ._base = name##_buffer \
+    ._base = id##_buffer \
   }
 
-#define MBB_Init3(name, size, flash_page) \
-  static uint8_t name##_buffer[size]; \
-  MBB_t name = { \
-    .name = #name, \
-    .buffer = name##_buffer, \
+#define MBB_Init3(id, size, flash_page) \
+  static uint8_t id##_buffer[size]; \
+  MBB_t id = { \
+    .name = #id, \
+    .buffer = id##_buffer, \
     .limit = (size), \
     .flash_page = (flash_page), \
-    ._base = name##_buffer \
+    ._base = id##_buffer \
   }
 
-#define MBB_Init4(name, size, struct_size, StructPrint) \
-  static uint8_t name##_buffer[size]; \
-  MBB_t name = { \
-    .name = #name, \
-    .buffer = name##_buffer, \
+#define MBB_Init4(id, size, struct_size, StructPrint) \
+  static uint8_t id##_buffer[size]; \
+  MBB_t id = { \
+    .name = #id, \
+    .buffer = id##_buffer, \
     .limit = (size), \
     .struct_size = (struct_size), \
     .StructPrint = (StructPrint), \
-    ._base = name##_buffer \
+    ._base = id##_buffer \
   }
 
-#define MBB_Init5(name, size, flash_page, struct_size, StructPrint) \
-  static uint8_t name##_buffer[size]; \
-  MBB_t name = { \
-    .name = #name, \
-    .buffer = name##_buffer, \
+#define MBB_Init5(id, size, flash_page, struct_size, StructPrint) \
+  static uint8_t id##_buffer[size]; \
+  MBB_t id = { \
+    .name = #id, \
+    .buffer = id##_buffer, \
     .limit = (size), \
     .flash_page = (flash_page), \
     .struct_size = (struct_size), \
     .StructPrint = (StructPrint), \
-    ._base = name##_buffer \
+    ._base = id##_buffer \
   }
 
 /**
@@ -118,7 +118,8 @@ int32_t MBB_Enter(MBB_t *mbb);
 int32_t MBB_DropLastLine(MBB_t *mbb);
 int32_t MBB_Bool(MBB_t *mbb, bool value);
 
-int32_t MBB_Int(MBB_t *mbb, int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint8_t fill_space);
+int32_t MBB_Int(MBB_t *mbb, int64_t nbr, uint8_t base, bool sign,
+  uint8_t fill_zero, uint8_t fill_space);
 int32_t MBB_Float(MBB_t *mbb, float nbr, uint8_t accuracy, uint8_t fill_space);
 int32_t MBB_Dec(MBB_t *mbb, int64_t nbr);
 int32_t MBB_uDec(MBB_t *mbb, uint64_t nbr);

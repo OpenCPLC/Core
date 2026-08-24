@@ -62,7 +62,8 @@ static bool SHTC3_CheckAppend(SHTC3_t *shtc3)
 static void SHTC3_Calculate(SHTC3_t *shtc3)
 {
   shtc3->humidity = 100.0 * (float)shtc3->raw.humidity / shtc3->oversampling / 65536;
-  shtc3->temperature = (175.0 * (float)shtc3->raw.temperature / shtc3->oversampling / 65536) - 45.0;
+  shtc3->temperature =
+    (175.0 * (float)shtc3->raw.temperature / shtc3->oversampling / 65536) - 45.0;
 }
 
 SHTC3_t SHTC3 = {

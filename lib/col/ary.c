@@ -6,7 +6,9 @@
 
 static inline uint16_t idx_wrap(uint16_t i, uint16_t limit) { return i % limit; }
 static inline uint16_t idx_prev(uint16_t i, uint16_t limit) { return i ? i - 1 : limit - 1; }
-static inline void *ary_ptr(const ary_t *ary, uint16_t i) { return (uint8_t *)ary->value + (uint32_t)i * ary->element_size; }
+static inline void *ary_ptr(const ary_t *ary, uint16_t i) {
+  return (uint8_t *)ary->value + (uint32_t)i * ary->element_size;
+}
 
 //-------------------------------------------------------------------------------------------------
 

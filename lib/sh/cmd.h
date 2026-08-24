@@ -10,7 +10,7 @@
 #include "xdef.h"
 #include "main.h"
 
-//-------------------------------------------------------------------------------- Configurable
+//------------------------------------------------------------------------------------ Configurable
 
 #ifndef CMD_MBB_LIMIT
   // Max number of `MBB_t` buffers registered via `CMD_AddMemBuff`
@@ -22,7 +22,7 @@
   #define CMD_HANDLER_LIMIT 16
 #endif
 
-//----------------------------------------------------------------------------- Argv validation
+//--------------------------------------------------------------------------------- Argv validation
 
 #define CMD_ArgcCount(count) \
   if(argc != (count)) { CMD_WrongArgc(argv[0], argc); return; }
@@ -31,12 +31,12 @@
 #define CMD_Argc(...) _args2(__VA_ARGS__, CMD_ArgcMinMax, CMD_ArgcCount)(__VA_ARGS__)
 #define CMD_ArgvExit(nbr) { CMD_WrongArgv(argv[0], argv[nbr], nbr); return; }
 
-//--------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
 // Command handler signature: receives `argv` and `argc` from parsed input line
 typedef void (*CMD_Handler_t)(char **argv, uint16_t argc);
 
-//---------------------------------------------------------------------------------------- Hash
+//-------------------------------------------------------------------------------------------- Hash
 
 /**
  * Shared keyword vocabulary for the entire CMD ecosystem.
@@ -147,16 +147,16 @@ typedef enum {
   PWR_Hash_Shutdown    = 4232446817,
 } PWR_Hash_t;
 
-//------------------------------------------------------------------------------------- Globals
+//----------------------------------------------------------------------------------------- Globals
 
 /**
  * @brief Currently active `MBB_t` buffer.
- * Default target for command handlers that produce output (e.g. `event select`).
+ * Default target for command handlers that produce output (e.g. `mbb select`).
  * Set to first registered MBB on startup, changed via `mbb select <name>` command.
  */
 extern MBB_t *cmd_mbb;
 
-//----------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 /**
  * @brief Register `MBB_t` buffer with command processor.
@@ -170,8 +170,9 @@ void CMD_AddMemBuff(MBB_t *mbb);
 
 /**
  * @brief Register command handler.
- * If a handler with the same `name` already exists, it is overwritten and
- * a warning is logged. Pass `NULL` as `name` to register the default handler
+ * If a handler with the same `name` already exists, it is overwritten
+ * and a warning is logged.
+ * Pass `NULL` as `name` to register the default handler
  * (called when no other command matches).
  * @param[in] name Command name (lowercase, or `NULL` for default handler)
  * @param[in] handler Function called when command is matched
@@ -222,7 +223,7 @@ void CMD_WrongArgv(char *cmd, char *argv, uint16_t pos);
  */
 bool CMD_Step(STREAM_t *stream);
 
-//------------------------------------------------------------------------------------ Triggers
+//---------------------------------------------------------------------------------------- Triggers
 
 /**
  * @brief Get and clear pending trigger event.
@@ -242,5 +243,5 @@ uint16_t TRIG_Wait(void);
  */
 void TRIG_WaitFor(uint16_t code);
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 #endif

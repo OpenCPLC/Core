@@ -2,7 +2,7 @@
 
 #include "opencplc.h"
 
-//------------------------------------------------------------------------------------------------- EEPROM
+//------------------------------------------------------------------------------------------ EEPROM
 
 #ifdef STM32G081xx
   EEPROM_t io_eeprom[] = {
@@ -17,23 +17,23 @@
   };
 #endif
 
-//------------------------------------------------------------------------------------------------- DOUT-RO
+//----------------------------------------------------------------------------------------- DOUT-RO
 
 DOUT_t RO1 = { .name = "RO1", .relay = true, .gpio = { .port = GPIOD, .pin = 0 }, .eeprom = &io_eeprom[0], .save = true };
 DOUT_t RO2 = { .name = "RO2", .relay = true, .gpio = { .port = GPIOD, .pin = 1 }, .eeprom = &io_eeprom[0], .save = true };
 
-//------------------------------------------------------------------------------------------------- DOUT-TO
+//----------------------------------------------------------------------------------------- DOUT-TO
 
 PWM_t to1_pwm = {
   .reg = TIM16,
   #if(SYS_CLOCK_FREQ == 16000000)
     .prescaler = 16,
   #elif(SYS_CLOCK_FREQ == 18432000)
-    // .prescaler = TODO, 
+    // .prescaler = TODO,
   #endif
   .channel[TIM_CH1] = TIM16_CH1_PB8,
   .auto_reload = 1000,
-  .center_aligned = false
+  .align = PWM_Align_Edge
 };
 
 DOUT_t TO1 = { .name = "TO1", .pwm = &to1_pwm, .channel = TIM_CH1, .eeprom = &io_eeprom[1], .save = false };
@@ -48,11 +48,11 @@ PWM_t to2_pwm = {
   #if(SYS_CLOCK_FREQ == 16000000)
     .prescaler = 16,
   #elif(SYS_CLOCK_FREQ == 18432000)
-    // .prescaler = TODO, 
+    // .prescaler = TODO,
   #endif
   .channel[TIM_CH1] = TIM17_CH1_PB9,
   .auto_reload = 1000,
-  .center_aligned = false
+  .align = PWM_Align_Edge
 };
 
 DOUT_t TO2 = { .name = "TO2", .pwm = &to2_pwm, .channel = TIM_CH1, .eeprom = &io_eeprom[1], .save = false };
@@ -73,7 +73,7 @@ PWM_t to345_pwm = {
   .channel[TIM_CH2] = TIM1_CH2_PB3,
   .channel[TIM_CH3] = TIM1_CH3_PB6,
   .auto_reload = 1000,
-  .center_aligned = true
+  .align = PWM_Align_Center3
 };
 
 DOUT_t TO3 = { .name = "TO3", .pwm = &to345_pwm, .channel = TIM_CH2, .eeprom = &io_eeprom[1], .save = false };
@@ -85,64 +85,72 @@ void TO345_Frequency(float frequency)
   PWM_Frequency(&to345_pwm, frequency);
 };
 
-//------------------------------------------------------------------------------------------------- DIN
+//--------------------------------------------------------------------------------------------- DIN
 
 PWMI_t din_pwmi15 = {
   .reg = TIM15,
   .prescaler = 49,
-  // .channel[TIM_CH1] = TIM15_CH1_PB14,
-  // .channel[TIM_CH2] = TIM15_CH2_PB15,
-  .input_prescaler = PWMI_Prescaler_1,
-  .filter = TIM_Filter_NoFilter,
-  .oversampling = 4
+  .filter = TIM_Filter_FCLK_N2,
+  .irq_priority = IRQ_Priority_High,
+  #if(!PWMI_AUTO_OVERSAMPLING)
+    .oversampling = 4,
+  #endif
 };
 
-DIN_t DI1 = { .name = "DI1", .gpif = { .gpio = { .port = GPIOB, .pin = 14, .reverse = true } }, .eeprom = &io_eeprom[1] };
-DIN_t DI2 = { .name = "DI2", .gpif = { .gpio = { .port = GPIOB, .pin = 15, .reverse = true } }, .eeprom = &io_eeprom[1] };
+DIN_t DI1 = { .name = "DI1", .pwmi = &din_pwmi15, .channel = TIM_CH1, .gpio = { .port = GPIOB, .pin = 14, .reverse = true }, .eeprom = &io_eeprom[1] };
+DIN_t DI2 = { .name = "DI2", .pwmi = &din_pwmi15, .channel = TIM_CH2, .gpio = { .port = GPIOB, .pin = 15, .reverse = true }, .eeprom = &io_eeprom[1] };
 
 bool din_pwmi15_init = false;
 
 PWMI_t din_pwmi3 = {
   .reg = TIM3,
   .prescaler = 49,
-  // .channel[TIM_CH1] = TIM3_CH1_PC6,
-  // .channel[TIM_CH2] = TIM3_CH2_PC7,
-  .input_prescaler = PWMI_Prescaler_1,
-  .filter = TIM_Filter_NoFilter,
-  .oversampling = 4
+  .filter = TIM_Filter_FCLK_N2,
+  .irq_priority = IRQ_Priority_High,
+  #if(!PWMI_AUTO_OVERSAMPLING)
+    .oversampling = 4,
+  #endif
 };
 
-DIN_t DI3 = { .name = "DI3", .gpif = { .gpio = { .port = GPIOC, .pin = 6, .reverse = true } }, .eeprom = &io_eeprom[1] };
-DIN_t DI4 = { .name = "DI4", .gpif = { .gpio = { .port = GPIOC, .pin = 7, .reverse = true } }, .eeprom = &io_eeprom[1] };
+DIN_t DI3 = { .name = "DI3", .pwmi = &din_pwmi3, .channel = TIM_CH1, .gpio = { .port = GPIOC, .pin = 6, .reverse = true }, .eeprom = &io_eeprom[1] };
+DIN_t DI4 = { .name = "DI4", .pwmi = &din_pwmi3, .channel = TIM_CH2, .gpio = { .port = GPIOC, .pin = 7, .reverse = true }, .eeprom = &io_eeprom[1] };
 
 bool din_pwmi3_init = false;
 
-//------------------------------------------------------------------------------------------------- AIN
+//--------------------------------------------------------------------------------------------- AIN
 
+// Over 8 channels the sequencer falls back to the bitmask scan, converting in ascending
+// channel-number order; the list mirrors that order, VREFINT (13) lands between PB10
+// (11) and PB11 (15) and makes the unit conversions ratiometric
 uint8_t ain_channels[] = {
   ADC_IN_PA0, ADC_IN_PA1, ADC_IN_PA5, ADC_IN_PA6, ADC_IN_PA7,
-  ADC_IN_PB0, ADC_IN_PB1, ADC_IN_PB2, ADC_IN_PB10, ADC_IN_PB11, ADC_IN_PB12
+  ADC_IN_PB0, ADC_IN_PB1, ADC_IN_PB2, ADC_IN_PB10, ADC_IN_VREFEN,
+  ADC_IN_PB11, ADC_IN_PB12
 };
 
-#define AIN_BUFFER_SIZE adc_record_buffer_size(AIN_AVERAGE_TIME_MS, 160, 32, sizeof(ain_channels))
+#define AIN_BUFFER_SIZE adc_record_buffer_size(AIN_AVERAGE_TIME_ms, AIN_SAMPLING_CYCLES, \
+  adc_oversampling_samples(AIN_OVERSAMPLING_RATIO), sizeof(ain_channels))
 #define AIN_SAMPLES (AIN_BUFFER_SIZE / sizeof(ain_channels))
 
 uint16_t ain_buffer[AIN_BUFFER_SIZE];
 uint16_t ain_data[sizeof(ain_channels)][AIN_SAMPLES];
 
+// HSI16 keeps the ADC at exactly 16 MHz regardless of the system clock, which is what
+// the adc_record_buffer_size window math assumes
 ADC_t ain_adc = {
-  .frequency = ADC_Frequency_16MHz,
-  .interrupt_level = 3,
+  .irq_priority = IRQ_Priority_Low,
+  .use_hsi = true,
+  .prescaler = ADC_Prescaler_1,
   .record = {
-    .channels = ain_channels,
-    .count = sizeof(ain_channels),
-    .dma_nbr = 1,
-    .sampling_time = ADC_SamplingTime_160,
-    .oversampling_enable = true,
-    .oversampling_ratio = ADC_OversamplingRatio_32,
-    .oversampling_shift = 1,
-    .buffer = ain_buffer,
-    .buffer_length = AIN_BUFFER_SIZE
+    .chan = ain_channels,
+    .chan_count = sizeof(ain_channels),
+    .dma = DMA_CH1,
+    .sampling_time = AIN_SAMPLING_TIME,
+    .oversampling.enable = true,
+    .oversampling.ratio = AIN_OVERSAMPLING_RATIO,
+    .oversampling.shift = AIN_OVERSAMPLING_SHIFT,
+    .buff = ain_buffer,
+    .buff_len = AIN_BUFFER_SIZE
   }
 };
 
@@ -150,9 +158,10 @@ AIN_t AI1 = { .name = "AI1", .data = ain_data[1], .count = AIN_SAMPLES };
 AIN_t AI2 = { .name = "AI2", .data = ain_data[2], .count = AIN_SAMPLES };
 AIN_t AI3 = { .name = "AI3", .data = ain_data[3], .count = AIN_SAMPLES };
 AIN_t AI4 = { .name = "AI4", .data = ain_data[4], .count = AIN_SAMPLES };
-AIN_t POT1 = { .name = "POT1", .data = ain_data[10], .count = AIN_SAMPLES };
-AIN_t POT2 = { .name = "POT2", .data = ain_data[9], .count = AIN_SAMPLES };
+AIN_t POT1 = { .name = "POT1", .data = ain_data[11], .count = AIN_SAMPLES };
+AIN_t POT2 = { .name = "POT2", .data = ain_data[10], .count = AIN_SAMPLES };
 AIN_t POT3 = { .name = "POT3", .data = ain_data[8], .count = AIN_SAMPLES };
+AIN_t VREF = { .name = "VREF", .data = ain_data[9], .count = AIN_SAMPLES };
 AIN_t POT4 = { .name = "POT4", .data = ain_data[7], .count = AIN_SAMPLES };
 AIN_t POT5 = { .name = "POT5", .data = ain_data[6], .count = AIN_SAMPLES };
 AIN_t POT6 = { .name = "POT6", .data = ain_data[5], .count = AIN_SAMPLES };
@@ -160,12 +169,10 @@ AIN_t VCC = { .name = "VCC", .data = ain_data[0], .count = AIN_SAMPLES };
 
 float VCC_Voltage_V(void)
 {
-  float raw = AIN_Raw(&VCC);
-  float value = resistor_divider_factor(3.3, 110, 10, 16) * raw;
-  return value;
+  return (float)(110 + 10) / 10 * AIN_PinVoltage_V(&VCC);
 }
 
-//------------------------------------------------------------------------------------------------- RS485
+//------------------------------------------------------------------------------------------- RS485
 
 uint8_t rs_buff_buffer[RS_BUFFER_SIZE];
 BUFF_t rs_buff = { .mem = rs_buff_buffer, .size = RS_BUFFER_SIZE };
@@ -180,20 +187,20 @@ UART_t RS = {
   .gpio_direction = &rs_gpio_direction
 };
 
-//------------------------------------------------------------------------------------------------- RGB+BTN
+//----------------------------------------------------------------------------------------- RGB+BTN
 
 GPIO_t rgb_gpio_red = { .port = GPIOA, .pin = 11 };
 GPIO_t rgb_gpio_green = { .port = GPIOA, .pin = 12 };
 GPIO_t rgb_gpio_blue = { .port = GPIOA, .pin = 15 };
 
 RGB_t RGB = { .red = &rgb_gpio_red, .green = &rgb_gpio_green, .blue = &rgb_gpio_blue };
-DIN_t BTN1 = { .gpif = { .gpio = { .port = GPIOD, .pin = 3, .reverse = true } } };
-DIN_t BTN2 = { .gpif = { .gpio = { .port = GPIOB, .pin = 4, .reverse = true } } };
-DIN_t BTN3 = { .gpif = { .gpio = { .port = GPIOB, .pin = 5, .reverse = true } } };
-DIN_t SW1 = { .gpif = { .gpio = { .port = GPIOB, .pin = 7 } } };
-DIN_t SW2 = { .gpif = { .gpio = { .port = GPIOC, .pin = 13 } } };
+DIN_t BTN1 = { .gpio = { .port = GPIOD, .pin = 3, .reverse = true } };
+DIN_t BTN2 = { .gpio = { .port = GPIOB, .pin = 4, .reverse = true } };
+DIN_t BTN3 = { .gpio = { .port = GPIOB, .pin = 5, .reverse = true } };
+DIN_t SW1 = { .gpio = { .port = GPIOB, .pin = 7 } };
+DIN_t SW2 = { .gpio = { .port = GPIOC, .pin = 13 } };
 
-//------------------------------------------------------------------------------------------------- DBG+Bash
+//---------------------------------------------------------------------------------------- DBG+Bash
 
 UART_t dbg_uart = {
   .reg = USART1,
@@ -212,7 +219,7 @@ UART_t dbg_uart = {
 uint8_t cache_file_buffer[2048];
 FILE_t cache_file = { .name = "cache", .buffer = cache_file_buffer, .limit = sizeof(cache_file_buffer) };
 
-//------------------------------------------------------------------------------------------------- PLC
+//--------------------------------------------------------------------------------------------- PLC
 
 void PLC_Init(void)
 {
@@ -246,35 +253,34 @@ void PLC_Init(void)
   PWM_Init(&to1_pwm);
   PWM_Init(&to2_pwm);
   PWM_Init(&to345_pwm);
-  // Digital inputs (DI)
-  if(DIN_Init(&DI1)) {
+  // Digital inputs (DI): fast counters share PWMI timers (TIM15, TIM3), one capture channel each
+  DIN_Init(&DI1);
+  if(DI1.mode == DIN_Mode_FastCounter) {
     din_pwmi15.channel[TIM_CH1] = TIM15_CH1_PB14;
-    DI1.frequency = &din_pwmi15.frequency[0];
-    DI1.fill = &din_pwmi15.fill[0];
     din_pwmi15_init = true;
   }
-  if(DIN_Init(&DI2)) {
+  DIN_Init(&DI2);
+  if(DI2.mode == DIN_Mode_FastCounter) {
     din_pwmi15.channel[TIM_CH2] = TIM15_CH2_PB15;
-    DI2.frequency = &din_pwmi15.frequency[0];
-    DI2.fill = &din_pwmi15.fill[0];
     din_pwmi15_init = true;
   }
-  if(DIN_Init(&DI3)) {
+  DIN_Init(&DI3);
+  if(DI3.mode == DIN_Mode_FastCounter) {
     din_pwmi3.channel[TIM_CH1] = TIM3_CH1_PC6;
-    DI3.frequency = &din_pwmi3.frequency[0];
-    DI3.fill = &din_pwmi3.fill[0];
     din_pwmi3_init = true;
   }
-  if(DIN_Init(&DI4)) {
+  DIN_Init(&DI4);
+  if(DI4.mode == DIN_Mode_FastCounter) {
     din_pwmi3.channel[TIM_CH2] = TIM3_CH2_PC7;
-    DI4.frequency = &din_pwmi3.frequency[0];
-    DI4.fill = &din_pwmi3.fill[0];
     din_pwmi3_init = true;
   }
+  if(din_pwmi15_init) PWMI_Init(&din_pwmi15);
+  if(din_pwmi3_init) PWMI_Init(&din_pwmi3);
   // Analog inputs (AI)
   ADC_Init(&ain_adc);
   ADC_Record(&ain_adc);
   ADC_Wait(&ain_adc);
+  AIN_SetVref(&VREF);
   // Interfejsy RS485
   UART_Init(&RS);
   LOG_Init(PLC_GREETING, PRO_VERSION);
@@ -303,20 +309,18 @@ void PLC_Loop(void)
   DIN_Loop(&DI2);
   DIN_Loop(&DI3);
   DIN_Loop(&DI4);
-  if(din_pwmi15_init && PWMI_Loop(&din_pwmi3)) {
-    // PWMI_Print(&din_pwmi3_init);
+  if(din_pwmi15_init && PWMI_Loop(&din_pwmi15)) {
+    // PWMI_Print(&din_pwmi15);
   }
   if(din_pwmi3_init && PWMI_Loop(&din_pwmi3)) {
-    // PWMI_Print(&din_pwmi3_init);
+    // PWMI_Print(&din_pwmi3);
   }
   // Analog inputs (AI)
   if(ADC_IsFree(&ain_adc)) {
-    AIN_Sort(ain_buffer, sizeof(ain_channels), AIN_SAMPLES, ain_data);
+    uint16_t overruns = ADC_Overruns(&ain_adc);
+    if(overruns) LOG_Warning("ADC over-run %d", overruns);
+    else ADC_LastSamples(&ain_adc, (uint16_t *)ain_data, AIN_BUFFER_SIZE, true);
     ADC_Record(&ain_adc);
-  }
-  if(ain_adc.overrun) {
-    LOG_Warning("ADC over-run %d", ain_adc.overrun);
-    ain_adc.overrun = 0;
   }
 }
 

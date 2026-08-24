@@ -22,7 +22,8 @@ bool TWI_IsFree(void)
 
 bool TWI_Read(uint8_t addr, uint8_t *ary, uint16_t n)
 {
-  I2C_Master_Read(twi_interface, addr, ary, n);
+  // A refused start leaves `_busy` untouched, and the wait below would read it as ours
+  if(I2C_Master_Read(twi_interface, addr, ary, n)) return false;
   if(timeout(21 + n, WAIT_&I2C_Master_IsFree, twi_interface)) {
     return false;
   }
@@ -31,7 +32,7 @@ bool TWI_Read(uint8_t addr, uint8_t *ary, uint16_t n)
 
 bool TWI_Write(uint8_t addr, uint8_t *ary, uint16_t n)
 {
-  I2C_Master_Write(twi_interface, addr, ary, n);
+  if(I2C_Master_Write(twi_interface, addr, ary, n)) return false;
   if(timeout(21 + n, WAIT_&I2C_Master_IsFree, twi_interface)) {
     return false;
   }
@@ -40,7 +41,7 @@ bool TWI_Write(uint8_t addr, uint8_t *ary, uint16_t n)
 
 bool TWI_ReadReg(uint8_t addr, uint8_t reg, uint8_t *ary, uint16_t n)
 {
-  I2C_Master_ReadReg(twi_interface, addr, reg, ary, n);
+  if(I2C_Master_ReadReg(twi_interface, addr, reg, ary, n)) return false;
   if(timeout(23 + n, WAIT_&I2C_Master_IsFree, twi_interface)) {
     return false;
   }
@@ -49,7 +50,7 @@ bool TWI_ReadReg(uint8_t addr, uint8_t reg, uint8_t *ary, uint16_t n)
 
 bool TWI_WriteReg(uint8_t addr, uint8_t reg, uint8_t *ary, uint16_t n)
 {
-  I2C_Master_WriteReg(twi_interface, addr, reg, ary, n);
+  if(I2C_Master_WriteReg(twi_interface, addr, reg, ary, n)) return false;
   if(timeout(22 + n, WAIT_&I2C_Master_IsFree, twi_interface)) {
     return false;
   }

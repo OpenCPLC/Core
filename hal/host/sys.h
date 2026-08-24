@@ -18,4 +18,11 @@ void panic_hook(void (*handler)(void));
 bool file_save(const char *name, const uint8_t *data, size_t size);
 size_t file_load(const char *name, uint8_t **data);
 
+//-------------------------------------------------------------------------------------- Intrinsics
+
+// Interrupt masking does not exist off-target, and a host build runs one thread
+// at a time under VRTS, so the CMSIS intrinsics firmware uses become no-ops
+static inline void __disable_irq(void) {}
+static inline void __enable_irq(void) {}
+
 #endif

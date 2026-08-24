@@ -3,14 +3,17 @@
 #include "heap.h"
 #include "vrts.h"
 
-//------------------------------------------------------------------------------------------------- Allocator
+//--------------------------------------------------------------------------------------- Allocator
 
-static uint8_t Heap[((HEAP_SIZE + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1))] __attribute__((aligned(HEAP_ALIGN))); // Heap memory region
-static heap_block_t *FreeList = (heap_block_t*)Heap; // Pointer to the first block in the free list
+// Heap memory region
+static uint8_t Heap[((HEAP_SIZE + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1))]
+  __attribute__((aligned(HEAP_ALIGN)));
+static heap_block_t *FreeList = (heap_block_t*)Heap; // First block in the free list
 
 void heap_init(void)
 {
-  FreeList->size = ((HEAP_SIZE + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1)) - sizeof(heap_block_t); // One free block covers the whole heap
+  // One free block covers the whole heap
+  FreeList->size = ((HEAP_SIZE + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1)) - sizeof(heap_block_t);
   FreeList->next = NULL; // No next block
   FreeList->free = true; // Mark the block as free
 }
@@ -21,18 +24,24 @@ void *heap_alloc(size_t size)
   heap_block_t *curr = FreeList; // Start from the first free block
   // Traverse the free list to find a block large enough
   while(curr) {
+    // Linked in address order, so neighbours freed at different moments sit adjacent
+    while(curr->free && curr->next && curr->next->free) {
+      curr->size += sizeof(heap_block_t) + curr->next->size;
+      curr->next = curr->next->next;
+    }
     if(curr->free && curr->size >= size) {
       // If the block is bigger than needed, split it
       if(curr->size > size + sizeof(heap_block_t)) {
-        heap_block_t *new_block = (heap_block_t*)((uint8_t*)curr + sizeof(heap_block_t) + size);
-        new_block->size = curr->size - size - sizeof(heap_block_t); // Size of the remaining free space
+        heap_block_t *new_block =
+          (heap_block_t*)((uint8_t*)curr + sizeof(heap_block_t) + size);
+        new_block->size = curr->size - size - sizeof(heap_block_t); // Remaining free space
         new_block->free = true; // Mark the new block as free
         new_block->next = curr->next; // Link new block with rest of list
         curr->next = new_block; // Insert the new block right after current
         curr->size = size; // Shrink current block to the requested size
       }
       curr->free = 0; // Mark current block as allocated
-      return (uint8_t*)curr + sizeof(heap_block_t); // Return pointer just after the block header
+      return (uint8_t*)curr + sizeof(heap_block_t); // Pointer just after the header
     }
     curr = curr->next; // Move to the next block if this one isn't suitable
   }
@@ -43,13 +52,14 @@ void *heap_alloc(size_t size)
 void heap_free(void *ptr)
 {
   if(!ptr) return; // Nothing to free if pointer is NULL
-  heap_block_t *curr = (heap_block_t*)((uint8_t*)ptr - sizeof(heap_block_t)); // Get the block header
+  // Get the block header
+  heap_block_t *curr = (heap_block_t*)((uint8_t*)ptr - sizeof(heap_block_t));
   curr->free = 1; // Mark this block as free
   // Coalesce with next block if it's free
   heap_block_t *next = curr->next;
   if(next && next->free) {
     curr->size += sizeof(heap_block_t) + next->size; // Merge sizes including the header
-    curr->next = next->next; // Remove next block from list
+    curr->next = next->next; // Remove next block from the free list
   }
 }
 
@@ -70,9 +80,10 @@ void *heap_reloc(void *ptr, size_t size)
   return new_ptr;
 }
 
-//------------------------------------------------------------------------------------------------- Garbage-collector
+//------------------------------------------------------------------------------- Garbage-collector
 
-// Stacks, one for each thread for multi-threading mode or single stack for single-threaded mode
+// Stacks, one for each thread for multi-threading mode
+// or single stack for single-threaded mode
 heap_new_t *Stacks[VRTS_SWITCHING ? VRTS_THREAD_LIMIT : 1];
 
 static heap_new_t *heap_get_stack(void)

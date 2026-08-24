@@ -36,7 +36,8 @@ int16_t QUEUE_Find(QUEUE_t *queue, const void *key)
   uint16_t cnt = ary_count(&queue->ary);
   for(uint16_t i = 0; i < cnt; i++) {
     const void *item = ary_get(&queue->ary, i);
-    bool same = queue->Equal ? queue->Equal(item, key) : !memcmp(item, key, queue->ary.element_size);
+    bool same = queue->Equal ? queue->Equal(item, key) :
+      !memcmp(item, key, queue->ary.element_size);
     if(same) return (int16_t)i;
   }
   return -1;
@@ -94,8 +95,16 @@ bool QUEUE_Peek(const QUEUE_t *queue, void *element)
 {
   if(ary_empty(&queue->ary)) return false;
   #if(QUEUE_USE_HEAP)
-  if(queue->Compare && !queue->invert) {
-    memcpy(element, ary_get(&queue->ary, 0), queue->ary.element_size);
+  if(queue->Compare) {
+    uint16_t idx = 0;
+    if(queue->invert) {
+      uint16_t cnt = ary_count(&queue->ary);
+      idx = cnt / 2;
+      for(uint16_t i = idx + 1; i < cnt; i++) {
+        if(queue->Compare(ary_get(&queue->ary, i), ary_get(&queue->ary, idx)) > 0) idx = i;
+      }
+    }
+    memcpy(element, ary_get(&queue->ary, idx), queue->ary.element_size);
     return true;
   }
   #endif
@@ -147,4 +156,4 @@ bool QUEUE_IsFull(const QUEUE_t *queue) { return ary_full(&queue->ary); }
 uint16_t QUEUE_Count(const QUEUE_t *queue) { return ary_count(&queue->ary); }
 void QUEUE_Clear(QUEUE_t *queue) { ary_clear(&queue->ary); }
 
-//-----------------------------
+//-------------------------------------------------------------------------------------------------

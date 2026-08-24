@@ -3,13 +3,13 @@
 #include "adc.h"
 #include "dma.h"
 
-//--------------------------------------------------------------------------------------- Const
+//------------------------------------------------------------------------------------------- Const
 
 const uint16_t ADC_PRESCALER_TAB[] = { 1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256 };
 const uint16_t ADC_SAMPLING_TIME_TAB[] = { 15, 19, 25, 37, 60, 105, 260, 653 };
 const uint16_t ADC_OVERSAMPLING_RATIO_TAB[] = { 2, 4, 8, 16, 32, 64, 128, 256 };
 
-//--------------------------------------------------------------------------------------- Internal
+//---------------------------------------------------------------------------------------- Internal
 
 static ADC_Common_TypeDef *ADC_GetCommon(ADC_t *adc)
 {
@@ -65,18 +65,7 @@ static void ADC_SetOversampling(ADC_t *adc, ADC_Oversampling_t *ovs)
     (ovs->enable ? ADC_CFGR2_ROVSE : 0);
 }
 
-static void ADC_SetPrescaler(ADC_t *adc, ADC_Prescaler_t prescaler)
-{
-  if(adc->prescaler != prescaler) {
-    ADC_Disable(adc);
-    adc->prescaler = prescaler;
-    ADC_Common_TypeDef *common = ADC_GetCommon(adc);
-    common->CCR = (common->CCR & ~ADC_CCR_PRESC_Msk) | (prescaler << ADC_CCR_PRESC_Pos);
-    ADC_Enable(adc);
-  }
-}
-
-//------------------------------------------------------------------------------------- Handler
+//----------------------------------------------------------------------------------------- Handler
 
 static void ADC_IRQHandler(ADC_t *adc)
 {
@@ -117,9 +106,9 @@ static void ADC_DMA_IRQHandler(ADC_t *adc)
 }
 #endif
 
-//---------------------------------------------------------------------------------------- GPIO
+//-------------------------------------------------------------------------------------------- GPIO
 
-static void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
+void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
 {
   ADC_Common_TypeDef *common = ADC_GetCommon(adc);
   while(count--) {
@@ -149,7 +138,7 @@ static void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
   }
 }
 
-//------------------------------------------------------------------------------ Enable/Disable
+//---------------------------------------------------------------------------------- Enable/Disable
 
 void ADC_Enable(ADC_t *adc)
 {
@@ -170,7 +159,7 @@ void ADC_Disable(ADC_t *adc)
   }
 }
 
-//---------------------------------------------------------------------------------------- Stop
+//-------------------------------------------------------------------------------------------- Stop
 
 void ADC_Stop(ADC_t *adc)
 {
@@ -190,27 +179,26 @@ void ADC_Stop(ADC_t *adc)
   adc->_busy = ADC_State_Free;
 }
 
-//------------------------------------------------------------------------------------- Measure
+//----------------------------------------------------------------------------------------- Measure
 
 status_t ADC_Measure(ADC_t *adc)
 {
   if(adc->_busy) return BUSY;
   adc->_busy = ADC_State_Measure;
   adc->measure._active = 0;
-  ADC_SetPrescaler(adc, adc->measure.prescaler);
   ADC_SetOversampling(adc, &adc->measure.oversampling);
-  ADC_SetSamplingTime(adc, adc->measure.chan, adc->measure.chan_count, adc->measure.sampling_time);
+  ADC_SetSamplingTime(adc, adc->measure.chan, adc->measure.chan_count,
+    adc->measure.sampling_time);
   ADC_SetSequence(adc, adc->measure.chan, adc->measure.chan_count);
-  #if(ADC_RECORD)
-    adc->reg->CFGR &= ~ADC_CFGR_EXTEN;
-    adc->reg->CFGR |= ADC_CFGR_CONT;
-  #endif
+  // Single-shot by nature: the sequence ends on its own after the last channel,
+  // which keeps the data rate at the interrupt's pace instead of racing a free-running ADC
+  adc->reg->CFGR &= ~(ADC_CFGR_EXTEN | ADC_CFGR_CONT);
   adc->reg->IER |= ADC_IER_EOCIE;
   adc->reg->CR |= ADC_CR_ADSTART;
   return OK;
 }
 
-//-------------------------------------------------------------------------------------- Record
+//------------------------------------------------------------------------------------------ Record
 
 #if(ADC_RECORD)
 
@@ -218,9 +206,9 @@ status_t ADC_Record(ADC_t *adc)
 {
   if(adc->_busy) return BUSY;
   adc->_busy = ADC_State_Record;
-  ADC_SetPrescaler(adc, adc->record.prescaler);
   ADC_SetOversampling(adc, &adc->record.oversampling);
-  ADC_SetSamplingTime(adc, adc->record.chan, adc->record.chan_count, adc->record.sampling_time);
+  ADC_SetSamplingTime(adc, adc->record.chan, adc->record.chan_count,
+    adc->record.sampling_time);
   ADC_SetSequence(adc, adc->record.chan, adc->record.chan_count);
   adc->record._dma.cha->CCR &= ~DMA_CCR_EN;
   adc->record._dma.cha->CMAR = (uint32_t)adc->record.buff;
@@ -263,7 +251,7 @@ status_t ADC_Record(ADC_t *adc)
 
 #endif
 
-//---------------------------------------------------------------------------------------- Init
+//-------------------------------------------------------------------------------------------- Init
 
 void ADC_Init(ADC_t *adc)
 {
@@ -302,11 +290,7 @@ void ADC_Init(ADC_t *adc)
   #endif
   adc->reg->IER |= ADC_IER_OVRIE;
   IRQ_EnableADC(adc->irq_priority, (IRQ_Handler_t)ADC_IRQHandler, adc);
-  #if(!ADC_RECORD)
-    adc->reg->CFGR &= ~ADC_CFGR_EXTEN;
-    adc->reg->CFGR |= ADC_CFGR_CONT;
-  #endif
   ADC_Enable(adc);
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------

@@ -94,7 +94,7 @@ void WIRE_Select(WIRE_t *onewire, uint8_t *addr)
 
 void WIRE_Skip(WIRE_t *onewire)
 {
-  WIRE_Write(onewire, ONEWIRE_CMD_SKIP_ROM);      
+  WIRE_Write(onewire, ONEWIRE_CMD_SKIP_ROM);
 }
 
 bool WIRE_Search(WIRE_t *onewire, uint8_t *addr)
@@ -132,7 +132,8 @@ bool WIRE_Search(WIRE_t *onewire, uint8_t *addr)
         }
         if(dir == 1) onewire->_rom[rom_i] |= mask;
         else onewire->_rom[rom_i] &= ~mask;
-        WIRE_Write(onewire, dir);
+        // Search ROM spends three slots per bit: value, complement, then the direction
+        WIRE_WriteBit(onewire, dir);
         id_bit_i++;
         mask <<= 1;
         if(mask == 0) {

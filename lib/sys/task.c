@@ -23,22 +23,24 @@ static QUEUE_New(task_queue, TASK_t, TASK_LIMIT, task_equal, task_compare);
 
 //-------------------------------------------------------------------------------------------------
 
-static inline void task_full_error(void)
+// `QUEUE_Push` refuses a full queue and a key already waiting, the caller sees one `false`
+static inline void task_rejected(void)
 {
-  LOG_ERR("Task queue full" LOG_LIB("TASK"));
+  if(ary_full(&task_queue.ary)) LOG_ERR("Task queue full " LOG_TAG("TASK"));
+  else LOG_ERR("Task key already queued " LOG_TAG("TASK"));
 }
 
 void TASK_Add(void (*Handler)(void *), void *arg, uint32_t delay_ms)
 {
   if(!delay_ms) { Handler(arg); return; }
   TASK_t task = { .Handler = Handler, .arg = arg, .key = 0, ._tick = tick_keep(delay_ms) };
-  if(!QUEUE_Push(&task_queue, &task)) task_full_error();
+  if(!QUEUE_Push(&task_queue, &task)) task_rejected();
 }
 
 void TASK_AddKey(void (*Handler)(void *), void *arg, uint32_t delay_ms, int32_t key)
 {
   TASK_t task = { .Handler = Handler, .arg = arg, .key = key, ._tick = tick_keep(delay_ms) };
-  if(!QUEUE_Push(&task_queue, &task)) task_full_error();
+  if(!QUEUE_Push(&task_queue, &task)) task_rejected();
 }
 
 bool TASK_Cancel(int32_t key)
@@ -79,16 +81,21 @@ bool TASK_Reschedule(int32_t key, uint32_t delay_ms)
 uint16_t TASK_Pending(void) { return QUEUE_Count(&task_queue); }
 void TASK_ClearAll(void) { QUEUE_Clear(&task_queue); }
 
-void TASK_Main(void)
+bool TASK_Step(void)
 {
   TASK_t task;
+  if(!QUEUE_Peek(&task_queue, &task)) return false;
+  // `_tick` of `0` is the disarmed sentinel: no deadline set, so the task is due now
+  if(task._tick && !tick_over(&task._tick)) return false;
+  QUEUE_Pop(&task_queue, NULL);
+  task.Handler(task.arg);
+  return true;
+}
+
+void TASK_Main(void)
+{
   while(1) {
-    if(QUEUE_Peek(&task_queue, &task)) {
-      if(tick_over(&task._tick)) {
-        QUEUE_Pop(&task_queue, NULL);
-        task.Handler(task.arg);
-      }
-    }
+    TASK_Step();
     let();
   }
 }

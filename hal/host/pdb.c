@@ -1,4 +1,10 @@
-// hal/stm32/per/pdb.c
+// hal/host/pdb.c
+
+// Port of `hal/stm32/per/pdb.c`. The algorithm is unchanged:
+// only the three flash accesses differ,
+// because host flash is emulated instead of memory-mapped.
+// A record is read with `FLASH_Read` and referenced with `FLASH_Ref`,
+// in place of the `*(volatile uint32_t *)addr` cast used on target.
 
 #include "pdb.h"
 
@@ -19,7 +25,7 @@ static void _calc_bounds(PDB_t *pdb)
 static bool _slot_erased(uint32_t addr, uint16_t size)
 {
   for(uint16_t i = 0; i < size; i += 4) {
-    if(*(volatile uint32_t *)(addr + i) != 0xFFFFFFFF) return false;
+    if(FLASH_Read(addr + i) != 0xFFFFFFFF) return false;
   }
   return true;
 }
@@ -28,7 +34,7 @@ static bool _record_valid(PDB_t *pdb, uint32_t addr)
 {
   if(!pdb->crc) return true;
   uint16_t len = pdb->payload_size + pdb->crc->width / 8;
-  return CRC_Error(pdb->crc, (uint8_t *)addr, len) == OK;
+  return CRC_Error(pdb->crc, (uint8_t *)FLASH_Ref(addr), len) == OK;
 }
 
 // Scan page, locate slot after the last non-erased record.
@@ -90,7 +96,7 @@ static bool _find_newest_page(PDB_t *pdb, uint16_t *out_page)
     for(uint32_t addr = start; addr < end; addr += pdb->_record_size) {
       if(_slot_erased(addr, pdb->_record_size)) continue;
       if(!_record_valid(pdb, addr)) continue;
-      uint32_t key = *(volatile uint32_t *)addr;
+      uint32_t key = FLASH_Read(addr);
       if(!have || key > best) { best = key; best_page = p; have = true; }
     }
   }
@@ -296,16 +302,16 @@ status_t PDB_IterNext(PDB_Iter_t *iter, void *out)
     if(step(iter)) { iter->_done = true; return ERR; }
     if(_slot_erased(iter->_pointer, pdb->_record_size)) continue;
     if(!_record_valid(pdb, iter->_pointer)) continue;
-    uint32_t key = *(volatile uint32_t *)iter->_pointer;
+    uint32_t key = FLASH_Read(iter->_pointer);
     if(iter->_query.key_min && key < iter->_query.key_min) continue;
     if(iter->_query.key_max && key > iter->_query.key_max) continue;
     if(iter->_query.filter
-      && !iter->_query.filter((const void *)iter->_pointer, iter->_query.filter_ctx)) continue;
+      && !iter->_query.filter(FLASH_Ref(iter->_pointer), iter->_query.filter_ctx)) continue;
     if(iter->_skipped < iter->_query.skip) {
       iter->_skipped++;
       continue;
     }
-    if(out) memcpy(out, (const void *)iter->_pointer, pdb->payload_size);
+    if(out) memcpy(out, FLASH_Ref(iter->_pointer), pdb->payload_size);
     iter->count++;
     if(iter->_query.limit && iter->count >= iter->_query.limit) iter->_done = true;
     return OK;
@@ -314,7 +320,7 @@ status_t PDB_IterNext(PDB_Iter_t *iter, void *out)
 
 const void *PDB_IterRef(PDB_Iter_t *iter)
 {
-  return (const void *)iter->_pointer;
+  return FLASH_Ref(iter->_pointer);
 }
 
 //------------------------------------------------------------------------------------ Select/Count

@@ -28,6 +28,19 @@
   #define RTC_WEEKDAYS_LONGNAMES 1
 #endif
 
+#ifndef RTC_LSE_RETRY
+  // Spin budget for LSE start-up. Counted in loop passes, not milliseconds: `RTC_Init` runs
+  // before any tick source is guaranteed, so there is nothing yet to measure time with.
+  // A healthy crystal settles well inside this; exhausting it means no crystal is present.
+  #define RTC_LSE_RETRY 4000000
+#endif
+
+#ifndef RTC_SYNC_RETRY
+  // Spin budget for the RTC synchronisation flags `INITF`, `ALRxWF` and `WUTWF`.
+  // They answer within two RTCCLK periods, so exhausting this means RTCCLK has stopped.
+  #define RTC_SYNC_RETRY 100000
+#endif
+
 //------------------------------------------------------------------------------------------- Types
 
 typedef enum {
@@ -95,8 +108,14 @@ typedef struct {
 
 //--------------------------------------------------------------------------------------------- API
 
-// Initialize RTC peripheral, enable LSE, configure NVIC. Call once before use
-void RTC_Init(void);
+/**
+ * @brief Initialize RTC peripheral, enable LSE, configure NVIC. Call once before use.
+ * @return `OK` when the RTC runs on LSE, `ERR` when the crystal never started.
+ * On `ERR` both `RtcInit` and `RtcReady` stay `false` and no clock source is substituted:
+ * a wrong time is worse than no time for anything scheduling on it. The caller decides
+ * between a degraded mode and `panic`.
+ */
+status_t RTC_Init(void);
 
 //----------------------------------------------------------------------------------------- Convert
 
@@ -167,7 +186,7 @@ void RTC_AlarmWeekstampEnable(RTC_Alarm_t alarm, uint32_t stamp);
 void RTC_AlarmIntervalEnable(RTC_Alarm_t alarm, uint32_t interval_sec);
 void RTC_AlarmDisable(RTC_Alarm_t alarm);
 
-//------------------------------------------------------------------------------------- Wakeup Timer
+//------------------------------------------------------------------------------------ Wakeup Timer
 
 void RTC_WakeupTimerEnable(uint32_t sec);
 void RTC_WakeupTimerDisable(void);
@@ -190,7 +209,8 @@ bool RTC_CheckDaystamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t o
  * @param[in] offset_max_sec Window end offset after now
  * @return `true` if alarm is in window
  */
-bool RTC_CheckWeekstamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec);
+bool RTC_CheckWeekstamp(uint32_t stamp_alarm, uint32_t offset_min_sec,
+  uint32_t offset_max_sec);
 
 /**
  * @brief Check if RTC alarm config is within time window of current RTC.
@@ -218,6 +238,6 @@ extern const char *RtcWeekdays[];
 extern bool RtcReady;
 extern bool RtcInit;
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 #endif
