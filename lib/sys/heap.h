@@ -25,6 +25,9 @@
 
 /**
  * @brief Heap memory block header.
+ * The payload starts one header past the block, so the header size decides the
+ * alignment every allocation gets. Aligned to `HEAP_ALIGN` for that reason: on a
+ * 32-bit target the fields alone come to 12 bytes and would hand out 4-aligned memory.
  * @param size Size of data area in bytes (excluding header)
  * @param next Pointer to next block in `FreeList`
  * @param free `true` if free, `false` if allocated
@@ -33,7 +36,9 @@ typedef struct heap_block {
   size_t size;
   struct heap_block *next;
   bool free;
-} heap_block_t;
+} __attribute__((aligned(HEAP_ALIGN))) heap_block_t;
+
+_Static_assert(sizeof(heap_block_t) % HEAP_ALIGN == 0, "header breaks payload alignment");
 
 // Initialize heap. Call once before `heap_alloc()`
 void heap_init(void);

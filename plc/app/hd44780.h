@@ -35,8 +35,8 @@ typedef enum {
 
 // Display Control operands: bit 2 = display, bit 1 = cursor, bit 0 = blink
 typedef enum {
-  HD44780_Display_ScreanOn = 0x04,
-  HD44780_Display_ScreanOff = 0x00,
+  HD44780_Display_ScreenOn = 0x04,
+  HD44780_Display_ScreenOff = 0x00,
   HD44780_Display_CursorOn = 0x02,
   HD44780_Display_CursorOff = 0x00,
   HD44780_Display_BlinkOn = 0x01,
@@ -65,8 +65,8 @@ typedef enum {
 } HD44780_Backlight_t;
 
 typedef enum {
-  HD44780_Exec_ScreanOn,
-  HD44780_Exec_ScreanOff,
+  HD44780_Exec_ScreenOn,
+  HD44780_Exec_ScreenOff,
   HD44780_Exec_CursorOn,
   HD44780_Exec_CursorOff,
   HD44780_Exec_BlinkOn,

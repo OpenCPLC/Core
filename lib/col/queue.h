@@ -103,7 +103,7 @@ bool QUEUE_RemoveAt(QUEUE_t *queue, uint16_t index, void *out);
 /**
  * @brief Remove all elements matching predicate.
  * @param[in,out] queue Queue.
- * @param[in] Match Predicate (`element`, `ctx`) → `bool`.
+ * @param[in] Match Predicate (`element`, `ctx`) -> `bool`.
  * @param[in] ctx User context.
  * @return Number removed.
  */

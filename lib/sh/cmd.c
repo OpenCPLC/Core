@@ -424,7 +424,7 @@ static void CMD_Alarm(char **argv, uint16_t argc)
       if(weekday == RTC_Weekday_Error) {
         CMD_ArgvExit(2);
       }
-      bool weekday_mask = weekday ? false : true;
+      bool weekday_mask = !weekday;
       char *time = str_replace_chars(argv[3], "\"/,:+-_", ',');
       char *hour_str = str_split(time, ',', 0);
       char *minute_str = str_split(time, ',', 1);

@@ -5,26 +5,28 @@
 //-------------------------------------------------------------------------------------------------
 #if(QUEUE_USE_HEAP)
 
-static void heap_sift_up(QUEUE_t *q, uint16_t i)
+static void heap_sift_up(QUEUE_t *queue, uint16_t i)
 {
   while(i > 0) {
     uint16_t p = (i - 1) / 2;
-    if(q->Compare(ary_get(&q->ary, i), ary_get(&q->ary, p)) >= 0) break;
-    ary_swap(&q->ary, i, p);
+    if(queue->Compare(ary_get(&queue->ary, i), ary_get(&queue->ary, p)) >= 0) break;
+    ary_swap(&queue->ary, i, p);
     i = p;
   }
 }
 
-static void heap_sift_down(QUEUE_t *q, uint16_t i)
+static void heap_sift_down(QUEUE_t *queue, uint16_t i)
 {
-  uint16_t n = ary_count(&q->ary);
+  uint16_t count = ary_count(&queue->ary);
   while(1) {
-    uint16_t sm = i, l = 2 * i + 1, r = 2 * i + 2;
-    if(l < n && q->Compare(ary_get(&q->ary, l), ary_get(&q->ary, sm)) < 0) sm = l;
-    if(r < n && q->Compare(ary_get(&q->ary, r), ary_get(&q->ary, sm)) < 0) sm = r;
-    if(sm == i) break;
-    ary_swap(&q->ary, i, sm);
-    i = sm;
+    uint16_t left = 2 * i + 1, right = 2 * i + 2, top = i;
+    if(left < count &&
+      queue->Compare(ary_get(&queue->ary, left), ary_get(&queue->ary, top)) < 0) top = left;
+    if(right < count &&
+      queue->Compare(ary_get(&queue->ary, right), ary_get(&queue->ary, top)) < 0) top = right;
+    if(top == i) break;
+    ary_swap(&queue->ary, i, top);
+    i = top;
   }
 }
 
@@ -33,8 +35,8 @@ static void heap_sift_down(QUEUE_t *q, uint16_t i)
 
 int16_t QUEUE_Find(QUEUE_t *queue, const void *key)
 {
-  uint16_t cnt = ary_count(&queue->ary);
-  for(uint16_t i = 0; i < cnt; i++) {
+  uint16_t count = ary_count(&queue->ary);
+  for(uint16_t i = 0; i < count; i++) {
     const void *item = ary_get(&queue->ary, i);
     bool same = queue->Equal ? queue->Equal(item, key) :
       !memcmp(item, key, queue->ary.element_size);
@@ -55,8 +57,8 @@ bool QUEUE_Push(QUEUE_t *queue, const void *element)
   }
   #endif
   if(queue->Compare) {
-    uint16_t pos = 0, cnt = ary_count(&queue->ary);
-    for(; pos < cnt; pos++) {
+    uint16_t pos = 0, count = ary_count(&queue->ary);
+    for(; pos < count; pos++) {
       if(queue->Compare(element, ary_get(&queue->ary, pos)) < 0) break;
     }
     ary_insert(&queue->ary, pos, element);
@@ -72,16 +74,16 @@ bool QUEUE_Pop(QUEUE_t *queue, void *element)
   if(ary_empty(&queue->ary)) return false;
   #if(QUEUE_USE_HEAP)
   if(queue->Compare) {
-    uint16_t cnt = ary_count(&queue->ary);
+    uint16_t count = ary_count(&queue->ary);
     if(queue->invert) {
-      uint16_t max_i = cnt / 2;
-      for(uint16_t i = max_i + 1; i < cnt; i++) {
+      uint16_t max_i = count / 2;
+      for(uint16_t i = max_i + 1; i < count; i++) {
         if(queue->Compare(ary_get(&queue->ary, i), ary_get(&queue->ary, max_i)) > 0) max_i = i;
       }
       return QUEUE_RemoveAt(queue, max_i, element);
     }
     if(element) memcpy(element, ary_get(&queue->ary, 0), queue->ary.element_size);
-    ary_set(&queue->ary, 0, ary_get(&queue->ary, cnt - 1));
+    ary_set(&queue->ary, 0, ary_get(&queue->ary, count - 1));
     ary_pop(&queue->ary, NULL);
     if(ary_count(&queue->ary) > 0) heap_sift_down(queue, 0);
     return true;
@@ -98,9 +100,9 @@ bool QUEUE_Peek(const QUEUE_t *queue, void *element)
   if(queue->Compare) {
     uint16_t idx = 0;
     if(queue->invert) {
-      uint16_t cnt = ary_count(&queue->ary);
-      idx = cnt / 2;
-      for(uint16_t i = idx + 1; i < cnt; i++) {
+      uint16_t count = ary_count(&queue->ary);
+      idx = count / 2;
+      for(uint16_t i = idx + 1; i < count; i++) {
         if(queue->Compare(ary_get(&queue->ary, i), ary_get(&queue->ary, idx)) > 0) idx = i;
       }
     }
@@ -114,12 +116,12 @@ bool QUEUE_Peek(const QUEUE_t *queue, void *element)
 
 bool QUEUE_RemoveAt(QUEUE_t *queue, uint16_t index, void *out)
 {
-  uint16_t cnt = ary_count(&queue->ary);
-  if(index >= cnt) return false;
+  uint16_t count = ary_count(&queue->ary);
+  if(index >= count) return false;
   #if(QUEUE_USE_HEAP)
   if(queue->Compare) {
     if(out) memcpy(out, ary_get(&queue->ary, index), queue->ary.element_size);
-    ary_set(&queue->ary, index, ary_get(&queue->ary, cnt - 1));
+    ary_set(&queue->ary, index, ary_get(&queue->ary, count - 1));
     ary_pop(&queue->ary, NULL);
     if(index < ary_count(&queue->ary)) {
       heap_sift_down(queue, index);

@@ -6,7 +6,7 @@
 
 __attribute__((weak)) void vrts_panic(const char *msg)
 {
-  (void)msg;
+  unused(msg);
   __disable_irq();
   while(1);
 }

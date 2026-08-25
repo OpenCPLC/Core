@@ -47,7 +47,7 @@ void print_args(const char *format, va_list args)
       switch(*format) {
         case 'a': case 'A': {
           ary_count = va_arg(args, uint32_t);
-          ary_type = precision > width ? precision : width;
+          ary_type = maxv(precision, width);
           if(!ary_type) ary_type = 1;
           memset(ary_space, 0, LOG_ARYSPACE_MAXLEN + 1);
           ary_space_len = 0;

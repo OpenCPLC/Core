@@ -37,7 +37,7 @@ static void ctrlc_disable(void)
 
 static void sig_handler(int sig)
 {
-  (void)sig;
+  unused(sig);
   exit_requested = 1;
 }
 

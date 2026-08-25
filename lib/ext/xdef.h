@@ -152,7 +152,7 @@ typedef enum {
 #define _min6(a,b,c,d,e,f) _min2(_min5(a,b,c,d,e), (f))
 /**
  * @brief Return minimum of provided values.
- * @note Supports 2–6 arguments. Single evaluation per argument.
+ * @note Supports 2-6 arguments. Single evaluation per argument.
  * @return Smallest of given arguments.
  */
 #define minv(...) (_args6(__VA_ARGS__, _min6, _min5, _min4, _min3, _min2)(__VA_ARGS__))
@@ -168,7 +168,7 @@ typedef enum {
 #define _max6(a,b,c,d,e,f) _max2(_max5(a,b,c,d,e), (f))
 /**
  * @brief Return maximum of provided values.
- * @note Supports 2–6 arguments. Single evaluation per argument.
+ * @note Supports 2-6 arguments. Single evaluation per argument.
  * @return Greatest of given arguments.
  */
 #define maxv(...) (_args6(__VA_ARGS__, _max6, _max5, _max4, _max3, _max2)(__VA_ARGS__))
@@ -185,7 +185,7 @@ typedef enum {
 
 /**
  * @brief Safe ABS for integer and floating-point types.
- *   Signed integers: |x| with saturation (MIN → MAX to avoid UB).
+ *   Signed integers: |x| with saturation (MIN -> MAX to avoid UB).
  *   Unsigned integers: returns x unchanged.
  *   Floating point: uses fabsf/fabs/fabsl.
  */
@@ -231,7 +231,7 @@ typedef enum {
  * @param value Value to check.
  * @param min Minimum allowed value.
  * @param max Maximum allowed value.
- * @return `true` if value ∈ [min, max], else `false`.
+ * @return `true` if value is inside `[min, max]`, else `false`.
  */
 #define in_range(value, min, max) ({ \
   __typeof__(value) _v  = (value); \

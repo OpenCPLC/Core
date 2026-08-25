@@ -13,7 +13,7 @@ static bool HD44780_ExpanderWrite(HD44780_t *hd, uint8_t data)
 static bool HD44780_Set4Bits(HD44780_t *hd, uint8_t value)
 {
   if(!HD44780_ExpanderWrite(hd, value & ~HD44780_EN)) return false;
-  if(!HD44780_ExpanderWrite(hd,value | HD44780_EN)) return false;
+  if(!HD44780_ExpanderWrite(hd, value | HD44780_EN)) return false;
   if(!HD44780_ExpanderWrite(hd, value & ~HD44780_EN)) return false;
   return true;
 }
@@ -90,8 +90,8 @@ bool HD44780_Home(HD44780_t *hd)
 bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_t exec)
 {
   switch(exec) {
-    case HD44780_Exec_ScreanOn: hd->_display |= HD44780_Display_ScreanOn; break;
-    case HD44780_Exec_ScreanOff: hd->_display &= ~HD44780_Display_ScreanOn; break;
+    case HD44780_Exec_ScreenOn: hd->_display |= HD44780_Display_ScreenOn; break;
+    case HD44780_Exec_ScreenOff: hd->_display &= ~HD44780_Display_ScreenOn; break;
     case HD44780_Exec_CursorOn: hd->_display |= HD44780_Display_CursorOn; break;
     case HD44780_Exec_CursorOff: hd->_display &= ~HD44780_Display_CursorOn; break;
     case HD44780_Exec_BlinkOn: hd->_display |= HD44780_Display_BlinkOn; break;
@@ -105,8 +105,8 @@ bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_t exec)
     default: break;
   }
   switch(exec) {
-    case HD44780_Exec_ScreanOn:
-    case HD44780_Exec_ScreanOff:
+    case HD44780_Exec_ScreenOn:
+    case HD44780_Exec_ScreenOff:
     case HD44780_Exec_CursorOn:
     case HD44780_Exec_CursorOff:
     case HD44780_Exec_BlinkOn:
@@ -156,8 +156,8 @@ bool HD44780_Init(HD44780_t *hd)
   if(hd->rows > 1) mode |= HD44780_Mode_2Line;
   if(hd->size5x10) mode |= HD44780_Mode_Dots5x10;
   if(!HD44780_Command(hd, HD44780_CMD_FunctionSet | mode)) return false;
-  hd->_display = HD44780_Display_ScreanOn;
-  if(!HD44780_Exec(hd, HD44780_Exec_ScreanOn)) return false;
+  hd->_display = HD44780_Display_ScreenOn;
+  if(!HD44780_Exec(hd, HD44780_Exec_ScreenOn)) return false;
   if(!HD44780_Exec(hd, HD44780_Exec_CursorOff)) return false;
   if(!HD44780_Exec(hd, HD44780_Exec_BlinkOff)) return false;
   if(!HD44780_Clear(hd)) return false;

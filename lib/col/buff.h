@@ -47,7 +47,7 @@ typedef struct {
   volatile uint8_t *_head;
   volatile uint8_t *_echo;
   volatile uint16_t _msg_counter;
-  uint16_t _msg_size[BUFF_MSG_LIMIT];
+  volatile uint16_t _msg_size[BUFF_MSG_LIMIT];
   volatile uint16_t _msg_head;
   volatile uint16_t _msg_tail;
   bool _break_allow;

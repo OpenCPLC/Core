@@ -7,7 +7,7 @@
 uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
 {
   uint32_t out;
-  uint8_t *pointner = (uint8_t *)&out;
+  uint8_t *pointer = (uint8_t *)&out;
   RCC_CRC_EN();
   CRC->POL = crc->polynomial;
   CRC->INIT = crc->initial;
@@ -31,8 +31,8 @@ uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
   if(crc->invert_out) {
     switch(crc->width) {
       case 32:
-        return (pointner[0] << 24) | (pointner[1] << 16) | (pointner[2] << 8) | pointner[3];
-      case 16: return (pointner[0] << 8) | pointner[1];
+        return (pointer[0] << 24) | (pointer[1] << 16) | (pointer[2] << 8) | pointer[3];
+      case 16: return (pointer[0] << 8) | pointer[1];
     }
   }
   return out;

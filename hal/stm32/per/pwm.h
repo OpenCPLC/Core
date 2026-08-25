@@ -23,11 +23,13 @@ typedef enum {
   PWM_Align_Center3 = 3
 } PWM_Align_t;
 
-// Clocks per PWM period divider: center-aligned sweeps the range twice
-#define pwm_align_div(align) ((align) ? 2u : 1u)
+// Counter ticks in one period: `ARR + 1` edge-aligned (`0..ARR` inclusive),
+// `2 * ARR` center-aligned (`0..ARR..0`, the turning points pass once)
+#define pwm_period_ticks(arr, align) ((align) ? (2u * (arr)) : ((arr) + 1u))
 
+// `ARR` register value for a target frequency, inverse of `pwm_period_ticks`
 #define PWM_ARR(freq_Hz, clock_Hz, align) \
-  ((clock_Hz) / (freq_Hz) / pwm_align_div(align))
+  ((align) ? ((clock_Hz) / (freq_Hz) / 2u) : (((clock_Hz) / (freq_Hz)) - 1u))
 
 /**
  * @brief PWM output configuration.

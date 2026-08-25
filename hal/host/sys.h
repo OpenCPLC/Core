@@ -20,8 +20,11 @@ size_t file_load(const char *name, uint8_t **data);
 
 //-------------------------------------------------------------------------------------- Intrinsics
 
-// Interrupt masking does not exist off-target, and a host build runs one thread
-// at a time under VRTS, so the CMSIS intrinsics firmware uses become no-ops
+// Interrupt masking does not exist off-target. VRTS threads run one at a time here,
+// exactly as on the target, so the CMSIS intrinsics firmware uses become no-ops.
+// The console reader is the one thread outside that scheduler: it stands in for the
+// UART interrupt and reaches `BUFF_t` the same way the target's handler does, as the
+// single producer against a single consumer.
 static inline void __disable_irq(void) {}
 static inline void __enable_irq(void) {}
 

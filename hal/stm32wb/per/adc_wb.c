@@ -13,7 +13,7 @@ const uint16_t ADC_OVERSAMPLING_RATIO_TAB[] = { 2, 4, 8, 16, 32, 64, 128, 256 };
 
 static ADC_Common_TypeDef *ADC_GetCommon(ADC_t *adc)
 {
-  (void)adc;
+  unused(adc);
   return ADC1_COMMON;
 }
 

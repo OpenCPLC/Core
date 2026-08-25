@@ -45,13 +45,7 @@ typedef struct {
   uint16_t timeout;
   BUFF_t *buff;
   // internal
-  #if defined(_WIN32) || defined(_WIN64)
-    void *_rx_thread;
-  #else
-    unsigned long _rx_thread;
-  #endif
   volatile bool _tx_busy;
-  volatile bool _running;
   bool _init;
 } UART_t;
 

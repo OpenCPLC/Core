@@ -66,8 +66,11 @@ bool BUFF_Break(BUFF_t *buff)
   if(!buff->_break_allow) return false;
   uint16_t next = buff->_msg_head + 1;
   if(next >= BUFF_MSG_LIMIT) next = 0;
-  // Drop-newest: message lost, pending queue intact
+  // Drop-newest: message lost, pending queue intact.
+  // Its bytes have to leave the ring too. `_tail` only ever advances by a recorded
+  // `_msg_size`, so bytes left behind would be read as the head of the next message.
   if(next == buff->_msg_tail) {
+    while(BUFF_Pop(buff, NULL));
     if(buff->Overflow) buff->Overflow();
     return false;
   }
@@ -156,7 +159,7 @@ uint16_t BUFF_Peek(BUFF_t *buff, uint8_t *dst)
 
 bool BUFF_Skip(BUFF_t *buff)
 {
-  return BUFF_Read(buff, NULL) ? true : false;
+  return BUFF_Read(buff, NULL) != 0;
 }
 
 char *BUFF_ReadString(BUFF_t *buff)

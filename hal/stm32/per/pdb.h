@@ -114,6 +114,7 @@ typedef struct {
   uint32_t _pointer_end;
   uint32_t _origin;
   uint32_t _skipped;
+  uint32_t _steps_left;
   bool _done;
 } PDB_Iter_t;
 

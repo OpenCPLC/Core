@@ -30,6 +30,8 @@ typedef struct {
   uint64_t tick;
   bool blink_on;
   bool one_shot;
+  // internal
+  RGB_Color_t _color;
 } RGB_t;
 
 void RGB_Init(RGB_t *rgb);

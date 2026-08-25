@@ -14,6 +14,10 @@
 
 //-------------------------------------------------------------------------------------------------
 
+// Longest single transfer. `NBYTES` in `CR2` is 8 bits wide and this driver does not
+// chain frames with `RELOAD`, so a larger length would spill into neighbouring fields.
+#define I2C_TRANSFER_MAX 255
+
 /**
  * @brief I2C master control structure.
  * @param[in] reg Pointer to I2C peripheral registers
@@ -29,6 +33,7 @@
  * @param _tx_dma TX DMA registers structure
  * @param _rx_dma RX DMA registers structure
  * @param _busy Transfer in progress flag
+ * @param _nack Last transfer was refused by the device
  * @param _tx_buffer Allocated TX buffer for `WriteReg`
  * @param _tx_ptr Current TX pointer (interrupt mode)
  * @param _rx_ptr Current RX pointer
@@ -51,6 +56,7 @@ typedef struct {
   DMA_t _tx_dma;
   DMA_t _rx_dma;
   volatile bool _busy;
+  volatile bool _nack;
   uint8_t *_tx_buffer;
   volatile uint8_t *_tx_ptr;
   uint8_t *_rx_ptr;
@@ -87,6 +93,16 @@ bool I2C_Master_IsBusy(I2C_Master_t *i2c);
  * @return `true` if free
  */
 bool I2C_Master_IsFree(I2C_Master_t *i2c);
+
+/**
+ * @brief Whether the last transfer ended with a NACK from the device.
+ * `NACKF` on this peripheral means a NACK *received* by the master, so it marks
+ * an absent device or a byte the device refused. The NACK a master-receiver sends
+ * after its own last byte is a normal end of frame and never raises this.
+ * @param[in] i2c Pointer to I2C master
+ * @return `true` when the device refused the address or a data byte
+ */
+bool I2C_Master_Nack(I2C_Master_t *i2c);
 
 /**
  * @brief Write data to I2C device.

@@ -46,9 +46,9 @@ uint32_t sqrt_u64(uint64_t value)
  */
 uint32_t ieee754_pack(float nbr)
 {
-  uint32_t *p_value;
-  p_value = (uint32_t *)&nbr;
-  return *p_value;
+  uint32_t value;
+  memcpy(&value, &nbr, sizeof(value));
+  return value;
 }
 
 /**
@@ -58,9 +58,9 @@ uint32_t ieee754_pack(float nbr)
  */
 float ieee754_unpack(uint32_t value)
 {
-  float *p_nbr;
-  p_nbr = (float *)&value;
-  return *p_nbr;
+  float nbr;
+  memcpy(&nbr, &value, sizeof(nbr));
+  return nbr;
 }
 
 //------------------------------------------------------------------------------------------- float
@@ -283,18 +283,18 @@ uint16_t filter_range_u32(uint32_t *data, uint16_t count, uint32_t min_val, uint
   if(!data || min_val > max_val) return 0;
   uint16_t valid = 0;
   for(uint16_t i = 0; i < count; i++) {
-    if(data[i] >= min_val && data[i] <= max_val) data[valid++] = data[i];
+    if(in_range(data[i], min_val, max_val)) data[valid++] = data[i];
   }
   return valid;
 }
 
 /**
- * @brief Rounded `mean x mul` of the inter-quartile core: sorts in place, drops
- * outliers beyond `1.5 x IQR`, averages the rest. Under 4 samples a plain mean.
+ * @brief Rounded `mean × mul` of the inter-quartile core: sorts in place, drops
+ * outliers beyond `1.5 × IQR`, averages the rest. Under 4 samples a plain mean.
  * @param data Values, sorted in place.
  * @param count Number of values.
  * @param mul Result scale factor (see `avg_u16`).
- * @return Rounded `mean x mul`. Returns `0` if `count` is `0`.
+ * @return Rounded `mean × mul`. Returns `0` if `count` is `0`.
  */
 uint32_t iqr_mean_u32(uint32_t *data, uint16_t count, uint32_t mul)
 {
@@ -309,7 +309,7 @@ uint32_t iqr_mean_u32(uint32_t *data, uint16_t count, uint32_t mul)
   uint64_t sum = 0;
   uint16_t valid = 0;
   for(uint16_t i = 0; i < count; i++) {
-    if(data[i] >= lo && data[i] <= hi) { sum += data[i]; valid++; }
+    if(in_range(data[i], lo, hi)) { sum += data[i]; valid++; }
   }
   if(!valid) return 0;
   return (uint32_t)((sum * mul + valid / 2) / valid);
@@ -487,9 +487,7 @@ static void select_u16(uint16_t *array, uint16_t len, uint16_t nth)
       while(i <= right && array[i] < pivot) i++;
       while(j > left && array[j] > pivot) j--;
       if(i >= j) break;
-      uint16_t tmp = array[i];
-      array[i] = array[j];
-      array[j] = tmp;
+      swap(array[i], array[j]);
       i++;
       if(j == 0) break;
       j--;
@@ -530,9 +528,7 @@ static void select_i16(int16_t *array, uint16_t len, uint16_t nth)
       while(i <= right && array[i] < pivot) i++;
       while(j > left && array[j] > pivot) j--;
       if(i >= j) break;
-      int16_t tmp = array[i];
-      array[i] = array[j];
-      array[j] = tmp;
+      swap(array[i], array[j]);
       i++;
       if(j == 0) break;
       j--;
@@ -590,7 +586,7 @@ void shift_u16(uint16_t *array, uint16_t len, int16_t shift)
       array[i] = (uint16_t)v;
     }
   }
-  else { // shift < 0 → right shift
+  else { // shift < 0 -> right shift
     uint32_t s = (uint32_t)(-shift);
     if(s >= 16) {
       for(uint16_t i = 0; i < len; i++) array[i] = 0;
@@ -622,7 +618,7 @@ void shift_u32(uint32_t *array, uint16_t len, int16_t shift)
       array[i] = (uint32_t)v;
     }
   }
-  else { // shift < 0 → right shift
+  else { // shift < 0 -> right shift
     uint32_t s = (uint32_t)(-shift);
     if(s >= 32) {
       for(uint16_t i = 0; i < len; i++) array[i] = 0;
@@ -691,7 +687,7 @@ void add_scalar_f32(float *array, uint16_t len, float value)
  * Mean is carried in Q8, so its fraction does not bias the squared differences,
  * and the scaled result keeps sub-unit precision.
  * @param data Pointer to input array.
- * @param count Number of elements in `data`. Must be ≥ 2.
+ * @param count Number of elements in `data`. Must be >= 2.
  * @param avg Optional pointer to store the rounded `mean × mul`.
  * @param mul Result scale factor (see `avg_u16`).
  * @return Rounded `stddev × mul`. Returns `0` if `count <= 1`.
@@ -713,7 +709,7 @@ uint32_t stddev_u16(const uint16_t *data, uint16_t count, uint32_t *avg, uint32_
 /**
  * @brief Signed counterpart of `stddev_u16`: `stddev × mul`, all-integer, Q8 mean.
  * @param data Pointer to input array.
- * @param count Number of elements in `data`. Must be ≥ 2.
+ * @param count Number of elements in `data`. Must be >= 2.
  * @param avg Optional pointer to store the rounded `mean × mul`.
  * @param mul Result scale factor (see `avg_u16`).
  * @return Rounded `stddev × mul`. Returns `0` if `count <= 1`.
@@ -736,7 +732,7 @@ uint32_t stddev_i16(const int16_t *data, uint16_t count, int32_t *avg, uint32_t 
  * @brief Sample standard deviation of `uint32_t` data as `stddev × mul`, all-integer.
  * The variance is lifted to Q16 before the root, so it must fit 48 bits.
  * @param data Pointer to input array.
- * @param count Number of elements in `data`. Must be ≥ 2.
+ * @param count Number of elements in `data`. Must be >= 2.
  * @param avg Optional pointer to store the rounded `mean × mul`.
  * @param mul Result scale factor (see `avg_u16`).
  * @return Rounded `stddev × mul`. Returns `0` if `count <= 1`.
@@ -761,7 +757,7 @@ uint32_t stddev_u32(const uint32_t *data, uint16_t count, uint32_t *avg, uint32_
  * @brief Signed counterpart of `stddev_u32`: `stddev × mul`, all-integer.
  * The variance is lifted to Q16 before the root, so it must fit 48 bits.
  * @param data Pointer to input array.
- * @param count Number of elements in `data`. Must be ≥ 2.
+ * @param count Number of elements in `data`. Must be >= 2.
  * @param avg Optional pointer to store the rounded `mean × mul`.
  * @param mul Result scale factor (see `avg_u16`).
  * @return Rounded `stddev × mul`. Returns `0` if `count <= 1`.
@@ -1105,9 +1101,7 @@ bool scale_fill(float start, float end, int n, float blend, float *scale_array)
   }
   bool reverse = false;
   if(start > end) {
-    float tmp = start;
-    start = end;
-    end = tmp;
+    swap(start, end);
     reverse = true;
   }
   float log_start = log10f(start);

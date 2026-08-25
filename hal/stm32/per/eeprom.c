@@ -63,7 +63,7 @@ static status_t _read_key(EEPROM_t *e, uint32_t key, uint32_t *out)
 {
   uint32_t start = e->_addr_start[e->_active];
   uint32_t marker = _marker_addr(e, e->_active);
-  for(uint32_t addr = marker; addr > start; ) {
+  for(uint32_t addr = marker; addr > start;) {
     addr -= 8;
     uint32_t k = *(volatile uint32_t *)addr;
     if(k == EEPROM_ERASED_KEY) continue;

@@ -175,8 +175,8 @@ static uint32_t rtc_time_register(const RTC_Datetime_t *date)
 
 /**
  * @brief Check if `stamp_alarm` falls in `[stamp_min, stamp_max]` window with wrap.
- * @param[in] stamp_min Window start (may be negative → wraps from end)
- * @param[in] stamp_max Window end (may exceed reload → wraps from start)
+ * @param[in] stamp_min Window start (may be negative -> wraps from end)
+ * @param[in] stamp_max Window end (may exceed reload -> wraps from start)
  * @param[in] stamp_alarm Alarm timestamp to test
  * @param[in] stamp_reload Period length (day or week in seconds)
  * @return `true` if alarm in window

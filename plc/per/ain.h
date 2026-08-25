@@ -74,9 +74,9 @@ _Static_assert(AIN_OVERSAMPLING_RATIO >= ADC_OversamplingRatio_16,
  * @param name Name of analog input.
  * @param data Pointer to ADC data buffer.
  * @param count Number of samples in buffer.
- * @param mode_4_20mA `true` if input works in 4–20 mA (or 2–10V) mode.
+ * @param mode_4_20mA `true` if input works in 4-20 mA (or 2-10V) mode.
  * @param ema Smoothing between windows for slowly varying signals, as a shift:
- * time constant ≈ window time × 2^ema, `0` = off. Integer filter, sub-LSB resolution.
+ * time constant ~ window time × 2^ema, `0` = off. Integer filter, sub-LSB resolution.
  * @param thresh_high_uV Upper threshold limit [µV], `0` = off.
  * @param thresh_low_uV Lower threshold limit [µV], `0` = off.
  * @param tick Timestamp for sampling / filtering.

@@ -9,14 +9,14 @@
 
 //----------------------------------------------------------------------- RCC: Clock Enable (stubs)
 
-static inline void RCC_EnableTIM(void *tim) { (void)tim; }
-static inline void RCC_EnableGPIO(void *gpio) { (void)gpio; }
-static inline void RCC_EnableUART(void *uart) { (void)uart; }
-static inline void RCC_DisableUART(void *uart) { (void)uart; }
-static inline void RCC_EnableI2C(void *i2c) { (void)i2c; }
-static inline void RCC_DisableI2C(void *i2c) { (void)i2c; }
-static inline void RCC_EnableSPI(void *spi) { (void)spi; }
-static inline void RCC_EnableDMA(void *dma) { (void)dma; }
+static inline void RCC_EnableTIM(void *tim) { unused(tim); }
+static inline void RCC_EnableGPIO(void *gpio) { unused(gpio); }
+static inline void RCC_EnableUART(void *uart) { unused(uart); }
+static inline void RCC_DisableUART(void *uart) { unused(uart); }
+static inline void RCC_EnableI2C(void *i2c) { unused(i2c); }
+static inline void RCC_DisableI2C(void *i2c) { unused(i2c); }
+static inline void RCC_EnableSPI(void *spi) { unused(spi); }
+static inline void RCC_EnableDMA(void *dma) { unused(dma); }
 
 //----------------------------------------------------------------------- RCC: System Clock (stubs)
 
@@ -24,7 +24,7 @@ static inline uint32_t RCC_GetClock(void) { return 64000000; } // Fake 64MHz
 static inline uint32_t RCC_SetHSE(uint32_t xtal_Hz) { return xtal_Hz; }
 static inline uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
 {
-  (void)m; (void)n; (void)r;
+  unused(m); unused(n); unused(r);
   return hse_Hz ? hse_Hz : 64000000;
 }
 
@@ -86,7 +86,7 @@ void PWR_Sleep(PWR_SleepMode_t mode);
  */
 static inline void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
 {
-  (void)pin; (void)edge;
+  unused(pin); unused(edge);
 }
 
 //---------------------------------------------------- PWR: Backup registers (RAM-based simulation)
@@ -115,7 +115,7 @@ typedef enum {
 
 static inline void IWDG_Init(IWDG_Prescaler_t prescaler, uint16_t reload)
 {
-  (void)prescaler; (void)reload;
+  unused(prescaler); unused(reload);
 }
 
 static inline void IWDG_Refresh(void) {}
@@ -133,7 +133,7 @@ typedef enum {
 } BOR_Level_t;
 
 static inline BOR_Level_t BOR_GetLevel(void) { return BOR_Level_1V7; }
-static inline status_t BOR_SetLevel(BOR_Level_t level) { (void)level; return OK; }
+static inline status_t BOR_SetLevel(BOR_Level_t level) { unused(level); return OK; }
 static inline bool BOR_WasReset(void) { return false; }
 
 //-------------------------------------------------------------------------------------------------

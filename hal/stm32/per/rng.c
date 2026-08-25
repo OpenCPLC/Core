@@ -24,7 +24,10 @@ void RNG_Init(RNG_Source_t source, RNG_Divider_t div)
 
 int32_t rng(int32_t min, int32_t max)
 {
-  return (RNG_Run() % (max - min)) + min;
+  if(max <= min) return min;
+  // Unsigned subtraction: `max - min` overflows `int32_t` for a full-range span
+  uint32_t span = (uint32_t)max - (uint32_t)min;
+  return (int32_t)((uint32_t)min + RNG_Run() % span);
 }
 
 //-------------------------------------------------------------------------------------------------

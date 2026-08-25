@@ -26,6 +26,8 @@
 
 //------------------------------------------------------------------------------------------- Types
 
+// Data is always one byte. Parity does not take a data bit away,
+// it adds a ninth bit to the word: a parity frame is 8 data bits plus 1 parity bit.
 typedef enum {
   UART_Parity_None = 0,
   UART_Parity_Odd = 1,

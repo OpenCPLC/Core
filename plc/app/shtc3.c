@@ -21,7 +21,7 @@ static bool SHTC3_SendCommand(SHTC3_t *shtc3, SHTC3_CMD_t cmd)
 {
   shtc3->buff_tx[0] = (uint8_t)(cmd >> 8);
   shtc3->buff_tx[1] = (uint8_t)(cmd);
-  return TWI_Write(SHTC3_ADRRESS, shtc3->buff_tx, 2);
+  return TWI_Write(SHTC3_ADDRESS, shtc3->buff_tx, 2);
 }
 
 static bool SHTC3_WakeUp(SHTC3_t *shtc3)
@@ -39,7 +39,7 @@ static bool SHTC3_SetMode(SHTC3_t *shtc3)
 
 static bool SHTC3_Read(SHTC3_t *shtc3)
 {
-  return TWI_Read(SHTC3_ADRRESS, shtc3->buff_rx, 6);
+  return TWI_Read(SHTC3_ADDRESS, shtc3->buff_rx, 6);
 }
 
 static bool SHTC3_Sleep(SHTC3_t *shtc3)

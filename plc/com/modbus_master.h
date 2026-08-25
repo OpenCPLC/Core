@@ -14,7 +14,7 @@ typedef enum {
   MODBUS_Error_Timeout,
   MODBUS_Error_MinLength,
   MODBUS_Error_Length,
-  MODBUS_Error_Adrress,
+  MODBUS_Error_Address,
   MODBUS_Error_Crc,
   MODBUS_Error_Function,
   MODBUS_Error_Start,

@@ -32,6 +32,8 @@ void RGB_Init(RGB_t *rgb)
     rgb->blue->mode = GPIO_Mode_Output;
     GPIO_Init(rgb->blue);
   }
+  // Unconditional: reading `_color` first would trust whatever the object was built on
+  rgb->_color = rgb->state ? rgb->state : RGB_White;
   RGB_Set(rgb, rgb->state);
   rgb_focus = rgb;
 }
@@ -54,6 +56,8 @@ void RGB_Set(RGB_t *rgb, RGB_Color_t color)
 {
   RGB_Preset(rgb, color);
   rgb->state = color;
+  // Remembered across an off state, so a toggle knows what to light again
+  if(color) rgb->_color = color;
 }
 
 void RGB_Rst(RGB_t *rgb)
@@ -64,7 +68,7 @@ void RGB_Rst(RGB_t *rgb)
 void RGB_Tgl(RGB_t *rgb)
 {
   if(rgb->state) RGB_Rst(rgb);
-  else RGB_Set(rgb, rgb->state);
+  else if(rgb->_color) RGB_Set(rgb, rgb->_color);
 }
 
 void RGB_Loop(RGB_t *rgb)
@@ -76,7 +80,7 @@ void RGB_Loop(RGB_t *rgb)
       else {
         RGB_Preset(rgb, RGB_Off);
         if(rgb->one_shot) {
-          rgb_focus->blink_ms = 0;
+          rgb->blink_ms = 0;
           rgb->one_shot = false;
         }
       }

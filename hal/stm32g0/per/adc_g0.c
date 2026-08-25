@@ -68,7 +68,7 @@ static void ADC_SetOversampling(ADC_t *adc, ADC_Oversampling_t *ovs)
 // 17..18 = PC4..PC5; channels 12..14 are the internal temperature, VREFINT and VBAT sources
 void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
 {
-  (void)adc; // single common register block on this family
+  unused(adc); // single common register block on this family
   while(count--) {
     uint8_t ch = *cha++;
     GPIO_TypeDef *port;

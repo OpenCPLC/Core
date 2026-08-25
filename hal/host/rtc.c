@@ -27,6 +27,8 @@ static int64_t rtc_offset_sec = 0; // offset from system time
 static RTC_AlarmCfg_t rtc_alarms[RTC_ALARM_COUNT];
 static bool rtc_alarm_enabled[RTC_ALARM_COUNT];
 static bool rtc_alarm_event[RTC_ALARM_COUNT];
+// Timestamp each alarm last fired at, so one match yields one event
+static uint64_t rtc_alarm_stamp[RTC_ALARM_COUNT];
 static bool rtc_wakeup_event = false;
 
 static uint64_t rtc_get_system_ms(void)
@@ -120,7 +122,7 @@ const char *RTC_WeekDayString(void)
 
 bool RTC_DatetimeIsCorrect(const RTC_Datetime_t *date, int8_t time_zone)
 {
-  (void)time_zone;
+  unused(time_zone);
   if(date->month < 1 || date->month > 12) return false;
   if(date->month_day < 1 ||
     date->month_day > get_days_in_month(date->month, 2000 + date->year)) return false;
@@ -279,7 +281,7 @@ void RTC_AlarmDisable(RTC_Alarm_t alarm)
 
 void RTC_WakeupTimerEnable(uint32_t sec)
 {
-  (void)sec;
+  unused(sec);
   // stub - no hardware wakeup on desktop
 }
 
@@ -323,7 +325,9 @@ bool RTC_Event(RTC_Alarm_t alarm)
   if(alarm >= RTC_ALARM_COUNT) return false;
   // Check if alarm should fire (within 1 second window)
   if(rtc_alarm_enabled[alarm] && !rtc_alarm_event[alarm]) {
-    if(RTC_AlarmCheck(alarm, 0, 0)) {
+    uint64_t now = RTC_Timestamp();
+    if(rtc_alarm_stamp[alarm] != now && RTC_AlarmCheck(alarm, 0, 0)) {
+      rtc_alarm_stamp[alarm] = now;
       rtc_alarm_event[alarm] = true;
     }
   }

@@ -9,7 +9,6 @@
   #include <conio.h>
 #else
   #include <unistd.h>
-  #include <pthread.h>
   #include <termios.h>
   #include <fcntl.h>
   #include <sys/select.h>
@@ -74,71 +73,20 @@ static int console_getch(void)
 }
 
 #endif
-//--------------------------------------------------------------------------------------- RX Thread
-#if defined(_WIN32) || defined(_WIN64)
+//------------------------------------------------------------------------------------ Console read
 
-static DWORD WINAPI uart_rx_thread(LPVOID param)
+// Console input is drained on the reading side, not by a thread of its own.
+// `BUFF_t` is written by one producer and read by one consumer; on the target those are
+// the interrupt and the thread it feeds, both on one core. A second OS thread here would
+// be neither, so the port keeps the single-producer contract by staying single-threaded.
+static void console_drain(UART_t *uart)
 {
-  UART_t *uart = (UART_t *)param;
-  while(uart->_running) {
-    if(console_kbhit()) {
-      int c = console_getch();
-      if(c >= 0) {
-        BUFF_Push(uart->buff, (uint8_t)c);
-        if(c == '\r' || c == '\n') BUFF_Break(uart->buff);
-      }
-    }
-    Sleep(1);
+  while(console_kbhit()) {
+    int c = console_getch();
+    if(c < 0) break;
+    BUFF_Push(uart->buff, (uint8_t)c);
+    if(c == '\r' || c == '\n') BUFF_Break(uart->buff);
   }
-  return 0;
-}
-
-#else //------------------------------------------------------------------------------- Linux
-
-static void *uart_rx_thread(void *param)
-{
-  UART_t *uart = (UART_t *)param;
-  while(uart->_running) {
-    if(console_kbhit()) {
-      int c = console_getch();
-      if(c >= 0) {
-        BUFF_Push(uart->buff, (uint8_t)c);
-        if(c == '\r' || c == '\n') BUFF_Break(uart->buff);
-      }
-    }
-    usleep(1000);
-  }
-  return NULL;
-}
-
-#endif
-//---------------------------------------------------------------------------------------- Internal
-
-static void UART_StartRxThread(UART_t *uart)
-{
-  uart->_running = true;
-  #if defined(_WIN32) || defined(_WIN64)
-    uart->_rx_thread = CreateThread(NULL, 0, uart_rx_thread, uart, 0, NULL);
-  #else
-    pthread_create((pthread_t *)&uart->_rx_thread, NULL, uart_rx_thread, uart);
-  #endif
-}
-
-static void UART_StopRxThread(UART_t *uart)
-{
-  uart->_running = false;
-  #if defined(_WIN32) || defined(_WIN64)
-    if(uart->_rx_thread) {
-      WaitForSingleObject(uart->_rx_thread, 1000);
-      CloseHandle(uart->_rx_thread);
-      uart->_rx_thread = NULL;
-    }
-  #else
-    if(uart->_rx_thread) {
-      pthread_join((pthread_t)uart->_rx_thread, NULL);
-      uart->_rx_thread = 0;
-    }
-  #endif
 }
 
 //--------------------------------------------------------------------------------------------- API
@@ -148,7 +96,6 @@ status_t UART_Init(UART_t *uart)
   if(!uart->buff) return ERR;
   BUFF_Init(uart->buff);
   UART_InitConsole();
-  UART_StartRxThread(uart);
   uart->_init = true;
   return OK;
 }
@@ -156,7 +103,6 @@ status_t UART_Init(UART_t *uart)
 void UART_DeInit(UART_t *uart)
 {
   if(!uart->_init) return;
-  UART_StopRxThread(uart);
   UART_DeinitConsole();
   uart->_init = false;
 }
@@ -191,10 +137,29 @@ status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len)
 
 //----------------------------------------------------------------------------------------- Receive
 
-uint16_t UART_Size(UART_t *uart) { return BUFF_Size(uart->buff); }
-uint16_t UART_Read(UART_t *uart, uint8_t *data) { return BUFF_Read(uart->buff, data); }
-char *UART_ReadString(UART_t *uart) { return BUFF_ReadString(uart->buff); }
-bool UART_Skip(UART_t *uart) { return BUFF_Skip(uart->buff); }
+uint16_t UART_Size(UART_t *uart)
+{
+  console_drain(uart);
+  return BUFF_Size(uart->buff);
+}
+
+uint16_t UART_Read(UART_t *uart, uint8_t *data)
+{
+  console_drain(uart);
+  return BUFF_Read(uart->buff, data);
+}
+
+char *UART_ReadString(UART_t *uart)
+{
+  console_drain(uart);
+  return BUFF_ReadString(uart->buff);
+}
+
+bool UART_Skip(UART_t *uart)
+{
+  console_drain(uart);
+  return BUFF_Skip(uart->buff);
+}
 void UART_Clear(UART_t *uart) { BUFF_Clear(uart->buff); }
 
 //------------------------------------------------------------------------------------------- Utils

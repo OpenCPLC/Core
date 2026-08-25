@@ -205,19 +205,20 @@ void PWM_Init(PWM_t *pwm)
 
 float PWM_GetFrequency(const PWM_t *pwm)
 {
-  return (float)SystemCoreClock / pwm->prescaler / pwm->auto_reload /
-    pwm_align_div(pwm->align);
+  if(!pwm->auto_reload) return 0.0f;
+  return (float)SystemCoreClock / pwm->prescaler /
+    (float)pwm_period_ticks(pwm->auto_reload, pwm->align);
 }
 
 float PWM_Frequency(PWM_t *pwm, float frequency)
 {
   if(frequency <= 0.0f) return PWM_GetFrequency(pwm);
   uint32_t reload_prev = pwm->auto_reload;
-  float ticks = (float)SystemCoreClock / frequency / pwm_align_div(pwm->align);
   uint32_t prescaler = 1;
-  uint32_t auto_reload = (uint32_t)ticks;
+  uint32_t auto_reload = PWM_ARR(frequency, (float)SystemCoreClock, pwm->align);
   while(auto_reload > 0xFFFF && prescaler < 0xFFFF) {
-    auto_reload = (uint32_t)(ticks / ++prescaler);
+    ++prescaler;
+    auto_reload = PWM_ARR(frequency * prescaler, (float)SystemCoreClock, pwm->align);
   }
   if(auto_reload > 0xFFFF) auto_reload = 0xFFFF; // below the achievable range
   PWM_SetPrescaler(pwm, prescaler);

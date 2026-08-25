@@ -7,7 +7,7 @@
 static void I2C_Slave_Sequence_IRQHandler(I2C_Slave_t *i2c)
 {
   // TODO: implement sequence mode with register pointer
-  (void)i2c;
+  unused(i2c);
 }
 
 static void I2C_Slave_Simple_IRQHandler(I2C_Slave_t *i2c)

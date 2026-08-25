@@ -48,7 +48,7 @@ float DOUT_GetDuty(const DOUT_t *dout)
  * @brief Set PWM duty cycle on digital output.
  * If `save` is enabled, the value is stored in EEPROM.
  * @param[in,out] dout Pointer to `DOUT_t` descriptor for transistor (TO) or triac (XO) output.
- * @param[in] duty PWM duty cycle [%] (0–100).
+ * @param[in] duty PWM duty cycle [%] (0-100).
  * @return Actual applied duty cycle [%], or `NaN` if not PWM type.
  */
 float DOUT_Duty(DOUT_t *dout, float duty)
@@ -199,8 +199,8 @@ bool DOUT_PulseFreeze(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t tof
  */
 bool DOUT_State(const DOUT_t *dout)
 {
-  if(dout->pwm) return dout->pwm->value[dout->channel] ? true : false;
-  else return dout->gpio.set;
+  if(dout->pwm) return dout->pwm->value[dout->channel] != 0;
+  return dout->gpio.set;
 }
 
 /**
@@ -210,7 +210,7 @@ bool DOUT_State(const DOUT_t *dout)
  */
 bool DOUT_IsPulse(DOUT_t *dout)
 {
-  return dout->pulse ? true : false;
+  return dout->pulse != 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -385,7 +385,7 @@ void DOUT_Bash(char **argv, uint16_t argc)
     }
     #if(LOG_COLORS)
       LOG_Info("Digital outputs: "ANSI_TEAL"%a %s"ANSI_END, bash.count, names);
-    #elif
+    #else
       LOG_Info("Digital outputs: %a, %s", bash.count, names);
     #endif
     return;

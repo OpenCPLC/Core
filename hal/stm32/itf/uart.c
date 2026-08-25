@@ -109,12 +109,9 @@ void UART_Init(UART_t *uart)
   BUFF_Init(uart->buff);
   // DMA setup
   UART_DmaSetup(uart);
-  // UART clock
   RCC_EnableUART(uart->reg);
-  // GPIO
   GPIO_InitAlternate(&UART_TX_MAP[uart->tx], false);
   GPIO_InitAlternate(&UART_RX_MAP[uart->rx], false);
-  // Baudrate
   UART_SetBaudrate(uart);
   // Reset registers
   uart->reg->CR1 = UART_CR1_RESET;
@@ -124,18 +121,22 @@ void UART_Init(UART_t *uart)
   uart->reg->RQR = USART_RQR_RXFRQ;
   // DMA TX, overrun disable
   uart->reg->CR3 |= USART_CR3_DMAT | USART_CR3_OVRDIS;
-  // Stop bits
   switch(uart->stop_bits) {
     case UART_StopBits_0_5: uart->reg->CR2 |= USART_CR2_STOP_0; break;
     case UART_StopBits_1:   break;
     case UART_StopBits_2:   uart->reg->CR2 |= USART_CR2_STOP_1; break;
     case UART_StopBits_1_5: uart->reg->CR2 |= USART_CR2_STOP_0 | USART_CR2_STOP_1; break;
   }
-  // Parity
+  // Parity occupies the most significant bit of the word, so 8 data bits with a parity
+  // bit is a 9-bit word (`M0`). Leaving `M` at 8 would send 7 data bits plus parity.
   switch(uart->parity) {
     case UART_Parity_None: break;
-    case UART_Parity_Odd:  uart->reg->CR1 |= USART_CR1_PCE | USART_CR1_PS; break;
-    case UART_Parity_Even: uart->reg->CR1 |= USART_CR1_PCE; break;
+    case UART_Parity_Odd:
+      uart->reg->CR1 |= USART_CR1_M0 | USART_CR1_PCE | USART_CR1_PS;
+      break;
+    case UART_Parity_Even:
+      uart->reg->CR1 |= USART_CR1_M0 | USART_CR1_PCE;
+      break;
   }
   // Timeout (timer or hardware RTO)
   if(uart->tim) {

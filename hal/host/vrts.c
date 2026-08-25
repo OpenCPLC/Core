@@ -59,65 +59,73 @@ static inline uint64_t vrts_ticker_get(void)
 
 #if(VRTS_SWITCHING)
 
+// The target runs one thread at a time and hands the core over only inside `let()`.
+// Host threads are real OS threads, so that contract is rebuilt on a baton: exactly one
+// index owns the CPU, `let()` passes it on round-robin, and every other thread blocks.
+// Without it `vrts_lock` guards nothing and the per-thread heap stacks all collapse
+// onto index 0, which is not how the same code behaves on the target.
 static struct {
   void (*handlers[VRTS_THREAD_LIMIT])(void);
   #if defined(_WIN32) || defined(_WIN64)
     HANDLE threads[VRTS_THREAD_LIMIT];
+    CRITICAL_SECTION lock;
+    CONDITION_VARIABLE turn;
   #else
     pthread_t threads[VRTS_THREAD_LIMIT];
+    pthread_mutex_t lock;
+    pthread_cond_t turn;
   #endif
   uint32_t count;
+  volatile uint32_t owner;
   volatile bool enabled;
+  volatile bool init;
 } vrts;
 
-#if defined(_WIN32) || defined(_WIN64)
-static DWORD WINAPI vrts_wrapper(LPVOID param)
-{
-  void (*handler)(void) = (void (*)(void))param;
-  handler();
-  return 0;
-}
-#else
-static void *vrts_wrapper(void *param)
-{
-  void (*handler)(void) = (void (*)(void))param;
-  handler();
-  return NULL;
-}
-#endif
+// Index of the calling thread. Thread `0` is the one that called `vrts_init`,
+// mirroring the target, where `vrts_init` enters the first handler on the main stack.
+static __thread uint32_t vrts_me;
 
-bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
+static void sched_lock(void)
 {
-  (void)stack; (void)size;
-  if(vrts.count >= VRTS_THREAD_LIMIT) return false;
-  vrts.handlers[vrts.count] = handler;
   #if defined(_WIN32) || defined(_WIN64)
-    vrts.threads[vrts.count] =
-      CreateThread(NULL, 0, vrts_wrapper, (LPVOID)handler, CREATE_SUSPENDED, NULL);
-    if(!vrts.threads[vrts.count]) return false;
-  #endif
-  vrts.count++;
-  return true;
-}
-
-void vrts_init(void)
-{
-  vrts.enabled = true;
-  #if defined(_WIN32) || defined(_WIN64)
-    for(uint32_t i = 0; i < vrts.count; i++) {
-      ResumeThread(vrts.threads[i]);
-    }
+    EnterCriticalSection(&vrts.lock);
   #else
-    for(uint32_t i = 0; i < vrts.count; i++) {
-      pthread_create(&vrts.threads[i], NULL, vrts_wrapper, (void *)vrts.handlers[i]);
-    }
+    pthread_mutex_lock(&vrts.lock);
   #endif
 }
 
-void vrts_lock(void) { vrts.enabled = false; }
-bool vrts_unlock(void) { vrts.enabled = true; return true; }
+static void sched_unlock(void)
+{
+  #if defined(_WIN32) || defined(_WIN64)
+    LeaveCriticalSection(&vrts.lock);
+  #else
+    pthread_mutex_unlock(&vrts.lock);
+  #endif
+}
 
-void let(void)
+static void sched_wait_turn(void)
+{
+  while(vrts.owner != vrts_me) {
+    #if defined(_WIN32) || defined(_WIN64)
+      SleepConditionVariableCS(&vrts.turn, &vrts.lock, INFINITE);
+    #else
+      pthread_cond_wait(&vrts.turn, &vrts.lock);
+    #endif
+  }
+}
+
+static void sched_wake(void)
+{
+  #if defined(_WIN32) || defined(_WIN64)
+    WakeAllConditionVariable(&vrts.turn);
+  #else
+    pthread_cond_broadcast(&vrts.turn);
+  #endif
+}
+
+// One idle tick per full round. The target burns the core in a cooperative wait too,
+// but a host process that does the same pins a CPU for nothing.
+static void sched_idle(void)
 {
   #if defined(_WIN32) || defined(_WIN64)
     Sleep(1);
@@ -126,7 +134,98 @@ void let(void)
   #endif
 }
 
-uint8_t vrts_active_thread(void) { return 0; }
+#if defined(_WIN32) || defined(_WIN64)
+static DWORD WINAPI vrts_wrapper(LPVOID param)
+#else
+static void *vrts_wrapper(void *param)
+#endif
+{
+  vrts_me = (uint32_t)(uintptr_t)param;
+  sched_lock();
+  sched_wait_turn();
+  sched_unlock();
+  vrts.handlers[vrts_me]();
+  // Landing pad for a handler that returns, same as the target
+  while(1) let();
+  #if defined(_WIN32) || defined(_WIN64)
+    return 0;
+  #else
+    return NULL;
+  #endif
+}
+
+bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
+{
+  (void)stack; (void)size;
+  if(!handler) return false;
+  if(vrts.count >= VRTS_THREAD_LIMIT) return false;
+  vrts.handlers[vrts.count] = handler;
+  vrts.count++;
+  return true;
+}
+
+void vrts_init(void)
+{
+  if(!vrts.count) return;
+  #if defined(_WIN32) || defined(_WIN64)
+    InitializeCriticalSection(&vrts.lock);
+    InitializeConditionVariable(&vrts.turn);
+  #else
+    pthread_mutex_init(&vrts.lock, NULL);
+    pthread_cond_init(&vrts.turn, NULL);
+  #endif
+  vrts_me = 0;
+  vrts.owner = 0;
+  vrts.enabled = true;
+  vrts.init = true;
+  // Threads start blocked: the baton is with index `0`, which is this one
+  for(uint32_t i = 1; i < vrts.count; i++) {
+    #if defined(_WIN32) || defined(_WIN64)
+      vrts.threads[i] = CreateThread(NULL, 0, vrts_wrapper, (LPVOID)(uintptr_t)i, 0, NULL);
+      if(!vrts.threads[i]) vrts_panic("thread create failed");
+    #else
+      if(pthread_create(&vrts.threads[i], NULL, vrts_wrapper, (void *)(uintptr_t)i)) {
+        vrts_panic("thread create failed");
+      }
+    #endif
+  }
+  // Does not return, matching the target
+  vrts.handlers[0]();
+  while(1) let();
+}
+
+void vrts_lock(void)
+{
+  vrts.enabled = false;
+}
+
+bool vrts_unlock(void)
+{
+  if(!vrts.init) return false;
+  vrts.enabled = true;
+  return true;
+}
+
+void let(void)
+{
+  if(!vrts.init) { sched_idle(); return; }
+  if(!vrts.enabled) return;
+  sched_lock();
+  uint32_t next = vrts.owner + 1;
+  if(next >= vrts.count) next = 0;
+  vrts.owner = next;
+  // A round has closed: pace the host before anyone runs again
+  if(!next) sched_idle();
+  if(next == vrts_me) { sched_unlock(); return; }
+  sched_wake();
+  sched_wait_turn();
+  sched_unlock();
+}
+
+uint8_t vrts_active_thread(void)
+{
+  return (uint8_t)vrts.owner;
+}
 
 #else // !VRTS_SWITCHING
 

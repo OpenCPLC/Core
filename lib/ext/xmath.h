@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
 #include "xdef.h"
 
 //-------------------------------------------------------------------------------------------------
@@ -99,8 +100,8 @@ int32_t avg_i32(const int32_t *array, uint16_t len, uint32_t mul);
 // Returns the kept count. Plausibility gate for interval/period measurements
 uint16_t filter_range_u32(uint32_t *data, uint16_t count, uint32_t min_val, uint32_t max_val);
 
-// Rounded `mean x mul` of the inter-quartile core: sorts in place, drops outliers
-// beyond `1.5 x IQR`, averages the rest; under 4 samples a plain mean
+// Rounded `mean × mul` of the inter-quartile core: sorts in place, drops outliers
+// beyond `1.5 × IQR`, averages the rest; under 4 samples a plain mean
 uint32_t iqr_mean_u32(uint32_t *data, uint16_t count, uint32_t mul);
 
 // Min, max and optionally sum with rounded `mean × mul`, one integer pass; the exact
@@ -285,7 +286,7 @@ float step_limiter_f32(float input, float prev, float max_delta);
  * @brief Exponential moving average filter for `int16_t` (-32768..32767).
  * @param input New input sample.
  * @param prev Previous sample.
- * @param alpha_shift Filter strength (higher = smoother), e.g. 3 → alpha = 1/8.
+ * @param alpha_shift Filter strength (higher = smoother), e.g. 3 -> alpha = 1/8.
  * @return Smoothed value.
  */
 int16_t ema_filter_i16(int16_t input, int16_t prev, uint8_t alpha_shift);
@@ -294,7 +295,7 @@ int16_t ema_filter_i16(int16_t input, int16_t prev, uint8_t alpha_shift);
  * @brief Exponential moving average filter for `uint16_t` (0..65535).
  * @param input New input sample.
  * @param prev Previous sample.
- * @param alpha_shift Filter strength (higher = smoother), e.g. 3 → alpha = 1/8.
+ * @param alpha_shift Filter strength (higher = smoother), e.g. 3 -> alpha = 1/8.
  * @return Smoothed value.
  */
 uint16_t ema_filter_u16(uint16_t input, uint16_t prev, uint8_t alpha_shift);
@@ -304,7 +305,7 @@ uint16_t ema_filter_u16(uint16_t input, uint16_t prev, uint8_t alpha_shift);
  *   accumulators (e.g. Q16).
  * @param input New input sample.
  * @param prev Previous filtered value.
- * @param alpha_shift Filter strength (higher = smoother), e.g. 3 → alpha = 1/8.
+ * @param alpha_shift Filter strength (higher = smoother), e.g. 3 -> alpha = 1/8.
  * @return Smoothed value.
  */
 int32_t ema_filter_i32(int32_t input, int32_t prev, uint8_t alpha_shift);
@@ -314,7 +315,7 @@ int32_t ema_filter_i32(int32_t input, int32_t prev, uint8_t alpha_shift);
  *   accumulators (e.g. Q16).
  * @param input New input sample.
  * @param prev Previous filtered value.
- * @param alpha_shift Filter strength (higher = smoother), e.g. 3 → alpha = 1/8.
+ * @param alpha_shift Filter strength (higher = smoother), e.g. 3 -> alpha = 1/8.
  * @return Smoothed value.
  */
 uint32_t ema_filter_u32(uint32_t input, uint32_t prev, uint8_t alpha_shift);
@@ -336,7 +337,7 @@ float ema_filter_f32(float input, float prev, float alpha);
  * @param[in] input Current sample.
  * @param[in] z1 Previous sample.
  * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2–3, 0 disables).
+ * @param[in] k Threshold multiplier (typical 2-3, 0 disables).
  * @return Cleaned value.
  */
 int16_t hampel_i16(int16_t input, int16_t z1, int16_t z2, uint8_t k);
@@ -346,7 +347,7 @@ int16_t hampel_i16(int16_t input, int16_t z1, int16_t z2, uint8_t k);
  * @param[in] input Current sample.
  * @param[in] z1 Previous sample.
  * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2–3, 0 disables).
+ * @param[in] k Threshold multiplier (typical 2-3, 0 disables).
  * @return Cleaned value.
  */
 uint16_t hampel_u16(uint16_t input, uint16_t z1, uint16_t z2, uint8_t k);
@@ -356,7 +357,7 @@ uint16_t hampel_u16(uint16_t input, uint16_t z1, uint16_t z2, uint8_t k);
  * @param[in] input Current sample.
  * @param[in] z1 Previous sample.
  * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2–3, 0 disables).
+ * @param[in] k Threshold multiplier (typical 2-3, 0 disables).
  * @return Cleaned value.
  */
 int32_t hampel_i32(int32_t input, int32_t z1, int32_t z2, uint8_t k);
@@ -366,7 +367,7 @@ int32_t hampel_i32(int32_t input, int32_t z1, int32_t z2, uint8_t k);
  * @param[in] input Current sample.
  * @param[in] z1 Previous sample.
  * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2–3, 0 disables).
+ * @param[in] k Threshold multiplier (typical 2-3, 0 disables).
  * @return Cleaned value.
  */
 uint32_t hampel_u32(uint32_t input, uint32_t z1, uint32_t z2, uint8_t k);
@@ -376,7 +377,7 @@ uint32_t hampel_u32(uint32_t input, uint32_t z1, uint32_t z2, uint8_t k);
  * @param[in] input Current sample.
  * @param[in] z1 Previous sample.
  * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2.0–3.0, ≤0 disables).
+ * @param[in] k Threshold multiplier (typical 2.0-3.0, <=0 disables).
  * @return Cleaned value.
  */
 float hampel_f32(float input, float z1, float z2, float k);

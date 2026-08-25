@@ -156,6 +156,7 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
     //---------------------------------------------------------------------------------------------
     case MODBUS_Fnc_WriteRegisters:
       count = (modbus->buffer_rx[4] << 8) | modbus->buffer_rx[5];
+      if(!count || count > MODBUS_WRITE_REGISTERS_MAX) return MODBUS_Status_InvalidSize;
       if(size_rx < 11 || !(size_rx % 2) || (count != (size_rx - 9) / 2) ||
         count != modbus->buffer_rx[6] / 2) return MODBUS_Status_InvalidSize;
       size_tx = 6;

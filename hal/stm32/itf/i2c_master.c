@@ -57,6 +57,7 @@ static void I2C_Master_IRQHandler(I2C_Master_t *i2c)
       I2C_CR1_TXIE | I2C_CR1_RXIE | I2C_CR1_TCIE);
     heap_free(i2c->_tx_buffer);
     i2c->_tx_buffer = NULL;
+    i2c->_nack = true;
     i2c->_busy = false;
   }
 }
@@ -87,7 +88,6 @@ void I2C_Master_Init(I2C_Master_t *i2c)
   GPIO_InitAlternate(&I2C_SDA_MAP[i2c->sda], i2c->pull_up);
   i2c->reg->TIMINGR = i2c->timing;
   i2c->reg->CR1 &= ~I2C_CR1_DNF;
-  // TX DMA
   if(i2c->tx_dma) {
     DMA_SetRegisters(i2c->tx_dma, &i2c->_tx_dma);
     RCC_EnableDMA(i2c->_tx_dma.reg);
@@ -99,7 +99,6 @@ void I2C_Master_Init(I2C_Master_t *i2c)
       (IRQ_Handler_t)I2C_Master_DMA_TX_IRQHandler, i2c);
     i2c->reg->CR1 |= I2C_CR1_TXDMAEN;
   }
-  // RX DMA
   if(i2c->rx_dma) {
     DMA_SetRegisters(i2c->rx_dma, &i2c->_rx_dma);
     RCC_EnableDMA(i2c->_rx_dma.reg);
@@ -134,11 +133,18 @@ bool I2C_Master_IsFree(I2C_Master_t *i2c)
   return !i2c->_busy;
 }
 
+bool I2C_Master_Nack(I2C_Master_t *i2c)
+{
+  return i2c->_nack;
+}
+
 //-------------------------------------------------------------------------------------------------
 
 status_t I2C_Master_Write(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16_t len)
 {
   if(i2c->_busy) return BUSY;
+  if(!data || !len || len > I2C_TRANSFER_MAX) return ERR;
+  i2c->_nack = false;
   if(i2c->tx_dma) {
     i2c->_tx_dma.cha->CCR &= ~DMA_CCR_EN;
     i2c->_tx_dma.cha->CMAR = (uint32_t)data;
@@ -163,6 +169,8 @@ status_t I2C_Master_Write(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16
 status_t I2C_Master_Read(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16_t len)
 {
   if(i2c->_busy) return BUSY;
+  if(!data || !len || len > I2C_TRANSFER_MAX) return ERR;
+  i2c->_nack = false;
   if(i2c->rx_dma) {
     i2c->_rx_dma.cha->CCR &= ~DMA_CCR_EN;
     i2c->_rx_dma.cha->CMAR = (uint32_t)data;
@@ -189,6 +197,7 @@ status_t I2C_Master_WriteReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
 )
 {
   if(i2c->_busy) return BUSY;
+  if(!data || !len || len >= I2C_TRANSFER_MAX) return ERR;
   i2c->_tx_buffer = heap_alloc(len + 1);
   if(!i2c->_tx_buffer) return ERR;
   i2c->_tx_buffer[0] = reg;
@@ -201,6 +210,8 @@ status_t I2C_Master_ReadReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
 )
 {
   if(i2c->_busy) return BUSY;
+  if(!data || !len || len > I2C_TRANSFER_MAX) return ERR;
+  i2c->_nack = false;
   i2c->_addr = addr;
   i2c->_rx_ptr = data;
   i2c->_size = len;
@@ -218,6 +229,9 @@ status_t I2C_Master_WriteRead(I2C_Master_t *i2c, uint8_t addr,
 )
 {
   if(i2c->_busy) return BUSY;
+  if(!tx_data || !tx_len || tx_len > I2C_TRANSFER_MAX) return ERR;
+  if(!rx_data || !rx_len || rx_len > I2C_TRANSFER_MAX) return ERR;
+  i2c->_nack = false;
   i2c->_addr = addr;
   i2c->_rx_ptr = rx_data;
   i2c->_size = rx_len;

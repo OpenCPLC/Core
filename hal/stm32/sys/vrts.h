@@ -122,7 +122,7 @@ bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size);
 
 // Registers a thread using a named stack buffer declared with `stack()`
 #define thread(fnc, stack_name) \
-  vrts_thread(&fnc, (uint32_t *)stack_name, sizeof(stack_name) / sizeof(uint32_t))
+  vrts_thread(&fnc, (uint32_t *)stack_name, array_len(stack_name))
 
 // Yields control to the next thread
 void let(void);

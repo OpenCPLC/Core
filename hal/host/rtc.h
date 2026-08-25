@@ -93,35 +93,35 @@ typedef struct {
  */
 status_t RTC_Init(void);
 
-// Convert
+//----------------------------------------------------------------------------------------- Convert
 RTC_Datetime_t RTC_UnixToDatetime(uint64_t timestamp);
 uint64_t RTC_DatetimeToUnix(const RTC_Datetime_t *date);
 const char *RTC_WeekDayString(void);
 bool RTC_DatetimeIsCorrect(const RTC_Datetime_t *date, int8_t time_zone);
 
-// Convert alarm
+//----------------------------------------------------------------------------------- Convert Alarm
 RTC_AlarmCfg_t RTC_DaystampToAlarm(uint32_t stamp);
 RTC_AlarmCfg_t RTC_WeekstampToAlarm(uint32_t stamp);
 uint32_t RTC_AlarmToDaystamp(const RTC_AlarmCfg_t *alarm);
 uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm);
 
-// Set
+//--------------------------------------------------------------------------------------------- Set
 void RTC_SetDatetime(RTC_Datetime_t *datetime);
 void RTC_SetTimestamp(uint64_t timestamp);
 void RTC_Reset(void);
 
-// Get
+//--------------------------------------------------------------------------------------------- Get
 RTC_Datetime_t RTC_Datetime(void);
 uint64_t RTC_Timestamp(void);
 uint64_t RTC_TimestampMs(void);
 uint32_t RTC_Daystamp(void);
 uint32_t RTC_Weekstamp(void);
 
-// Alarm get
+//--------------------------------------------------------------------------------------- Alarm Get
 RTC_AlarmCfg_t RTC_Alarm(RTC_Alarm_t alarm);
 uint32_t RTC_AlarmDaystamp(RTC_Alarm_t alarm);
 
-// Alarm control
+//----------------------------------------------------------------------------------- Alarm Control
 bool RTC_AlarmIsEnabled(RTC_Alarm_t alarm);
 void RTC_AlarmEnable(RTC_Alarm_t alarm, const RTC_AlarmCfg_t *cfg);
 void RTC_AlarmDaystampEnable(RTC_Alarm_t alarm, uint32_t stamp);
@@ -129,17 +129,19 @@ void RTC_AlarmWeekstampEnable(RTC_Alarm_t alarm, uint32_t stamp);
 void RTC_AlarmIntervalEnable(RTC_Alarm_t alarm, uint32_t interval_sec);
 void RTC_AlarmDisable(RTC_Alarm_t alarm);
 
-// Wakeup timer (stub on desktop)
+//------------------------------------------------------------------------------------ Wakeup Timer
+
+// Stub on desktop
 void RTC_WakeupTimerEnable(uint32_t sec);
 void RTC_WakeupTimerDisable(void);
 
-// Check
+//------------------------------------------------------------------------------------- Alarm Check
 bool RTC_CheckDaystamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec);
 bool RTC_CheckWeekstamp(uint32_t stamp_alarm, uint32_t offset_min_sec,
   uint32_t offset_max_sec);
 bool RTC_AlarmCheck(RTC_Alarm_t alarm, uint32_t offset_min_sec, uint32_t offset_max_sec);
 
-// Event
+//------------------------------------------------------------------------------------------- Event
 bool RTC_Event(RTC_Alarm_t alarm);
 bool RTC_EventWakeupTimer(void);
 void RTC_Force(RTC_Alarm_t alarm);

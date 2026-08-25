@@ -42,7 +42,7 @@ uint32_t hash_djb2_ci(const char *str)
  * @brief Helper: encode integer digits into reversed string.
  * @param nbr Number to convert (unsigned).
  * @param str Output buffer (digits reversed).
- * @param base Numeric base (2–36).
+ * @param base Numeric base (2-36).
  * @param sign Include sign (true = signed number, false = unsigned).
  * @param fill_zero Minimal digit count (filled with zeros).
  * @param fill_space Minimal string length (filled with spaces).
@@ -83,7 +83,7 @@ char StrTempMem[256];
 
 /**
  * @brief Convert 64-bit integer to string (backend for printf).
- * Supports signed/unsigned, base 2–36, zero-padding, space-padding.
+ * Supports signed/unsigned, base 2-36, zero-padding, space-padding.
  * @param nbr Number to convert.
  * @param base Numeric base (e.g. 10 for decimal, 16 for hex).
  * @param sign If true, treat as signed and show sign if negative.
@@ -586,7 +586,7 @@ char *str_join(uint32_t count, const char *str, ...)
   const char *tmp = str;
   for(uint32_t i = 0; i < count; i++) {
     total_size += strlen(tmp);
-    tmp = va_arg(args, const char*);
+    if(i + 1 < count) tmp = va_arg(args, const char*);
   }
   va_end(args);
   char *out = (char*)heap_new(total_size);
@@ -597,7 +597,7 @@ char *str_join(uint32_t count, const char *str, ...)
   for(uint32_t i = 0; i < count; i++) {
     const char *src = tmp;
     while(*src) *dst++ = *src++;
-    tmp = va_arg(args, const char*);
+    if(i + 1 < count) tmp = va_arg(args, const char*);
   }
   va_end(args);
   *dst = '\0';
@@ -1074,7 +1074,7 @@ char *str_replace(const char *str, const char *pattern, const char *replacement)
 
 /**
  * Split string by delimiter and get part at given index.
- * Example: str_split("a,b,c", ',', 1) → "b"
+ * Example: str_split("a,b,c", ',', 1) -> "b"
  * @param str Input string (null-terminated).
  * @param delimiter Single delimiter char.
  * @param index Zero-based index of part to return.

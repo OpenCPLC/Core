@@ -89,8 +89,9 @@ uint32_t RNG_Run(void)
 int32_t rng(int32_t min, int32_t max)
 {
   if(min >= max) return min;
-  uint32_t range = (uint32_t)(max - min);
-  return (int32_t)(RNG_Run() % range) + min;
+  // Unsigned subtraction: `max - min` overflows `int32_t` for a full-range span
+  uint32_t span = (uint32_t)max - (uint32_t)min;
+  return (int32_t)((uint32_t)min + RNG_Run() % span);
 }
 
 void RNG_Fill(uint8_t *buf, uint16_t len)

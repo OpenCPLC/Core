@@ -119,7 +119,7 @@ bool ary_swap(ary_t *ary, uint16_t i, uint16_t j)
   if(i == j) return true;
   uint8_t *a = ary_get(ary, i), *b = ary_get(ary, j);
   for(uint16_t k = 0; k < ary->element_size; k++) {
-    uint8_t t = a[k]; a[k] = b[k]; b[k] = t;
+    uint8_t tmp = a[k]; a[k] = b[k]; b[k] = tmp;
   }
   return true;
 }

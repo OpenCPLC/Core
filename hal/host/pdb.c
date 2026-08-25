@@ -284,6 +284,10 @@ status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query)
   iter->_done = false;
   _iter_set_page(iter, pdb->_page_active);
   iter->_origin = pdb->_pointer;
+  // The cursor sits past the last slot while a page-advance is still pending, and the
+  // stepper only ever lands on slots. Bounding the walk ends it even then.
+  iter->_steps_left = (uint32_t)pdb->page_count *
+    ((iter->_pointer_end - iter->_pointer_start) / pdb->_record_size);
   if(query->dir == PDB_Desc) {
     iter->_pointer = pdb->_pointer;
   }
@@ -299,6 +303,8 @@ status_t PDB_IterNext(PDB_Iter_t *iter, void *out)
   PDB_t *pdb = iter->_pdb;
   bool (*step)(PDB_Iter_t *) = iter->_query.dir == PDB_Desc ? _iter_dec : _iter_inc;
   while(1) {
+    if(!iter->_steps_left) { iter->_done = true; return ERR; }
+    iter->_steps_left--;
     if(step(iter)) { iter->_done = true; return ERR; }
     if(_slot_erased(iter->_pointer, pdb->_record_size)) continue;
     if(!_record_valid(pdb, iter->_pointer)) continue;

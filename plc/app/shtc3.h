@@ -9,7 +9,7 @@
 
 //-------------------------------------------------------------------------------------------------
 
-#define SHTC3_ADRRESS 0x70
+#define SHTC3_ADDRESS 0x70
 
 typedef enum {
   SHTC3_CMD_Sleep = 0xB098,
