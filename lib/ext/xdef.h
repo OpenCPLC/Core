@@ -51,7 +51,7 @@ typedef enum {
  * @param bit Bit index to check (0 = LSB).
  * @return `1` if bit is set, `0` if cleared.
  */
-#define bit_get(reg, bit)  (((reg) >> (bit)) & 1U)
+#define bit_get(reg, bit)  (((reg) >> (bit)) & 1u)
 
 //-------------------------------------------------------------------------------------------- ANSI
 

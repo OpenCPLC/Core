@@ -3,7 +3,7 @@
 #include "eeprom.h"
 
 #define EEPROM_ERASED_KEY 0xFFFFFFFFu
-#define EEPROM_ERASED_WORD 0xFFFFFFFFFFFFFFFFULL
+#define EEPROM_ERASED_WORD 0xFFFFFFFFFFFFFFFFull
 #define EEPROM_MARKER_KEY 0xFFFFFFFEu
 #define EEPROM_BEGIN_KEY 0xFFFFFFFDu // First slot of rewrite-target. Power-loss recovery tag.
 #define EEPROM_MARKER_MAGIC 0x5A5Au // Low 16b of marker value. Detects partial marker write.

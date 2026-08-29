@@ -37,7 +37,7 @@ static uint64_t rtc_get_system_ms(void)
     FILETIME ft;
     GetSystemTimeAsFileTime(&ft);
     uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-    return (t / 10000) - 11644473600000ULL; // convert to Unix ms
+    return (t / 10000) - 11644473600000ull; // convert to Unix ms
   #else
     struct timeval tv;
     gettimeofday(&tv, NULL);

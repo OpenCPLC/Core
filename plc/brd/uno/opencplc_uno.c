@@ -234,7 +234,7 @@ void PLC_Init(void)
 {
   vrts_lock();
   #if PLC_BOOTLOADER
-    // SCB->VTOR = FLASH_BASE | 0x00000000U;
+    // SCB->VTOR = FLASH_BASE | 0x00000000u;
   #endif
   // Konfiguracja systemowa
   BOR_SetLevel(PLC_BOR_LEVEL); // first boot may reprogram option bytes, then reset.

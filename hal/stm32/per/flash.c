@@ -40,6 +40,16 @@ static inline void flash_wait(void)
   while(FLASH->SR & FLASH_BSY) __DSB();
 }
 
+// Page reads as erased: `0xFFFFFFFF` in every word
+static bool flash_page_is_erased(uint16_t page)
+{
+  const volatile uint32_t *word = (const volatile uint32_t *)FLASH_GetAddress(page, 0);
+  for(uint32_t i = 0; i < FLASH_PAGE_SIZE / sizeof(uint32_t); i++) {
+    if(word[i] != 0xFFFFFFFFu) return false;
+  }
+  return true;
+}
+
 #if defined(STM32G0) && defined(STM32G0C1xx)
 /**
  * @brief Get bank bit for dual-bank G0C1.
@@ -71,20 +81,23 @@ static inline void flash_lock(void)
   FLASH->CR |= FLASH_CR_LOCK;
 }
 
+// Latch error flags, clear status and lock flash
+static status_t flash_finish(void)
+{
+  uint32_t sr = FLASH->SR;
+  FLASH->SR = FLASH_CLR_FLAGS;
+  flash_lock();
+  if(sr & FLASH_ERR_FLAGS) return ERR;
+  return OK;
+}
+
 //------------------------------------------------------------------------------------------- Erase
 
 status_t FLASH_Erase(uint16_t page)
 {
   if(page >= FLASH_PAGES) return ERR;
-  // Erasing an already-erased page completes without `EOP`,
-  // which the check below reads as a failure.
-  // An empty page IS the erased state: skip the operation.
-  const uint32_t *word = (const uint32_t *)FLASH_GetAddress(page, 0);
-  bool empty = true;
-  for(uint32_t i = 0; i < FLASH_PAGE_SIZE / sizeof(uint32_t); i++) {
-    if(word[i] != 0xFFFFFFFFu) { empty = false; break; }
-  }
-  if(empty) return OK;
+  // An empty page IS the erased state: skip the operation
+  if(flash_page_is_erased(page)) return OK;
   if(flash_unlock()) return ERR;
   FLASH->SR = FLASH_CLR_FLAGS;
   FLASH->CR &= ~FLASH_PNB_MASK;
@@ -99,12 +112,11 @@ status_t FLASH_Erase(uint16_t page)
   flash_wait();
   FLASH->CR &= ~FLASH_CR_PER;
   __DSB();
-  uint32_t sr = FLASH->SR;
-  FLASH->SR = FLASH_CLR_FLAGS;
-  flash_lock();
-  if(sr & FLASH_ERR_FLAGS) return ERR;
-  if(sr & FLASH_SR_EOP) return OK;
-  return ERR;
+  if(flash_finish()) return ERR;
+  // `EOP` is gated by `EOPIE` on G0/WB/L4, so a real erase never sets it here.
+  // Success is read from the flash itself: the page, erased
+  if(!flash_page_is_erased(page)) return ERR;
+  return OK;
 }
 
 //------------------------------------------------------------------------------------ Address/Read
@@ -137,10 +149,7 @@ status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2)
   flash_wait();
   FLASH->CR &= ~FLASH_CR_PG;
   __set_PRIMASK(primask);
-  uint32_t sr = FLASH->SR;
-  FLASH->SR = FLASH_CLR_FLAGS;
-  flash_lock();
-  if(sr & FLASH_ERR_FLAGS) return ERR;
+  if(flash_finish()) return ERR;
   if(*(volatile uint32_t *)addr != data1) return ERR;
   if(*(volatile uint32_t *)(addr + 4u) != data2) return ERR;
   return OK;
@@ -156,7 +165,6 @@ status_t FLASH_WriteFast(uint32_t addr, uint32_t *data)
     return ERR; // not in RAM: linker misconfig
   }
   if(flash_unlock()) return ERR;
-  flash_wait();
   FLASH->SR = FLASH_CLR_FLAGS;
   FLASH->CR |= FLASH_CR_FSTPG;
   uint32_t primask = __get_PRIMASK();
@@ -168,12 +176,13 @@ status_t FLASH_WriteFast(uint32_t addr, uint32_t *data)
   flash_wait();
   FLASH->CR &= ~FLASH_CR_FSTPG;
   __set_PRIMASK(primask);
-  uint32_t sr = FLASH->SR;
-  FLASH->SR = FLASH_CLR_FLAGS;
-  flash_lock();
-  if(sr & FLASH_ERR_FLAGS) return ERR;
-  if(sr & FLASH_SR_EOP) return OK;
-  return ERR;
+  if(flash_finish()) return ERR;
+  // Same `EOPIE` gate as the erase: verify the row against the source instead
+  addr -= 256u;
+  for(int i = 0; i < 64; i++) {
+    if(*(volatile uint32_t *)(addr + 4u * (uint32_t)i) != data[i]) return ERR;
+  }
+  return OK;
 }
 
 status_t FLASH_WritePage(uint16_t page, uint8_t *data)

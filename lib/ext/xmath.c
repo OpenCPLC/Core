@@ -23,7 +23,7 @@ int64_t div_round(int64_t num, int64_t den)
 
 uint32_t sqrt_u64(uint64_t value)
 {
-  uint64_t rem = value, res = 0, one = 1ull << 62;
+  uint64_t rem = value, res = 0, one = (uint64_t)1 << 62;
   while(one > rem) one >>= 2;
   while(one) {
     if(rem >= res + one) {
@@ -614,7 +614,7 @@ void shift_u32(uint32_t *array, uint16_t len, int16_t shift)
     uint32_t sh = s;
     for(uint16_t i = 0; i < len; i++) {
       uint64_t v = (uint64_t)array[i] << sh;
-      if(v > 0xFFFFFFFFULL) v = 0xFFFFFFFFULL;
+      if(v > 0xFFFFFFFFull) v = 0xFFFFFFFFull;
       array[i] = (uint32_t)v;
     }
   }

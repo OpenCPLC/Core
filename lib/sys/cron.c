@@ -5,22 +5,22 @@
 //---------------------------------------------------------------------------------------- Internal
 
 // Bitmask of all valid `month_day` values (bits `1`-`31`)
-#define CRON_MDAY_ALL 0xFFFFFFFEU
+#define CRON_MDAY_ALL 0xFFFFFFFEu
 // Bitmask of all valid `week_day` values (bits `1`-`7`)
-#define CRON_WDAY_ALL 0xFEU
+#define CRON_WDAY_ALL 0xFEu
 
 static CRON_t tasks[CRON_MAX_TASKS];
 
 // Match current datetime against task spec, POSIX `month_day`/`week_day` rule
 static bool CRON_Match(const CRON_t *t, const RTC_Datetime_t *now)
 {
-  if(!(t->minute & (1ULL << now->minute))) return false;
-  if(!(t->hour & (1U << now->hour))) return false;
-  if(!(t->month & (1U << now->month))) return false;
+  if(!(t->minute & ((uint64_t)1 << now->minute))) return false;
+  if(!(t->hour & (1u << now->hour))) return false;
+  if(!(t->month & (1u << now->month))) return false;
   bool md_any = (t->month_day & CRON_MDAY_ALL) == CRON_MDAY_ALL;
   bool wd_any = (t->week_day & CRON_WDAY_ALL) == CRON_WDAY_ALL;
-  bool md_hit = (t->month_day & (1U << now->month_day)) != 0;
-  bool wd_hit = (t->week_day & (1U << now->week_day)) != 0;
+  bool md_hit = (t->month_day & (1u << now->month_day)) != 0;
+  bool wd_hit = (t->week_day & (1u << now->week_day)) != 0;
   if(md_any && wd_any) return true;
   if(md_any) return wd_hit;
   if(wd_any) return md_hit;

@@ -17,8 +17,8 @@
 #define DAC_MASK 0x0FFF // 12-bit right-aligned
 #define DAC_SET(ch1, ch2) (((uint32_t)((ch2) & DAC_MASK) << 16) | ((ch1) & DAC_MASK))
 
-void DAC_Calib(bool ch1_pa4, bool ch2_pa5);
-void DAC_Init(bool ch1_pa4, bool ch2_pa5);
+void DAC_Calib(bool ch1, bool ch2);
+void DAC_Init(bool ch1, bool ch2);
 
 static inline void DAC_SetCH1(uint16_t value)
 {
