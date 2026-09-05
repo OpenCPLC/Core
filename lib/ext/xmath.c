@@ -1123,4 +1123,21 @@ bool scale_fill(float start, float end, int n, float blend, float *scale_array)
   return true;
 }
 
+//----------------------------------------------------------------------------------- Interpolation
+
+float interp_f32(float x, const float *xs, const float *ys, uint16_t count)
+{
+  if(isNaN(x) || count == 0) return NaN;
+  if(count == 1) return ys[0];
+  bool asc = xs[0] < xs[count - 1];
+  if(asc ? (x <= xs[0]) : (x >= xs[0])) return ys[0];
+  for(uint16_t i = 1; i < count; i++) {
+    if(asc ? (x <= xs[i]) : (x >= xs[i])) {
+      float t = (x - xs[i - 1]) / (xs[i] - xs[i - 1]);
+      return ys[i - 1] + t * (ys[i] - ys[i - 1]);
+    }
+  }
+  return ys[count - 1];
+}
+
 //-------------------------------------------------------------------------------------------------

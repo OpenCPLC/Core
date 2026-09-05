@@ -96,6 +96,9 @@ extern void (* volatile LPUART1_Cb)(void *); extern void * volatile LPUART1_CbAr
 extern void (* volatile LPUART2_Cb)(void *); extern void * volatile LPUART2_CbArg;
 #endif
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- USB
 
+extern void (* volatile USB_Cb)(void *); extern void * volatile USB_CbArg;
+
+//-------------------------------------------------------------------------------------------------
 #endif

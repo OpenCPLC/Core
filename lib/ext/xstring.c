@@ -1138,4 +1138,45 @@ int str_explode(char ***arr_ptr, const char *str, char delimiter)
   return count;
 }
 
+uint8_t str_split_int(const char *str, char sep, uint8_t base, uint32_t *parts,
+  uint8_t limit)
+{
+  if(!str || !*str || !limit || base < 2 || base > 36) return 0;
+  uint8_t count = 0;
+  bool digit = false;
+  uint64_t value = 0;
+  for(const char *c = str; ; c++) {
+    uint8_t weight = 0xFF;
+    if(*c >= '0' && *c <= '9') weight = (uint8_t)(*c - '0');
+    else if(*c >= 'A' && *c <= 'Z') weight = (uint8_t)(*c - 'A' + 10);
+    else if(*c >= 'a' && *c <= 'z') weight = (uint8_t)(*c - 'a' + 10);
+    if(weight < base) {
+      value = value * base + weight;
+      if(value > UINT32_MAX) return 0;
+      digit = true;
+    }
+    else if(*c == sep || *c == 0) {
+      if(!digit || count >= limit) return 0;
+      parts[count++] = (uint32_t)value;
+      value = 0;
+      digit = false;
+      if(*c == 0) return count;
+    }
+    else return 0;
+  }
+}
+
+char *str_append_int(char *dst, int64_t nbr, uint8_t base, uint8_t fill_zero)
+{
+  // Digits are made in one place in this library, and that place leaves them reversed
+  uint8_t len = itoa_encode(nbr, dst, base, true, fill_zero, 0);
+  for(uint8_t i = 0, j = len; i + 1 < j; i++) {
+    j--;
+    char swap = dst[i];
+    dst[i] = dst[j];
+    dst[j] = swap;
+  }
+  return dst + len;
+}
+
 //-------------------------------------------------------------------------------------------------

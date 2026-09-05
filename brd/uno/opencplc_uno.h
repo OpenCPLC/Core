@@ -91,6 +91,9 @@ void PLC_Init(void);
 void PLC_Loop(void);
 void PLC_Main(void);
 
+// Buses the board maps, ready for external drivers
+extern I2C_Master_t i2c_master;
+
 // PT100/PT1000
 extern MAX31865_t RTD;
 #define RTD1 RTD

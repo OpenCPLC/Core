@@ -198,6 +198,12 @@ void CMD_SetSleep(void (*Sleep)(PWR_SleepMode_t));
 void CMD_SetReset(void (*Reset)(void));
 
 /**
+ * @brief Set hook called for every line the console receives, before it is handled.
+ * @param[in] Activity Hook function or `NULL` for none
+ */
+void CMD_SetActivity(void (*Activity)(void));
+
+/**
  * @brief Report wrong argument count error.
  * Internal. Called by `CMD_Argc*` macros, not meant for direct use.
  * @param[in] cmd Command name (`argv[0]`)

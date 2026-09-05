@@ -93,6 +93,7 @@ void LOG_Panic(const char *message);         // Log panic message and flush bloc
 void LOG_Message(LOG_Level_t lvl, char *message, ...);
 
 #define LOG_NOP LOG_Nope      // No-op log (for disabled levels)
+
 #define LOG_DBG LOG_Debug     // Log debug message
 #define LOG_INF LOG_Info      // Log info message
 #define LOG_WRN LOG_Warning   // Log warning message
@@ -101,6 +102,8 @@ void LOG_Message(LOG_Level_t lvl, char *message, ...);
 #define LOG_PNC LOG_Panic     // Log panic message and flush blocking
 #define LOG_MSG LOG_Message   // Log message with specified level
 
+// Aside in grey: format text, not a value; brings its own space, args follow the message
+#define LOG_NOTE(fmt) ANSI_GREY " (" fmt ")" ANSI_END
 // Context tag: a module, command or any short phrase. Caller adds the spacing
 #define LOG_TAG(name) ANSI_GREY "[" ANSI_CREAM name ANSI_GREY "]" ANSI_END
 // Debug log with context tag

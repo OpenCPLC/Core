@@ -16,6 +16,7 @@ static struct {
   MBB_t *mbb_active;
   void (*Sleep)(PWR_SleepMode_t);
   void (*Reset)(void);
+  void (*Activity)(void);
   volatile uint16_t trig;
 } cmd;
 
@@ -75,6 +76,11 @@ void CMD_SetSleep(void (*Sleep)(PWR_SleepMode_t))
 void CMD_SetReset(void (*Reset)(void))
 {
   cmd.Reset = Reset;
+}
+
+void CMD_SetActivity(void (*Activity)(void))
+{
+  cmd.Activity = Activity;
 }
 
 static inline void CMD_WrongCommand(char *name)
@@ -586,11 +592,12 @@ static void CMD_Trig(char **argv, uint16_t argc)
 
 //-------------------------------------------------------------------------------------------- Step
 
-bool CMD_Step(STREAM_t *stream)
+static bool cmd_step(STREAM_t *stream)
 {
   char **argv = NULL;
   uint16_t argc = STREAM_Read(stream, &argv);
   if(argc) {
+    if(cmd.Activity) cmd.Activity(); // a line arrived, whatever it holds
     if(stream->_data_mode) CMD_Data((uint8_t *)argv[0], argc, stream);
     else {
       uint32_t argv0_hash = hash_djb2_ci(argv[0]);
@@ -628,6 +635,12 @@ bool CMD_Step(STREAM_t *stream)
     return true;
   }
   return false;
+}
+
+
+bool CMD_Step(STREAM_t *stream)
+{
+  return cmd_step(stream);
 }
 
 //-------------------------------------------------------------------------------------------------

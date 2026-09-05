@@ -378,4 +378,45 @@ void IRQ_ClearPendingEXTI(uint8_t line)
   NVIC_ClearPendingIRQ(irq);
 }
 
+//--------------------------------------------------------------------------------------------- USB
+
+void IRQ_EnableUSB(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
+{
+  USB_Cb = handler;
+  USB_CbArg = object;
+  // Single-buffer endpoints use only `USB_LP_IRQn`.
+  NVIC_SetPriority(USB_LP_IRQn, EncodePriority(priority));
+  NVIC_EnableIRQ(USB_LP_IRQn);
+}
+
+void IRQ_DisableUSB(void) { NVIC_DisableIRQ(USB_LP_IRQn); }
+void IRQ_ClearPendingUSB(void) { NVIC_ClearPendingIRQ(USB_LP_IRQn); }
+
+//-------------------------------------------------------------------------------------------- IPCC
+
+void IRQ_EnableIPCC(IRQ_Priority_t priority, IRQ_Handler_t rx, IRQ_Handler_t tx,
+  void *object)
+{
+  IPCC_RX_Cb = rx;
+  IPCC_TX_Cb = tx;
+  IPCC_CbArg = object;
+  uint32_t prio = EncodePriority(priority);
+  NVIC_SetPriority(IPCC_C1_RX_IRQn, prio);
+  NVIC_SetPriority(IPCC_C1_TX_IRQn, prio);
+  NVIC_EnableIRQ(IPCC_C1_RX_IRQn);
+  NVIC_EnableIRQ(IPCC_C1_TX_IRQn);
+}
+
+void IRQ_DisableIPCC(void)
+{
+  NVIC_DisableIRQ(IPCC_C1_RX_IRQn);
+  NVIC_DisableIRQ(IPCC_C1_TX_IRQn);
+}
+
+void IRQ_ClearPendingIPCC(void)
+{
+  NVIC_ClearPendingIRQ(IPCC_C1_RX_IRQn);
+  NVIC_ClearPendingIRQ(IPCC_C1_TX_IRQn);
+}
+
 //-------------------------------------------------------------------------------------------------

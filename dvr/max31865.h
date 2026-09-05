@@ -1,4 +1,4 @@
-// plc/dvr/max31865.h
+// dvr/max31865.h
 
 #ifndef MAX31865_H_
 #define MAX31865_H_

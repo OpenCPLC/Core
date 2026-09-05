@@ -25,12 +25,11 @@
 //------------------------------------------------------------------------------------------ Macros
 
 // Buffer length (in samples) that holds `time_ms` of recording,
-// rounded down to whole scans.
-// Assumes a 16MHz ADC clock (16000 cycles per millisecond),
-// exact when the ADC runs from HSI16 with prescaler 1
-#define adc_record_buffer_size(time_ms, sample_time, oversampling, channel_count) \
+// rounded down to whole scans. The kernel frequency is the caller's to state,
+// `ADC_Frequency_Hz` tells it at runtime
+#define adc_record_buffer_size(freq_Hz, time_ms, sample_time, oversampling, channel_count) \
   (uint16_t)((channel_count) * \
-    ((time_ms) * 16000 / (sample_time) / (oversampling) / (channel_count)))
+    ((time_ms) * ((freq_Hz) / 1000) / (sample_time) / (oversampling) / (channel_count)))
 
 // Multiply a raw conversion by this factor to get the voltage at the top of a resistor divider
 #define resistor_divider_factor(vcc, up, down, resolution) \
@@ -47,9 +46,6 @@
 
 // Number of accumulated samples for an oversampling ratio enum value
 #define adc_oversampling_samples(ratio) (2u << (ratio))
-
-// Factory calibration of the internal reference: reading at VDDA = 3.0V (G0/WB layout)
-#define ADC_VREFINT_CAL (*(const uint16_t *)0x1FFF75AAu)
 
 //------------------------------------------------------------------------------------------- Types
 
@@ -178,7 +174,7 @@ typedef struct {
  * until the current one completes or `ADC_Stop` is called.
  * @param[in] reg ADC peripheral registers, `NULL` selects `ADC1`
  * @param[in] irq_priority Interrupt priority for the ADC and its DMA channel
- * @param[in] use_hsi Clock the ADC from HSI16 instead of the system clock
+ * @param[in] clock Kernel clock route (`ADC_Clock_...`), zero = family default
  * @param[in] prescaler ADC clock prescaler, common to every job on this ADC
  * @param[in] measure One-shot conversion configuration
  * @param[in] record DMA recording configuration (when `ADC_RECORD` is enabled)
@@ -189,7 +185,7 @@ typedef struct {
 typedef struct {
   ADC_TypeDef *reg;
   IRQ_Priority_t irq_priority;
-  bool use_hsi;
+  ADC_Clock_t clock;
   ADC_Prescaler_t prescaler;
   ADC_Measure_t measure;
   #if(ADC_RECORD)
@@ -229,6 +225,13 @@ status_t ADC_Measure(ADC_t *adc);
  * @return Raw conversion result
  */
 uint16_t ADC_Read(ADC_t *adc, uint8_t chan);
+
+/**
+ * @brief Kernel clock frequency of the configured route after the prescaler.
+ * @param[in] adc Pointer to ADC structure
+ * @return Frequency [Hz], `0` when the framework cannot know it (a PLL route)
+ */
+uint32_t ADC_Frequency_Hz(ADC_t *adc);
 
 /**
  * @brief Supply voltage computed from the internal reference (`ADC_IN_VREFEN`)

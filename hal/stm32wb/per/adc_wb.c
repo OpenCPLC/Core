@@ -6,6 +6,12 @@
 //------------------------------------------------------------------------------------------- Const
 
 const uint16_t ADC_PRESCALER_TAB[] = { 1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256 };
+
+uint32_t ADC_Frequency_Hz(ADC_t *adc)
+{
+  if(adc->clock == ADC_Clock_PLLP || adc->clock == ADC_Clock_PLLSAI) return 0;
+  return SystemCoreClock / ADC_PRESCALER_TAB[adc->prescaler];
+}
 const uint16_t ADC_SAMPLING_TIME_TAB[] = { 15, 19, 25, 37, 60, 105, 260, 653 };
 const uint16_t ADC_OVERSAMPLING_RATIO_TAB[] = { 2, 4, 8, 16, 32, 64, 128, 256 };
 
@@ -258,10 +264,11 @@ void ADC_Init(ADC_t *adc)
   if(!adc->reg) adc->reg = ADC1;
   ADC_Disable(adc);
   ADC_Common_TypeDef *common = ADC_GetCommon(adc);
-  RCC->CCIPR &= ~RCC_CCIPR_ADCSEL_Msk;
-  if(adc->use_hsi) {
-    RCC->CCIPR |= RCC_CCIPR_ADCSEL_1;
-  }
+  // Register route per `ADC_Clock_t`: reset `00` is no clock at all,
+  // `Default` is the system clock on this family
+  static const uint8_t clock_sel[] = { 3, 3, 2, 1 };
+  RCC->CCIPR = (RCC->CCIPR & ~RCC_CCIPR_ADCSEL_Msk)
+    | ((uint32_t)clock_sel[adc->clock] << RCC_CCIPR_ADCSEL_Pos);
   RCC->AHB2ENR |= RCC_AHB2ENR_ADCEN;
   common->CCR = (common->CCR & ~ADC_CCR_PRESC_Msk) | (adc->prescaler << ADC_CCR_PRESC_Pos);
   adc->reg->CR &= ~ADC_CR_DEEPPWD;

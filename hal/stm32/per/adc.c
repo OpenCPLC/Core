@@ -49,10 +49,6 @@ uint16_t ADC_Read(ADC_t *adc, uint8_t chan)
 
 //-------------------------------------------------------------------------------------------------
 
-// Factory calibration of the temperature sensor, measured at VDDA = 3.0V (G0/WB layout)
-#define ADC_TS_CAL1 (*(const uint16_t *)0x1FFF75A8u) // at 30°C
-#define ADC_TS_CAL2 (*(const uint16_t *)0x1FFF75CAu) // at 130°C
-
 // Longest sampling time, no oversampling: the calibration data lives on the native
 // 12-bit scale. The first conversion is discarded, it covers the source startup time
 static uint16_t ADC_ReadInternal(ADC_t *adc, uint8_t chan)
@@ -65,13 +61,13 @@ uint16_t ADC_Vdda_mV(ADC_t *adc)
 {
   uint16_t raw = ADC_ReadInternal(adc, ADC_IN_VREFEN);
   if(!raw) return 0;
-  return (uint16_t)(3000ul * ADC_VREFINT_CAL / raw);
+  return (uint16_t)((uint32_t)ADC_CAL_VDDA_mV * ADC_VREFINT_CAL / raw);
 }
 
 float ADC_Temperature_C(ADC_t *adc)
 {
   uint16_t vdda = ADC_Vdda_mV(adc);
-  float data = (float)ADC_ReadInternal(adc, ADC_IN_TSEN) * vdda / 3000.0f;
+  float data = (float)ADC_ReadInternal(adc, ADC_IN_TSEN) * vdda / ADC_CAL_VDDA_mV;
   return 30.0f + 100.0f * (data - ADC_TS_CAL1) / (float)(ADC_TS_CAL2 - ADC_TS_CAL1);
 }
 
@@ -130,8 +126,8 @@ uint16_t ADC_RecordPosition(ADC_t *adc)
 
 float ADC_RecordScanTime_s(ADC_t *adc)
 {
-  float freq = (adc->use_hsi ? 16000000.0f : (float)SystemCoreClock);
-  freq /= (float)ADC_PRESCALER_TAB[adc->prescaler];
+  uint32_t hz = ADC_Frequency_Hz(adc);
+  float freq = hz ? (float)hz : (float)SystemCoreClock; // a PLL route is the caller's guess
   float cycles = (float)ADC_SAMPLING_TIME_TAB[adc->record.sampling_time];
   float time = (float)(adc->record.chan_count + adc->record._pad) * cycles / freq;
   if(adc->record.oversampling.enable) {

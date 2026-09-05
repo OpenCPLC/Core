@@ -80,6 +80,14 @@ extern void (* volatile SPI2_Cb)(void *); extern void * volatile SPI2_CbArg;
 extern void (* volatile USART1_Cb)(void *);  extern void * volatile USART1_CbArg;
 extern void (* volatile LPUART1_Cb)(void *); extern void * volatile LPUART1_CbArg;
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- USB
 
+extern void (* volatile USB_Cb)(void *); extern void * volatile USB_CbArg;
+
+//-------------------------------------------------------------------------------------------- IPCC
+
+extern void (* volatile IPCC_RX_Cb)(void *); extern void * volatile IPCC_CbArg;
+extern void (* volatile IPCC_TX_Cb)(void *);
+
+//-------------------------------------------------------------------------------------------------
 #endif

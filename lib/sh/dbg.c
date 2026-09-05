@@ -4,6 +4,11 @@
 #include "cmd.h"
 #include "log.h"
 #include "pwr.h"
+#include "heap.h"
+
+// The whole buffer is copied out through one allocation, so the heap has to be able to
+// hold it with room left for the block it lives in
+_Static_assert(HEAP_SIZE > DBG_TX_SIZE + 128, "HEAP_SIZE must exceed DBG_TX_SIZE");
 
 //------------------------------------------------------------------------------------------- Basic
 
@@ -121,8 +126,11 @@ void DBG_Loop(void)
       heap_clear();
       if(DbgFile->size) {
         uint8_t *buffer = (uint8_t *)heap_new(DbgFile->size);
-        memcpy(buffer, DbgFile->buffer, DbgFile->size);
-        UART_Send(DbgUart, buffer, DbgFile->size);
+        // A heap too small to copy the batch out costs log lines, never the device
+        if(buffer) {
+          memcpy(buffer, DbgFile->buffer, DbgFile->size);
+          UART_Send(DbgUart, buffer, DbgFile->size);
+        }
         MBB_Clear(DbgFile);
       }
       else if(DbgReset && UART_SendCompleted(DbgUart)) PWR_Reset();

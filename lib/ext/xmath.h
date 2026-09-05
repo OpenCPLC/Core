@@ -329,6 +329,19 @@ uint32_t ema_filter_u32(uint32_t input, uint32_t prev, uint8_t alpha_shift);
  */
 float ema_filter_f32(float input, float prev, float alpha);
 
+//----------------------------------------------------------------------------------- Interpolation
+
+/**
+ * @brief Piecewise-linear interpolation over `(x, y)` points sorted by `x`,
+ * ascending or descending. Outside the range the end value holds, no extrapolation.
+ * @param x Input coordinate.
+ * @param xs X coordinates, strictly monotonic.
+ * @param ys Y values, one per `xs` entry.
+ * @param count Number of points; `1` returns `ys[0]`.
+ * @return Interpolated value; `NaN` for a `NaN` input or an empty table.
+ */
+float interp_f32(float x, const float *xs, const float *ys, uint16_t count);
+
 //---------------------------------------------------------------------------------- Filter: Hampel
 
 /**

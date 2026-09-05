@@ -17,6 +17,7 @@ static inline void RCC_EnableI2C(void *i2c) { unused(i2c); }
 static inline void RCC_DisableI2C(void *i2c) { unused(i2c); }
 static inline void RCC_EnableSPI(void *spi) { unused(spi); }
 static inline void RCC_EnableDMA(void *dma) { unused(dma); }
+static inline void RCC_EnableUSB(void) {}
 
 //----------------------------------------------------------------------- RCC: System Clock (stubs)
 
@@ -104,22 +105,49 @@ static inline void BKP_DomainReset(void) {}
 //-------------------------------------------------------------------------- IWDG: Watchdog (stubs)
 
 typedef enum {
-  IWDG_Prescaler_4 = 0,
-  IWDG_Prescaler_8 = 1,
-  IWDG_Prescaler_16 = 2,
-  IWDG_Prescaler_32 = 3,
-  IWDG_Prescaler_64 = 4,
-  IWDG_Prescaler_128 = 5,
-  IWDG_Prescaler_256 = 6
-} IWDG_Prescaler_t;
+  IWDG_Time_125us = 0,
+  IWDG_Time_250us = 1,
+  IWDG_Time_500us = 2,
+  IWDG_Time_1ms = 3,
+  IWDG_Time_2ms = 4,
+  IWDG_Time_4ms = 5,
+  IWDG_Time_8ms = 6
+} IWDG_Time_t;
 
-static inline void IWDG_Init(IWDG_Prescaler_t prescaler, uint16_t reload)
+static inline void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 {
   unused(prescaler); unused(reload);
 }
 
+static inline void IWDG_Init_ms(uint32_t timeout_ms) { unused(timeout_ms); }
 static inline void IWDG_Refresh(void) {}
 static inline bool IWDG_WasReset(void) { return false; }
+
+typedef enum {
+  PWR_Wakeup_Pin1 = (1 << 0),
+  PWR_Wakeup_Pin2 = (1 << 1),
+  PWR_Wakeup_Pin3 = (1 << 2),
+  PWR_Wakeup_Pin4 = (1 << 3),
+  PWR_Wakeup_Pin5 = (1 << 4)
+} PWR_Wakeup_t;
+
+typedef enum {
+  PWR_BOR_1V7 = 0,
+  PWR_BOR_2V0 = 1,
+  PWR_BOR_2V2 = 2,
+  PWR_BOR_2V5 = 3,
+  PWR_BOR_2V9 = 4
+} PWR_BOR_t;
+
+static inline void PWR_SetBOR(PWR_BOR_t level) { unused(level); }
+
+// No power domain to leave on host, the request is refused
+static inline status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
+{
+  unused(wakeup_mask);
+  unused(falling_mask);
+  return ERR;
+}
 
 //-------------------------------------------------------------------- BOR: Brown-Out Reset (stubs)
 

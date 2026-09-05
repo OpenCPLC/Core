@@ -30,6 +30,9 @@ void IRQ_EnableDMA(DMA_CHx_t channel, IRQ_Priority_t priority, IRQ_Handler_t han
   void *object);
 void IRQ_EnableEXTI(uint8_t line, IRQ_Priority_t priority, IRQ_Handler_t handler,
   void *object);
+void IRQ_EnableUSB(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
+void IRQ_EnableIPCC(IRQ_Priority_t priority, IRQ_Handler_t rx, IRQ_Handler_t tx,
+  void *object);
 
 //----------------------------------------------------------------------------------------- Disable
 
@@ -40,6 +43,8 @@ void IRQ_DisableSPI(void *spi);
 void IRQ_DisableADC(void);
 void IRQ_DisableDMA(DMA_CHx_t channel);
 void IRQ_DisableEXTI(uint8_t line);
+void IRQ_DisableUSB(void);
+void IRQ_DisableIPCC(void);
 
 //----------------------------------------------------------------------------------- Clear pending
 
@@ -50,6 +55,8 @@ void IRQ_ClearPendingSPI(void *spi);
 void IRQ_ClearPendingADC(void);
 void IRQ_ClearPendingDMA(DMA_CHx_t channel);
 void IRQ_ClearPendingEXTI(uint8_t line);
+void IRQ_ClearPendingUSB(void);
+void IRQ_ClearPendingIPCC(void);
 
 //-------------------------------------------------------------------------------------------------
 #endif

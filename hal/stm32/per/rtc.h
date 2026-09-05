@@ -115,6 +115,14 @@ typedef struct {
  * a wrong time is worse than no time for anything scheduling on it. The caller decides
  * between a degraded mode and `panic`.
  */
+/**
+ * @brief Start the `LSE` crystal, weakest drive first. Called by `RTC_Init`, and by
+ *   anything else that needs the crystal without the calendar.
+ * @note The backup domain must be unlocked (`DBP`) before the call.
+ * @return `OK` when the crystal oscillates, `ERR` when no drive level starts it
+ */
+status_t RTC_StartLSE(void);
+
 status_t RTC_Init(void);
 
 //----------------------------------------------------------------------------------------- Convert

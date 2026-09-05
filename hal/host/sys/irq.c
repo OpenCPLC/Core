@@ -3,6 +3,16 @@
 #include "irq.h"
 #include "xdef.h"
 
+void IRQ_EnableUSB(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
+{
+  unused(priority);
+  unused(handler);
+  unused(object);
+}
+
+void IRQ_DisableUSB(void) {}
+void IRQ_ClearPendingUSB(void) {}
+
 //-------------------------------------------------------------------------------------------------
 
 /**

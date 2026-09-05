@@ -2,6 +2,24 @@
 
 #include "flash.h"
 
+#if defined(STM32WB)
+  #include "hsem_wb.h"
+
+// The CPU2 stack stretches its radio timing around erases when told ahead; the real
+// send lives in `wpan_wb.c`, a build without the radio keeps this stub
+__attribute__((weak)) void WPAN_FlashEraseActivity(bool active)
+{
+  unused(active);
+}
+
+  #define flash_take() HSEM_Wait(HSEM_FLASH)
+  #define flash_give() HSEM_Give(HSEM_FLASH)
+#else
+  #define flash_take()
+  #define flash_give()
+  #define WPAN_FlashEraseActivity(active)
+#endif
+
 //----------------------------------------------------------------------------- Compatibility Layer
 
 #define FLASH_START_ADDR ((uint32_t)0x08000000)
@@ -64,13 +82,18 @@ static inline uint32_t flash_bank_bit(uint16_t page)
 
 //-------------------------------------------------------------------------------------------- Init
 
+// The semaphore spans unlock to finish, so every operation holds it exactly once
 static inline status_t flash_unlock(void)
 {
+  flash_take();
   flash_wait();
   if(FLASH->CR & FLASH_CR_LOCK) {
     FLASH->KEYR = FLASH_KEY1;
     FLASH->KEYR = FLASH_KEY2;
-    if(FLASH->CR & FLASH_CR_LOCK) return ERR;
+    if(FLASH->CR & FLASH_CR_LOCK) {
+      flash_give();
+      return ERR;
+    }
   }
   return OK;
 }
@@ -87,6 +110,7 @@ static status_t flash_finish(void)
   uint32_t sr = FLASH->SR;
   FLASH->SR = FLASH_CLR_FLAGS;
   flash_lock();
+  flash_give();
   if(sr & FLASH_ERR_FLAGS) return ERR;
   return OK;
 }
@@ -98,7 +122,11 @@ status_t FLASH_Erase(uint16_t page)
   if(page >= FLASH_PAGES) return ERR;
   // An empty page IS the erased state: skip the operation
   if(flash_page_is_erased(page)) return OK;
-  if(flash_unlock()) return ERR;
+  WPAN_FlashEraseActivity(true);
+  if(flash_unlock()) {
+    WPAN_FlashEraseActivity(false);
+    return ERR;
+  }
   FLASH->SR = FLASH_CLR_FLAGS;
   FLASH->CR &= ~FLASH_PNB_MASK;
   #if defined(STM32G0) && defined(STM32G0C1xx)
@@ -112,7 +140,9 @@ status_t FLASH_Erase(uint16_t page)
   flash_wait();
   FLASH->CR &= ~FLASH_CR_PER;
   __DSB();
-  if(flash_finish()) return ERR;
+  status_t ret = flash_finish();
+  WPAN_FlashEraseActivity(false);
+  if(ret) return ERR;
   // `EOP` is gated by `EOPIE` on G0/WB/L4, so a real erase never sets it here.
   // Success is read from the flash itself: the page, erased
   if(!flash_page_is_erased(page)) return ERR;

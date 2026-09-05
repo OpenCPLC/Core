@@ -29,6 +29,20 @@ typedef enum {
   ADC_IN_VBATEN = 18
 } ADC_IN_t;
 
+// Kernel clock route, zero (`Default`) follows the framework clock tree
+typedef enum {
+  ADC_Clock_Default = 0, // the system clock, this family has no HSI16 route
+  ADC_Clock_SYSCLK = 1,
+  ADC_Clock_PLLP = 2,    // frequency unknown to the framework
+  ADC_Clock_PLLSAI = 3   // frequency unknown to the framework
+} ADC_Clock_t;
+
+// Factory calibration, measured at VDDA = 3.6V on this family
+#define ADC_CAL_VDDA_mV 3600
+#define ADC_VREFINT_CAL (*(const uint16_t *)0x1FFF75AAu)
+#define ADC_TS_CAL1     (*(const uint16_t *)0x1FFF75A8u) // temperature sensor at 30 deg C
+#define ADC_TS_CAL2     (*(const uint16_t *)0x1FFF75CAu) // temperature sensor at 130 deg C
+
 // Total conversion time in ADC clock cycles (sampling + 12.5)
 typedef enum {
   ADC_SamplingTime_15 = 0,

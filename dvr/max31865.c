@@ -1,4 +1,4 @@
-// plc/dvr/max31865.c
+// dvr/max31865.c
 
 #include "max31865.h"
 

@@ -19,6 +19,7 @@ void sys_init(void)
  * `48000000`: internal HSI 48MHz,
  * `64000000`: internal HSI 64MHz,
  * `18432000`: external HSE 18.432MHz,
+ * `32000000`: external HSE 32MHz,
  * `59904000`: PLL (18.432MHz * 13 / 4).
  */
 void clock_init(void)
@@ -31,6 +32,8 @@ void clock_init(void)
     RCC_64MHz();
   #elif(SYS_CLOCK_FREQ == 18432000)
     RCC_SetHSE(18432000);
+  #elif(SYS_CLOCK_FREQ == 32000000)
+    RCC_SetHSE(32000000);
   #elif(SYS_CLOCK_FREQ == 59904000)
     RCC_SetPLL(18432000, 2, 13, 2);
   #else

@@ -1,10 +1,10 @@
-// plc/dvr/hd44780.h
+// dvr/hd44780.h
 
 #ifndef HD44780_H_
 #define HD44780_H_
 
 #include <stdint.h>
-#include "twi.h"
+#include "i2c_master.h"
 
 //-------------------------------------------------------------------------------------------------
 
@@ -93,11 +93,26 @@ typedef enum {
 
 //-------------------------------------------------------------------------------------------------
 
+/**
+ * @brief Character LCD driven through a PCF8574 I2C expander.
+ * @param[in] i2c Bus the expander sits on
+ * @param[in] address Expander address (default `0x27`)
+ * @param[in] columns Display width in characters
+ * @param[in] rows Display height in characters
+ * @param[in] size5x10 Use 5x10 dot font instead of 5x8
+ * Internal:
+ * @param _row_offsets DDRAM address of every row
+ * @param _backlight Backlight bit merged into each transfer
+ * @param _display Display control operands
+ * @param _entry Entry mode operands
+ */
 typedef struct {
-  uint8_t address; // I2C address of PCF8574 expander (default `0x27`)
+  I2C_Master_t *i2c;
+  uint8_t address;
   uint8_t columns;
   uint8_t rows;
   bool size5x10;
+  // internal
   uint8_t _row_offsets[4];
   uint8_t _backlight;
   uint8_t _display;
@@ -105,6 +120,16 @@ typedef struct {
 } HD44780_t;
 
 //-------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Declare display of a given size.
+ * @param name Variable name.
+ * @param bus `I2C_Master_t` the expander sits on.
+ * @param cols Display width in characters.
+ * @param lines Display height in characters.
+ */
+#define HD44780_New(name, bus, cols, lines) \
+  HD44780_t name = { .i2c = (bus), .address = 0x27, .columns = (cols), .rows = (lines) }
 
 bool HD44780_Write(HD44780_t *hd, uint8_t value);
 bool HD44780_Command(HD44780_t *hd, uint8_t cmd);

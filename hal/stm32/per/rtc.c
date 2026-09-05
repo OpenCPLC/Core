@@ -153,24 +153,24 @@ static uint8_t rtc_weekday_calc(RTC_Datetime_t *datetime)
 // Encode datetime to `RTC->DR` register layout (BCD)
 static uint32_t rtc_date_register(const RTC_Datetime_t *date)
 {
-  return ((date->year / 10)      << RTC_DR_YT_Pos)  |
-         ((date->year % 10)      << RTC_DR_YU_Pos)  |
-         ((date->week_day)       << RTC_DR_WDU_Pos) |
-         ((date->month / 10)     << RTC_DR_MT_Pos)  |
-         ((date->month % 10)     << RTC_DR_MU_Pos)  |
-         ((date->month_day / 10) << RTC_DR_DT_Pos)  |
-         ((date->month_day % 10) << RTC_DR_DU_Pos);
+  return ((date->year / 10) << RTC_DR_YT_Pos) |
+    ((date->year % 10) << RTC_DR_YU_Pos) |
+    ((date->week_day) << RTC_DR_WDU_Pos) |
+    ((date->month / 10) << RTC_DR_MT_Pos) |
+    ((date->month % 10) << RTC_DR_MU_Pos) |
+    ((date->month_day / 10) << RTC_DR_DT_Pos) |
+    ((date->month_day % 10) << RTC_DR_DU_Pos);
 }
 
 // Encode datetime to `RTC->TR` register layout (BCD)
 static uint32_t rtc_time_register(const RTC_Datetime_t *date)
 {
-  return ((date->hour / 10)   << RTC_TR_HT_Pos)  |
-         ((date->hour % 10)   << RTC_TR_HU_Pos)  |
-         ((date->minute / 10) << RTC_TR_MNT_Pos) |
-         ((date->minute % 10) << RTC_TR_MNU_Pos) |
-         ((date->second / 10) << RTC_TR_ST_Pos)  |
-         ((date->second % 10) << RTC_TR_SU_Pos);
+  return ((date->hour / 10) << RTC_TR_HT_Pos) |
+    ((date->hour % 10) << RTC_TR_HU_Pos) |
+    ((date->minute / 10) << RTC_TR_MNT_Pos) |
+    ((date->minute % 10) << RTC_TR_MNU_Pos) |
+    ((date->second / 10) << RTC_TR_ST_Pos) |
+    ((date->second % 10) << RTC_TR_SU_Pos);
 }
 
 /**
@@ -215,6 +215,23 @@ static bool rtc_running(void)
   return ((RCC->BDCR & mask) == want) && (RTC_SR & RTC_INITS);
 }
 
+// The crystal load decides the drive level, so it is measured rather than configured:
+// the weakest level that oscillates wins, and too weak a one never raises `LSERDY`.
+// `LSEDRV` takes a write only with the oscillator stopped, so every step restarts it.
+// A cold start pays for the search once, later resets find the crystal already running.
+status_t RTC_StartLSE(void)
+{
+  if(RCC->BDCR & RCC_BDCR_LSERDY) return OK;
+  for(uint32_t drive = 0; drive <= 3; drive++) {
+    RCC->BDCR &= ~RCC_BDCR_LSEON;
+    for(uint32_t i = RTC_LSE_RETRY; i && (RCC->BDCR & RCC_BDCR_LSERDY); i--) __NOP();
+    RCC->BDCR = (RCC->BDCR & ~RCC_BDCR_LSEDRV) | (drive << RCC_BDCR_LSEDRV_Pos);
+    RCC->BDCR |= RCC_BDCR_LSEON;
+    if(!rtc_wait(&RCC->BDCR, RCC_BDCR_LSERDY, RTC_LSE_RETRY)) return OK;
+  }
+  return ERR;
+}
+
 status_t RTC_Init(void)
 {
   // Enable clocks
@@ -224,12 +241,10 @@ status_t RTC_Init(void)
     RCC->APB1ENR1 |= RCC_APB1ENR1_RTCAPBEN;
   #endif
   PWR->CR1 |= PWR_CR1_DBP;
-  // valid RTC survives resets; reset and rebuild only a stopped or corrupt domain.
+  // A valid RTC survives resets, only a stopped or corrupt domain is rebuilt
   if(!rtc_running()) {
     BKP_DomainReset();
-    RCC->BDCR |= RCC_BDCR_LSEON;
-    // Off-chip crystal, the one wait here that can never end
-    if(rtc_wait(&RCC->BDCR, RCC_BDCR_LSERDY, RTC_LSE_RETRY)) {
+    if(RTC_StartLSE()) {
       RtcInit = false;
       RtcReady = false;
       return ERR;
@@ -298,9 +313,9 @@ uint64_t RTC_DatetimeToUnix(const RTC_Datetime_t *date)
   }
   days += date->month_day - 1;
   return (uint64_t)days * RTC_SECONDS_IN_DAY +
-         date->hour * RTC_SECONDS_IN_HOUR +
-         date->minute * RTC_SECONDS_IN_MIN +
-         date->second;
+    date->hour * RTC_SECONDS_IN_HOUR +
+    date->minute * RTC_SECONDS_IN_MIN +
+    date->second;
 }
 
 const char *RTC_WeekDayString(void)
@@ -349,8 +364,8 @@ RTC_AlarmCfg_t RTC_WeekstampToAlarm(uint32_t stamp)
 uint32_t RTC_AlarmToDaystamp(const RTC_AlarmCfg_t *alarm)
 {
   return alarm->hour * RTC_SECONDS_IN_HOUR +
-         alarm->minute * RTC_SECONDS_IN_MIN +
-         alarm->second;
+    alarm->minute * RTC_SECONDS_IN_MIN +
+    alarm->second;
 }
 
 uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm)
@@ -432,9 +447,9 @@ uint32_t RTC_Weekstamp(void)
 {
   RTC_Datetime_t dt = RTC_Datetime();
   return (dt.week_day - 1) * RTC_SECONDS_IN_DAY +
-         dt.hour * RTC_SECONDS_IN_HOUR +
-         dt.minute * RTC_SECONDS_IN_MIN +
-         dt.second;
+    dt.hour * RTC_SECONDS_IN_HOUR +
+    dt.minute * RTC_SECONDS_IN_MIN +
+    dt.second;
 }
 
 //--------------------------------------------------------------------------------------- Alarm Get

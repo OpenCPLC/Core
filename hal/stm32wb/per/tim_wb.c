@@ -20,12 +20,13 @@ const GPIO_Map_t TIM_CHx_MAP[] = {
   [TIM2_CH2_PB3] = { .port = GPIOB, .pin = 3, .alternate = 1 },
   [TIM2_CH3_PA2] = { .port = GPIOA, .pin = 2, .alternate = 1 },
   [TIM2_CH4_PA3] = { .port = GPIOA, .pin = 3, .alternate = 1 },
-  [TIM16_CH1_PA6] = { .port = GPIOA, .pin = 6, .alternate = 1 },
-  [TIM16_CH1N_PB6] = { .port = GPIOB, .pin = 6, .alternate = 1 },
-  [TIM16_CH1_PB8] = { .port = GPIOB, .pin = 8, .alternate = 1 },
-  [TIM17_CH1_PA7] = { .port = GPIOA, .pin = 7, .alternate = 1 },
-  [TIM17_CH1_PB9] = { .port = GPIOB, .pin = 9, .alternate = 1 },
-  [TIM17_CH1N_PB7] = { .port = GPIOB, .pin = 7, .alternate = 1 }
+  // `TIM16`/`TIM17` sit on `AF14`, unlike `TIM1`/`TIM2` on `AF1`
+  [TIM16_CH1_PA6] = { .port = GPIOA, .pin = 6, .alternate = 14 },
+  [TIM16_CH1N_PB6] = { .port = GPIOB, .pin = 6, .alternate = 14 },
+  [TIM16_CH1_PB8] = { .port = GPIOB, .pin = 8, .alternate = 14 },
+  [TIM17_CH1_PA7] = { .port = GPIOA, .pin = 7, .alternate = 14 },
+  [TIM17_CH1_PB9] = { .port = GPIOB, .pin = 9, .alternate = 14 },
+  [TIM17_CH1N_PB7] = { .port = GPIOB, .pin = 7, .alternate = 14 }
 };
 
 //-------------------------------------------------------------------------------------------------

@@ -98,6 +98,19 @@ void RCC_EnableDMA(void *dma)
   }
 }
 
+#ifdef USB_DRD_FS
+void RCC_EnableUSB(void)
+{
+  // `CRS_CFGR` reset selects USB SOF with `48 MHz` reload.
+  RCC->CR |= RCC_CR_HSI48ON;
+  while(!(RCC->CR & RCC_CR_HSI48RDY));
+  RCC->CCIPR2 &= ~RCC_CCIPR2_USBSEL; // `00` = `HSI48`
+  RCC->APBENR1 |= RCC_APBENR1_CRSEN | RCC_APBENR1_USBEN | RCC_APBENR1_PWREN;
+  CRS->CR |= CRS_CR_AUTOTRIMEN | CRS_CR_CEN;
+  PWR->CR2 |= PWR_CR2_USV; // `VDDUSB` valid, isolation off
+}
+#endif
+
 //------------------------------------------------------------------------------- RCC: System Clock
 
 uint32_t RCC_GetClock(void) { return SystemCoreClock; }
@@ -252,6 +265,9 @@ void BKP_DomainReset(void)
 void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 {
   if(reload > 0x0FFF) reload = 0x0FFF;
+  // A halted core would starve the dog: pause it whenever the debugger holds the CPU
+  RCC->APBENR1 |= RCC_APBENR1_DBGEN;
+  DBG->APBFZ1 |= DBG_APB_FZ1_DBG_IWDG_STOP;
   RCC->CSR |= RCC_CSR_LSION;
   while(!(RCC->CSR & RCC_CSR_LSIRDY));
   IWDG->KR = IWDG_KEY_START;
@@ -263,6 +279,17 @@ void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 }
 
 void IWDG_Refresh(void) { IWDG->KR = IWDG_KEY_REFRESH; }
+
+// The smallest tick that covers the timeout, so the resolution stays the finest possible
+void IWDG_Init_ms(uint32_t timeout_ms)
+{
+  uint8_t time = IWDG_Time_125us;
+  uint32_t reload;
+  while((reload = (timeout_ms * 8) >> time) > 0x0FFF && time < IWDG_Time_8ms) time++;
+  if(!reload) reload = 1;
+  IWDG_Init((IWDG_Time_t)time, (uint16_t)reload);
+}
+
 
 // `RMVF` clears all reset flags at once: latch on first read so `IWDG_WasReset`
 // and `BOR_WasReset` do not clobber each other.
@@ -280,6 +307,20 @@ static uint32_t rst_flags(void)
 }
 
 bool IWDG_WasReset(void) { return (rst_flags() & RCC_CSR_IWDGRSTF) != 0; }
+
+status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
+{
+  RCC->APBENR1 |= RCC_APBENR1_PWREN;
+  (void)RCC->APBENR1;
+  PWR->CR3 = (PWR->CR3 & ~0x3Fu) | (wakeup_mask & 0x3Fu);
+  PWR->CR4 = (PWR->CR4 & ~0x3Fu) | (falling_mask & 0x3Fu);
+  PWR->SCR = 0x013Fu; // clear the wakeup and standby flags, stale ones bounce right back
+  PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | PWR_CR1_LPMS_2;
+  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+  __DSB();
+  while(1) __WFI();
+}
+
 
 //--------------------------------------------------------------------------------------------- BOR
 

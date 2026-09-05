@@ -396,4 +396,17 @@ void IRQ_ClearPendingEXTI(uint8_t line)
   NVIC_ClearPendingIRQ((IRQn_Type)irq);
 }
 
+//--------------------------------------------------------------------------------------------- USB
+
+void IRQ_EnableUSB(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
+{
+  USB_Cb = handler;
+  USB_CbArg = object;
+  NVIC_SetPriority((IRQn_Type)IRQ_USB, IRQ_PRIO(priority));
+  NVIC_EnableIRQ((IRQn_Type)IRQ_USB);
+}
+
+void IRQ_DisableUSB(void) { NVIC_DisableIRQ((IRQn_Type)IRQ_USB); }
+void IRQ_ClearPendingUSB(void) { NVIC_ClearPendingIRQ((IRQn_Type)IRQ_USB); }
+
 //-------------------------------------------------------------------------------------------------

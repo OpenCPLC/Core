@@ -114,6 +114,15 @@ void (* volatile SPI2_Cb)(void *) = Void_Handler; void * volatile SPI2_CbArg;
 void (* volatile USART1_Cb)(void *) = Void_Handler;  void * volatile USART1_CbArg;
 void (* volatile LPUART1_Cb)(void *) = Void_Handler; void * volatile LPUART1_CbArg;
 
+//---------------------------------------------------------------------------------- Callbacks: USB
+
+void (* volatile USB_Cb)(void *) = Void_Handler; void * volatile USB_CbArg;
+
+//--------------------------------------------------------------------------------- Callbacks: IPCC
+
+void (* volatile IPCC_RX_Cb)(void *) = Void_Handler; void * volatile IPCC_CbArg;
+void (* volatile IPCC_TX_Cb)(void *) = Void_Handler;
+
 //----------------------------------------------------------------------- Weak IRQ handlers: System
 
 __weak void NMI_Handler(void) { Default_Handler(); }
@@ -135,7 +144,7 @@ __weak void RTC_WKUP_IRQHandler(void) { Default_Handler(); }
 __weak void FLASH_IRQHandler(void) { Default_Handler(); }
 __weak void RCC_IRQHandler(void) { Default_Handler(); }
 __weak void USB_HP_IRQHandler(void) { Default_Handler(); }
-__weak void USB_LP_IRQHandler(void) { Default_Handler(); }
+__weak void USB_LP_IRQHandler(void) { USB_Cb(USB_CbArg); }
 __weak void C2SEV_PWR_C2H_IRQHandler(void) { Default_Handler(); }
 __weak void COMP_IRQHandler(void) { Default_Handler(); }
 __weak void TIM1_BRK_IRQHandler(void) { Default_Handler(); }
@@ -146,8 +155,8 @@ __weak void TSC_IRQHandler(void) { Default_Handler(); }
 __weak void RTC_Alarm_IRQHandler(void) { Default_Handler(); }
 __weak void CRS_IRQHandler(void) { Default_Handler(); }
 __weak void PWR_SOTF_BLEACT_802ACT_RFPHASE_IRQHandler(void) { Default_Handler(); }
-__weak void IPCC_C1_RX_IRQHandler(void) { Default_Handler(); }
-__weak void IPCC_C1_TX_IRQHandler(void) { Default_Handler(); }
+__weak void IPCC_C1_RX_IRQHandler(void) { IPCC_RX_Cb(IPCC_CbArg); }
+__weak void IPCC_C1_TX_IRQHandler(void) { IPCC_TX_Cb(IPCC_CbArg); }
 __weak void HSEM_IRQHandler(void) { Default_Handler(); }
 __weak void LCD_IRQHandler(void) { Default_Handler(); }
 __weak void QUADSPI_IRQHandler(void) { Default_Handler(); }

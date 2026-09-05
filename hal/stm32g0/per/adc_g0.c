@@ -6,6 +6,17 @@
 //------------------------------------------------------------------------------------------- Const
 
 const uint16_t ADC_PRESCALER_TAB[] = { 1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256 };
+
+uint32_t ADC_Frequency_Hz(ADC_t *adc)
+{
+  uint32_t base;
+  switch(adc->clock) {
+    case ADC_Clock_SYSCLK: base = SystemCoreClock; break;
+    case ADC_Clock_PLLP: return 0; // the framework does not run the PLL
+    default: base = 16000000u; break; // HSI16
+  }
+  return base / ADC_PRESCALER_TAB[adc->prescaler];
+}
 const uint16_t ADC_SAMPLING_TIME_TAB[] = { 14, 16, 20, 25, 32, 52, 92, 173 };
 const uint16_t ADC_OVERSAMPLING_RATIO_TAB[] = { 2, 4, 8, 16, 32, 64, 128, 256 };
 
@@ -250,10 +261,10 @@ void ADC_Init(ADC_t *adc)
 {
   if(!adc->reg) adc->reg = ADC1;
   ADC_Disable(adc);
-  RCC->CCIPR &= ~RCC_CCIPR_ADCSEL_Msk;
-  if(adc->use_hsi) {
-    RCC->CCIPR |= RCC_CCIPR_ADCSEL_1;
-  }
+  // Register route per `ADC_Clock_t`: `Default` is HSI16 on this family
+  static const uint8_t clock_sel[] = { 2, 0, 1, 2 };
+  RCC->CCIPR = (RCC->CCIPR & ~RCC_CCIPR_ADCSEL_Msk)
+    | ((uint32_t)clock_sel[adc->clock] << RCC_CCIPR_ADCSEL_Pos);
   RCC->APBENR2 |= RCC_APBENR2_ADCEN;
   ADC->CCR = (ADC->CCR & ~ADC_CCR_PRESC_Msk) | (adc->prescaler << ADC_CCR_PRESC_Pos);
   // Voltage regulator startup (tADCVREG_SETUP), then self-calibration on a disabled ADC

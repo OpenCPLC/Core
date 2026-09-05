@@ -209,7 +209,6 @@ typedef enum {
   ); \
 })
 
-#ifndef __ZEPHYR__
 /**
  * @brief Clamp value to `[min, max]` range.
  * @param value Value to clamp.
@@ -217,14 +216,12 @@ typedef enum {
  * @param max Maximum allowed value.
  * @return Clamped value in range `[min, max]`.
  */
-
 #define clamp(value, min, max) ({ \
-  __typeof__(value) _v   = (value); \
+  __typeof__(value) _v = (value); \
   __typeof__(value) _min = (min); \
   __typeof__(value) _max = (max); \
   _v < _min ? _min : (_v > _max ? _max : _v); \
 })
-#endif
 
 /**
  * @brief Check if value is inside `[min, max]` range (inclusive).

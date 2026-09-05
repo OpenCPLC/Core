@@ -1,13 +1,17 @@
-// plc/dvr/hd44780.c
+// dvr/hd44780.c
 
 #include "hd44780.h"
+#include "vrts.h"
 
 //-------------------------------------------------------------------------------------------------
 
 static bool HD44780_ExpanderWrite(HD44780_t *hd, uint8_t data)
 {
   data |= hd->_backlight;
-  return TWI_Write(hd->address, &data, 1);
+  if(!hd->i2c) return false;
+  if(I2C_Master_Write(hd->i2c, hd->address, &data, 1)) return false;
+  if(timeout(22, WAIT_&I2C_Master_IsFree, hd->i2c)) return false;
+  return !I2C_Master_Nack(hd->i2c);
 }
 
 static bool HD44780_Set4Bits(HD44780_t *hd, uint8_t value)

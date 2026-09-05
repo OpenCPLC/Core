@@ -123,6 +123,10 @@ void (* volatile LPUART1_Cb)(void *) = Void_Handler; void * volatile LPUART1_CbA
 void (* volatile LPUART2_Cb)(void *) = Void_Handler; void * volatile LPUART2_CbArg;
 #endif
 
+//------------------------------------------------------------------------------ IRQ callbacks: USB
+
+void (* volatile USB_Cb)(void *) = Void_Handler; void * volatile USB_CbArg;
+
 //------------------------------------------------------------------------------- Weak IRQ handlers
 
 __weak void HardFault_Handler(void) { while(1); }
@@ -135,7 +139,7 @@ __weak void PVD_IRQHandler(void) { Default_Handler(); }
 __weak void RTC_TAMP_IRQHandler(void) { Default_Handler(); }
 __weak void FLASH_IRQHandler(void) { Default_Handler(); }
 __weak void RCC_IRQHandler(void) { Default_Handler(); }
-__weak void USB_UCPD_IRQHandler(void) { Default_Handler(); }
+__weak void USB_UCPD_IRQHandler(void) { USB_Cb(USB_CbArg); }
 __weak void CEC_IRQHandler(void) { Default_Handler(); }
 __weak void TIM1_CC_IRQHandler(void) { Default_Handler(); }
 __weak void RNG_IRQHandler(void) { Default_Handler(); }

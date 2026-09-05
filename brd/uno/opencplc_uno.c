@@ -110,18 +110,18 @@ uint8_t ain_channels[] = {
 // Sized by the scan, not the channel count: oversampling appends one conversion per scan.
 // A buffer that is not whole scans wraps mid-scan and loses the channel offsets.
 #define AIN_SCAN adc_scan_len(sizeof(ain_channels), true)
-#define AIN_BUFFER_SIZE adc_record_buffer_size(AIN_AVERAGE_TIME_ms, AIN_SAMPLING_CYCLES, \
-  adc_oversampling_samples(AIN_OVERSAMPLING_RATIO), AIN_SCAN)
+#define AIN_BUFFER_SIZE adc_record_buffer_size(16000000, AIN_AVERAGE_TIME_ms, \
+  AIN_SAMPLING_CYCLES, adc_oversampling_samples(AIN_OVERSAMPLING_RATIO), AIN_SCAN)
 #define AIN_SAMPLES (AIN_BUFFER_SIZE / AIN_SCAN)
 
 uint16_t ain_buffer[AIN_BUFFER_SIZE];
 uint16_t ain_data[sizeof(ain_channels)][AIN_SAMPLES];
 
-// HSI16 keeps the ADC at exactly 16 MHz regardless of the system clock, which is what
-// the adc_record_buffer_size window math assumes
+// HSI16 keeps the ADC at exactly 16MHz regardless of the system clock, which is what
+// the `AIN_BUFFER_SIZE` window math states
 ADC_t ain_adc = {
   .irq_priority = IRQ_Priority_Low,
-  .use_hsi = true,
+  .clock = ADC_Clock_HSI16,
   .prescaler = ADC_Prescaler_1,
   .record = {
     .chan = ain_channels,
@@ -247,7 +247,9 @@ void PLC_Init(void)
   DIN_Init(&BTN);
   DBG_Init(&dbg_uart);
   CMD_AddMemBuff(&cache_file);
-  CMD_AddCommand("LED", &LED_Bash);
+  #if(RGB_BASH)
+    CMD_AddCommand("LED", &RGB_Bash);
+  #endif
   // Magistrala I2C
   TWI_Init(&i2c_master);
   // Relay outputs (RO)
