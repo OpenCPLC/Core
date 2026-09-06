@@ -1,6 +1,9 @@
 // hal/host/sys/sys.c
 
 #include "sys.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 #if defined(_WIN32) || defined(_WIN64)
   #include <windows.h>
 #else

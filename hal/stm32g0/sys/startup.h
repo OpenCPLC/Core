@@ -6,6 +6,10 @@
 #include <stdint.h>
 #include "system_stm32g0xx.h"
 #include "stm32g0xx.h"
+#include "xdef.h"
+
+// Default handler, an application definition of the same name replaces it
+#define STARTUP_WEAK __attribute__((weak))
 
 //--------------------------------------------------------------------------------------------- ADC
 

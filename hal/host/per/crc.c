@@ -29,13 +29,13 @@ static uint32_t reflect_bits(uint32_t data, uint8_t width)
 // Bit-at-a-time division, the same result a lookup table would give.
 // Keeping it tableless makes `CRC_t` identical to the target one and removes an
 // init step that the target, running on the CRC peripheral, has no counterpart for.
-uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
+uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count)
 {
   uint32_t mask = get_crc_mask(crc->width);
   uint32_t topbit = 1u << (crc->width - 1);
   uint32_t remainder = crc->initial;
-  uint8_t *bytes = (uint8_t *)data;
-  for(uint16_t i = 0; i < count; i++) {
+  const uint8_t *bytes = data;
+  for(uint32_t i = 0; i < count; i++) {
     uint8_t byte = bytes[i];
     if(crc->reflect_data_in) byte = (uint8_t)reflect_bits(byte, 8);
     remainder ^= (uint32_t)byte << (crc->width - 8);
@@ -62,7 +62,7 @@ uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count)
 
 uint16_t CRC_Append(const CRC_t *crc, uint8_t *data, uint16_t count)
 {
-  uint32_t code = CRC_Run(crc, (void *)data, count);
+  uint32_t code = CRC_Run(crc, data, count);
   switch(crc->width) {
     case 32:
       data[count++] = (uint8_t)(code >> 24);
@@ -82,7 +82,7 @@ status_t CRC_Error(const CRC_t *crc, uint8_t *data, uint16_t count)
   // `count` spans the frame including its checksum, shorter would wrap the subtraction
   if(count < crc->width / 8) return ERR;
   count -= crc->width / 8;
-  uint32_t code = CRC_Run(crc, (void *)data, count);
+  uint32_t code = CRC_Run(crc, data, count);
   switch(crc->width) {
     case 32:
       if(data[count++] != (uint8_t)(code >> 24)) return ERR;

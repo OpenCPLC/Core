@@ -14,11 +14,6 @@
 
 //----------------------------------------------------------------------------------------- Presets
 
-#define UART_CR1_RESET 0x00000000u
-#define UART_CR2_RESET 0x00000000u
-#define UART_CR3_RESET 0x00000000u
-#define UART_ICR_CLEAR 0xFFFFFFFFu
-
 #define UART_115200  baud = 115200, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_57600   baud = 57600,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_19200   baud = 19200,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
@@ -27,7 +22,7 @@
 //------------------------------------------------------------------------------------------- Types
 
 // Data is always one byte. Parity does not take a data bit away,
-// it adds a ninth bit to the word: a parity frame is 8 data bits plus 1 parity bit.
+// it adds a ninth bit to the word: a parity frame is 8 data bits plus 1 parity bit
 typedef enum {
   UART_Parity_None = 0,
   UART_Parity_Odd = 1,
@@ -41,7 +36,7 @@ typedef enum {
   UART_StopBits_1_5 = 3
 } UART_StopBits_t;
 
-//---------------------------------------------------------------------------------- Family Include
+//---------------------------------------------------------------------------------- Family include
 
 #if defined(STM32G0)
   #include "uart_g0.h"
@@ -49,7 +44,7 @@ typedef enum {
   #include "uart_wb.h"
 #endif
 
-//---------------------------------------------------------------------------------------- Pin Maps
+//---------------------------------------------------------------------------------------- Pin maps
 
 extern const GPIO_Map_t UART_TX_MAP[];
 extern const GPIO_Map_t UART_RX_MAP[];
@@ -57,24 +52,26 @@ extern const GPIO_Map_t UART_RX_MAP[];
 //--------------------------------------------------------------------------------------- Structure
 
 /**
- * @brief UART control structure with DMA TX and buffered RX.
- * @param[in] reg Pointer to USART peripheral registers
- * @param[in] tx TX pin mapping enum value
- * @param[in] rx RX pin mapping enum value
- * @param[in] dma DMA channel for TX
- * @param[in] irq_priority Interrupt priority for UART and DMA
- * @param[in] baud Baudrate
- * @param[in] parity Parity configuration
- * @param[in] stop_bits Stop bits configuration
- * @param[in] timeout RX timeout in bit times (0 = disabled)
- * @param[in] dir Optional GPIO for RS485 direction control (`NULL` = disabled)
- * @param[in] tim Optional timer for timeout (if no hardware RTO)
- * @param[in] buff Pointer to receive buffer
- * @param[in] prefix Optional address prefix byte (sent before DMA data)
+ * @brief UART with DMA transmit and a framed receive ring.
+ *   A frame closes on the receiver timeout: the hardware one, or a timer when the port
+ *   has none.
+ * @param[in] reg USART peripheral registers
+ * @param[in] tx TX pin mapping
+ * @param[in] rx RX pin mapping
+ * @param[in] dma TX DMA channel
+ * @param[in] irq_priority Interrupt priority for UART, DMA and the timeout timer
+ * @param[in] baud Baud rate [bit/s]
+ * @param[in] parity Parity
+ * @param[in] stop_bits Stop bits
+ * @param[in] timeout Receiver timeout closing a frame [bit times], `0` = off
+ * @param[in] dir RS485 direction GPIO, `NULL` = none
+ * @param[in] tim Timeout timer for a port without the hardware receiver timeout
+ * @param[in] buff Receive ring
+ * @param[in] prefix Address byte sent ahead of every transfer, `0` = none
  * Internal:
- * @param _dma DMA registers structure
- * @param _tx_busy TX DMA in progress flag
- * @param _tc_pending TX complete pending flag
+ * @param _dma TX DMA register set
+ * @param _tx_busy DMA transfer in progress
+ * @param _tc_pending Last byte still in the shift register
  * @param _init Initialization completed flag
  */
 typedef struct {
@@ -101,108 +98,54 @@ typedef struct {
 //--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Initialize UART with DMA TX, buffered RX and optional timeout.
+ * @brief Initialize the port, pins, DMA, timeout and interrupts.
  * @param[in,out] uart Pointer to UART structure
  */
 void UART_Init(UART_t *uart);
 
 /**
- * @brief Reinitialize UART (waits for pending TX, resets peripheral).
+ * @brief Stop the port, let a transfer in flight finish, then initialize it again.
  * @param[in,out] uart Pointer to UART structure
  */
 void UART_ReInit(UART_t *uart);
 
 /**
- * @brief Set RX timeout value.
+ * @brief Change the receiver timeout.
  * @param[in,out] uart Pointer to UART structure
- * @param[in] timeout Timeout in bit times (0 = disable)
+ * @param[in] timeout Timeout [bit times], `0` = off
  */
 void UART_SetTimeout(UART_t *uart, uint16_t timeout);
 
-/**
- * @brief Check if TX is complete (DMA finished and shift register empty).
- * @param[in] uart Pointer to UART structure
- * @return `true` if TX complete
- */
+// Transmit state: `SendCompleted` once the last bit left the pin,
+// `IsFree` once the DMA transfer is done and another one may start
 bool UART_SendCompleted(UART_t *uart);
-
-/**
- * @brief Check if TX is active (TC flag pending).
- * @param[in] uart Pointer to UART structure
- * @return `true` if TX active
- */
 bool UART_SendActive(UART_t *uart);
-
-/**
- * @brief Check if UART TX DMA is busy.
- * @param[in] uart Pointer to UART structure
- * @return `true` if busy
- */
 bool UART_IsBusy(UART_t *uart);
-
-/**
- * @brief Check if UART TX DMA is free.
- * @param[in] uart Pointer to UART structure
- * @return `true` if free
- */
 bool UART_IsFree(UART_t *uart);
 
 /**
- * @brief Start UART transmit via DMA.
+ * @brief Start a DMA transmit, `data` must stay valid until `UART_IsFree`.
  * @param[in,out] uart Pointer to UART structure
- * @param[in] data Pointer to data buffer
- * @param[in] len Number of bytes to send
- * @return `OK` if started, `ERR` if not initialized, `BUSY` if transmitting
+ * @param[in] data Bytes to send
+ * @param[in] len Number of bytes, `0` is refused
+ * @return `OK` if started, `ERR` if not initialized or empty, `BUSY` if transmitting
  */
-status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len);
+status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len);
 
-/**
- * @brief Get number of bytes in current RX frame.
- * @param[in] uart Pointer to UART structure
- * @return Number of bytes in current frame
- */
+// Received frames, one at a time: bytes of the current one, frames waiting,
+// copy out, as a heap string, skip, or drop them all
 uint16_t UART_Size(UART_t *uart);
-
-/**
- * @brief Get number of pending frames in RX queue.
- * @param[in] uart Pointer to UART structure
- * @return Number of frames waiting to be read
- */
 uint16_t UART_MessageCount(UART_t *uart);
-
-/**
- * @brief Read data from RX buffer.
- * @param[in,out] uart Pointer to UART structure
- * @param[out] data Pointer to destination buffer
- * @return Number of bytes read
- */
 uint16_t UART_Read(UART_t *uart, uint8_t *data);
-
-/**
- * @brief Read RX buffer as null-terminated string.
- * @param[in,out] uart Pointer to UART structure
- * @return Pointer to string (valid until next read)
- */
 char *UART_ReadString(UART_t *uart);
-
-/**
- * @brief Skip current frame in RX buffer.
- * @param[in,out] uart Pointer to UART structure
- * @return `true` if frame was skipped
- */
 bool UART_Skip(UART_t *uart);
-
-/**
- * @brief Clear RX buffer.
- * @param[in,out] uart Pointer to UART structure
- */
 void UART_Clear(UART_t *uart);
 
 /**
- * @brief Calculate transmission time for frame.
+ * @brief Time on the wire of a frame of `len` bytes plus the receiver timeout.
  * @param[in] uart Pointer to UART structure
- * @param[in] len Frame length in bytes
- * @return Transmission time in milliseconds
+ * @param[in] len Frame length [B]
+ * @return Transmission time [ms]
  */
 uint32_t UART_CalcTime_ms(UART_t *uart, uint16_t len);
 

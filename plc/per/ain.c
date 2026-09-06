@@ -2,6 +2,8 @@
 
 #include "ain.h"
 
+//--------------------------------------------------------------------------------------- Constants
+
 // Working range of the voltage input and the 4-20mA live-zero window, in microvolts
 #define AIN_RANGE_uV      10000000u
 #define AIN_OVERRANGE_uV  10250000u
@@ -9,7 +11,9 @@
 #define AIN_420_SPAN_uV   8000000u
 #define AIN_420_BREAK_uV  100000u
 
-static AIN_t *ain_vref = NULL;
+//--------------------------------------------------------------------------------------------- Raw
+
+static AIN_t *ain_vref;
 
 void AIN_SetVref(AIN_t *vref)
 {
@@ -34,7 +38,7 @@ uint32_t AIN_Raw(AIN_t *ain)
 
 // Voltage at the ADC pin in microvolts, all-integer: the single place the ratiometric
 // conversion lives. Q8 inputs leave 64-bit headroom for the resistor macros in any unit
-static uint32_t AIN_Pin_uV(AIN_t *ain)
+static uint32_t pin_uV(AIN_t *ain)
 {
   uint32_t raw = AIN_Raw(ain) >> 8;
   if(ain_vref && ain_vref != ain) {
@@ -52,15 +56,15 @@ static uint32_t AIN_Pin_uV(AIN_t *ain)
 
 // Input voltage in microvolts, after divider scaling:
 // the full-precision value both the integer and the float conversions start from
-static uint32_t AIN_uV(AIN_t *ain)
+static uint32_t input_uV(AIN_t *ain)
 {
-  return (uint32_t)(((uint64_t)AIN_Pin_uV(ain) * (AIN_RESISTOR_UP + AIN_RESISTOR_DOWN)
+  return (uint32_t)(((uint64_t)pin_uV(ain) * (AIN_RESISTOR_UP + AIN_RESISTOR_DOWN)
     + AIN_RESISTOR_DOWN / 2) / AIN_RESISTOR_DOWN);
 }
 
 // Range verdict: `0` in range, `±Inf` out of range.
 // Logs the violation, so every unit function reports errors the same way
-static float AIN_RangeError(AIN_t *ain, uint32_t uv)
+static float range_error(AIN_t *ain, uint32_t uv)
 {
   if(uv > AIN_OVERRANGE_uV || (ain->thresh_high_uV && uv > ain->thresh_high_uV)) {
     LOG_Message(AIN_LOG_LEVEL, "Analog input %s over-range", ain->name);
@@ -79,7 +83,7 @@ static float AIN_RangeError(AIN_t *ain, uint32_t uv)
 // the unit of the whole conversion path;
 // zero passes through, keeping the threshold disabled.
 // Percent honors the 4-20mA window
-static uint32_t AIN_ThreshTo_uV(AIN_t *ain, float value, AIN_Thresh_t unit)
+static uint32_t thresh_to_uV(AIN_t *ain, float value, AIN_Thresh_t unit)
 {
   if(value <= 0.0f) return 0;
   float uv;
@@ -97,37 +101,37 @@ static uint32_t AIN_ThreshTo_uV(AIN_t *ain, float value, AIN_Thresh_t unit)
 
 void AIN_Threshold(AIN_t *ain, float low, float high, AIN_Thresh_t unit)
 {
-  ain->thresh_low_uV = AIN_ThreshTo_uV(ain, low, unit);
-  ain->thresh_high_uV = AIN_ThreshTo_uV(ain, high, unit);
+  ain->thresh_low_uV = thresh_to_uV(ain, low, unit);
+  ain->thresh_high_uV = thresh_to_uV(ain, high, unit);
 }
 
 //--------------------------------------------------------------------------------------- Float API
 
 float AIN_PinVoltage_V(AIN_t *ain)
 {
-  return (float)AIN_Pin_uV(ain) / 1000000;
+  return (float)pin_uV(ain) / 1000000;
 }
 
 float AIN_Voltage_V(AIN_t *ain)
 {
-  uint32_t uv = AIN_uV(ain);
-  float error = AIN_RangeError(ain, uv);
+  uint32_t uv = input_uV(ain);
+  float error = range_error(ain, uv);
   if(error) return error;
   return (float)uv / 1000000;
 }
 
 float AIN_Current_mA(AIN_t *ain)
 {
-  uint32_t uv = AIN_uV(ain);
-  float error = AIN_RangeError(ain, uv);
+  uint32_t uv = input_uV(ain);
+  float error = range_error(ain, uv);
   if(error) return error;
   return (float)uv / 500000;
 }
 
 float AIN_Normalized(AIN_t *ain)
 {
-  uint32_t uv = AIN_uV(ain);
-  float error = AIN_RangeError(ain, uv);
+  uint32_t uv = input_uV(ain);
+  float error = range_error(ain, uv);
   if(error) return error;
   float norm = ain->mode_4_20mA
     ? ((float)uv - AIN_420_OFFSET_uV) / AIN_420_SPAN_uV : (float)uv / AIN_RANGE_uV;
@@ -155,3 +159,5 @@ float POT_Voltage_V(AIN_t *ain)
 {
   return 3.3f * POT_Normalized(ain);
 }
+
+//-------------------------------------------------------------------------------------------------

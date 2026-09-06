@@ -7,10 +7,23 @@
 #define ADC_H_
 
 #include "device.h"
+#include "irq.h"
+#include "dma.h"
+#include "gpio.h"
+#include "xdef.h"
+#include "vrts.h"
+#include "main.h"
 
+//------------------------------------------------------------------------------------------ Config
 
-//-------------------------------------------------------------------------------------------------
+#ifndef ADC_RECORD
+  // DMA recording API, `ADC_Record_t`; off leaves the one-shot conversions only
+  #define ADC_RECORD 1
+#endif
 
+//------------------------------------------------------------------------------------- Host device
+
+// The G0 channel map, the board files are written against it
 typedef enum {
   ADC_IN_PA0 = 0,
   ADC_IN_PA1 = 1,
@@ -32,6 +45,21 @@ typedef enum {
   ADC_IN_PC4 = 17,
   ADC_IN_PC5 = 18
 } ADC_IN_t;
+
+// Kernel clock route, zero (`Default`) follows the framework clock tree
+typedef enum {
+  ADC_Clock_Default = 0,
+  ADC_Clock_SYSCLK = 1,
+  ADC_Clock_PLLP = 2,
+  ADC_Clock_HSI16 = 3
+} ADC_Clock_t;
+
+// Factory calibration of the G0 at VDDA = 3.0V. No system memory off-target:
+// the typical values stand in, so a conversion using them lands where the target would
+#define ADC_CAL_VDDA_mV 3000
+#define ADC_VREFINT_CAL 1526u
+#define ADC_TS_CAL1     1037u // temperature sensor at 30 deg C
+#define ADC_TS_CAL2     1379u // temperature sensor at 130 deg C
 
 // Total conversion time in ADC clock cycles (sampling + 12.5)
 typedef enum {
@@ -57,37 +85,21 @@ typedef enum {
   ADC_ExtTrig_EXTI11 = 7
 } ADC_ExtTrig_t;
 
-// Sequencer errata the scan length works around: hardware oversampling corrupts
+// G0 errata: hardware oversampling combined with the configurable sequencer corrupts
 // the last conversion of a multi-channel sequence. The driver appends one sacrificial
 // repeat of the last channel, so every scan carries one extra word: size record
 // buffers and frame strides with this
 #define adc_scan_len(channel_count, ovs_enable) \
   ((uint16_t)(channel_count) + (((ovs_enable) && (channel_count) > 1) ? 1 : 0))
 
-//-------------------------------------------------------------------------------------------------
-
-
-#include "irq.h"
-#include "dma.h"
-#include "gpio.h"
-#include "xdef.h"
-#include "vrts.h"
-#include "main.h"
-
-#ifndef ADC_RECORD
-  #define ADC_RECORD 1
-#endif
-
-
 //------------------------------------------------------------------------------------------ Macros
 
 // Buffer length (in samples) that holds `time_ms` of recording,
-// rounded down to whole scans.
-// Assumes a 16MHz ADC clock (16000 cycles per millisecond),
-// exact when the ADC runs from HSI16 with prescaler 1
-#define adc_record_buffer_size(time_ms, sample_time, oversampling, channel_count) \
+// rounded down to whole scans. The kernel frequency is the caller's to state,
+// `ADC_Frequency_Hz` tells it at runtime
+#define adc_record_buffer_size(freq_Hz, time_ms, sample_time, oversampling, channel_count) \
   (uint16_t)((channel_count) * \
-    ((time_ms) * 16000 / (sample_time) / (oversampling) / (channel_count)))
+    ((time_ms) * ((freq_Hz) / 1000) / (sample_time) / (oversampling) / (channel_count)))
 
 // Multiply a raw conversion by this factor to get the voltage at the top of a resistor divider
 #define resistor_divider_factor(vcc, up, down, resolution) \
@@ -104,10 +116,6 @@ typedef enum {
 
 // Number of accumulated samples for an oversampling ratio enum value
 #define adc_oversampling_samples(ratio) (2u << (ratio))
-
-// Factory calibration of the internal reference. No system memory off-target: the
-// typical value stands in, so a conversion using it lands where the target would
-#define ADC_VREFINT_CAL 1526u
 
 //------------------------------------------------------------------------------------------- Types
 
@@ -177,12 +185,13 @@ typedef struct {
   uint16_t *output;
   ADC_SamplingTime_t sampling_time;
   ADC_Oversampling_t oversampling;
+  // internal
   uint8_t _active;
 } ADC_Measure_t;
 
 #if(ADC_RECORD)
 
-/** @brief DMA callback, executed in interrupt context: set a flag and leave */
+// DMA callback, interrupt context: set a flag and leave
 typedef void (*ADC_DmaCallback_t)(void *arg);
 
 /**
@@ -224,6 +233,7 @@ typedef struct {
   ADC_DmaCallback_t HalfCallback;
   ADC_DmaCallback_t CompleteCallback;
   void *callback_arg;
+  // internal
   DMA_t _dma;
   uint8_t _pad;
 } ADC_Record_t;
@@ -236,7 +246,7 @@ typedef struct {
  * until the current one completes or `ADC_Stop` is called.
  * @param[in] reg ADC peripheral registers, `NULL` selects `ADC1`
  * @param[in] irq_priority Interrupt priority for the ADC and its DMA channel
- * @param[in] use_hsi Clock the ADC from HSI16 instead of the system clock
+ * @param[in] clock Kernel clock route (`ADC_Clock_...`), zero = family default
  * @param[in] prescaler ADC clock prescaler, common to every job on this ADC
  * @param[in] measure One-shot conversion configuration
  * @param[in] record DMA recording configuration (when `ADC_RECORD` is enabled)
@@ -247,12 +257,13 @@ typedef struct {
 typedef struct {
   ADC_TypeDef *reg;
   IRQ_Priority_t irq_priority;
-  bool use_hsi;
+  ADC_Clock_t clock;
   ADC_Prescaler_t prescaler;
   ADC_Measure_t measure;
   #if(ADC_RECORD)
-    ADC_Record_t record;
+  ADC_Record_t record;
   #endif
+  // internal
   volatile ADC_State_t _busy;
   uint16_t _overrun;
 } ADC_t;
@@ -287,6 +298,13 @@ status_t ADC_Measure(ADC_t *adc);
  * @return Raw conversion result
  */
 uint16_t ADC_Read(ADC_t *adc, uint8_t chan);
+
+/**
+ * @brief Kernel clock frequency of the configured route after the prescaler.
+ * @param[in] adc Pointer to ADC structure
+ * @return Frequency [Hz], `0` when the framework cannot know it (a PLL route)
+ */
+uint32_t ADC_Frequency_Hz(ADC_t *adc);
 
 /**
  * @brief Supply voltage computed from the internal reference (`ADC_IN_VREFEN`)
@@ -357,36 +375,26 @@ uint16_t ADC_Overruns(ADC_t *adc);
  */
 void ADC_Stop(ADC_t *adc);
 
-/** @brief `true` while a job is in progress */
+// Job in progress, or none: the ADC takes the next one
 bool ADC_IsBusy(ADC_t *adc);
-
-/** @brief `true` when the ADC is free to start a job */
 bool ADC_IsFree(ADC_t *adc);
 
-/** @brief Yield to the scheduler until the job in progress completes */
+// Yield to the scheduler until the job in progress completes
 void ADC_Wait(ADC_t *adc);
 
-/**
- * @brief Enable the ADC and wait until it is ready.
- * @param[in,out] adc Pointer to ADC structure
- */
+// Enable the ADC and wait until it is ready, or stop any conversion and disable it
 void ADC_Enable(ADC_t *adc);
-
-/**
- * @brief Stop any conversion and disable the ADC.
- * @param[in,out] adc Pointer to ADC structure
- */
 void ADC_Disable(ADC_t *adc);
 
 //---------------------------------------------------------------------------------------- Internal
 
-// Enable analog mode, or the internal source, for every channel on the list (per family)
+// Family glue: analog mode, or the internal source, for every channel on the list
 void ADC_InitGPIO(ADC_t *adc, uint8_t *chan, uint8_t count);
 
+// Divider, conversion cycles and oversampling ratio behind each enum value
 extern const uint16_t ADC_PRESCALER_TAB[];
 extern const uint16_t ADC_SAMPLING_TIME_TAB[];
 extern const uint16_t ADC_OVERSAMPLING_RATIO_TAB[];
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

@@ -10,39 +10,42 @@
 #include "xdef.h"
 #include "main.h"
 
-//------------------------------------------------------------------------------------ Configurable
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef CMD_MBB_LIMIT
-  // Max number of `MBB_t` buffers registered via `CMD_AddMemBuff`
+  // Buffers registered with `CMD_AddMemBuff`
   #define CMD_MBB_LIMIT 8
 #endif
 
 #ifndef CMD_HANDLER_LIMIT
-  // Max number of command handlers registered via `CMD_AddCommand`
+  // Commands registered with `CMD_AddCommand`
   #define CMD_HANDLER_LIMIT 16
 #endif
 
-//--------------------------------------------------------------------------------- Argv validation
+#ifndef CMD_BOOT
+  // Shell command `boot`, the image transfer of a build under the bootloader, for tests
+  #define CMD_BOOT OFF
+#endif
 
+//---------------------------------------------------------------------------------- Argument check
+
+// Leave a handler on a wrong argument count, exact or `min, max`; `argv` and `argc` in scope
 #define CMD_ArgcCount(count) \
   if(argc != (count)) { CMD_WrongArgc(argv[0], argc); return; }
 #define CMD_ArgcMinMax(min, max) \
   if(argc < (min) || argc > (max)) { CMD_WrongArgc(argv[0], argc); return; }
 #define CMD_Argc(...) _args2(__VA_ARGS__, CMD_ArgcMinMax, CMD_ArgcCount)(__VA_ARGS__)
+
+// Leave a handler reporting argument `nbr` as invalid
 #define CMD_ArgvExit(nbr) { CMD_WrongArgv(argv[0], argv[nbr], nbr); return; }
 
 //------------------------------------------------------------------------------------------- Types
 
-// Command handler signature: receives `argv` and `argc` from parsed input line
+// Command handler: the tokenized line, `argv[0]` is the command
 typedef void (*CMD_Handler_t)(char **argv, uint16_t argc);
 
-//-------------------------------------------------------------------------------------------- Hash
-
-/**
- * Shared keyword vocabulary for the entire CMD ecosystem.
- * All hashes computed from lowercase strings (parser uses `hash_djb2_ci`).
- * Each section groups related words; modules switch on these in their handlers.
- */
+// Keyword vocabulary of the shell, `hash_djb2_ci` of the lowercase word.
+// Every module switches on these in its handler
 typedef enum {
   // Top-level commands
   HASH_Ping     = 2090616627,
@@ -56,6 +59,7 @@ typedef enum {
   HASH_Addr     = 2090071808,
   HASH_Flash    = 259106899,
   HASH_Mutex    = 267752024,
+  HASH_Boot     = 2090120089,
   // MBB verbs
   HASH_Save     = 2090715988,
   HASH_Load     = 2090478981,
@@ -101,6 +105,11 @@ typedef enum {
   HASH_Fill     = 2090257196,
   // Time
   HASH_Now      = 193500569,
+  // Update verbs
+  HASH_Begin    = 254117866,
+  HASH_Data     = 2090176863,
+  HASH_End      = 193490716,
+  HASH_Abort    = 252833149,
   // Slot literals
   HASH_A        = 177670,
   HASH_B        = 177671,
@@ -113,10 +122,9 @@ typedef enum {
   HASH_6        = 177627,
   HASH_7        = 177628,
   HASH_8        = 177629,
-  HASH_9        = 177630,
+  HASH_9        = 177630
 } HASH_t;
 
-#ifdef RTC_H_
 typedef enum {
   RTC_Hash_Everyday  = 552618222,
   RTC_Hash_Monday    = 238549325,
@@ -133,9 +141,8 @@ typedef enum {
   RTC_Hash_Thu       = 193506870,
   RTC_Hash_Fri       = 193491942,
   RTC_Hash_Sat       = 193505549,
-  RTC_Hash_Sun       = 193506203,
+  RTC_Hash_Sun       = 193506203
 } RTC_Hash_t;
-#endif
 
 typedef enum {
   PWR_Hash_Stop        = 2090736459,
@@ -144,109 +151,60 @@ typedef enum {
   PWR_Hash_StandbySram = 950227578,
   PWR_Hash_Standbysram = 1332813965,
   PWR_Hash_Standby     = 2916655642,
-  PWR_Hash_Shutdown    = 4232446817,
+  PWR_Hash_Shutdown    = 4232446817
 } PWR_Hash_t;
 
 //----------------------------------------------------------------------------------------- Globals
 
-/**
- * @brief Currently active `MBB_t` buffer.
- * Default target for command handlers that produce output (e.g. `mbb select`).
- * Set to first registered MBB on startup, changed via `mbb select <name>` command.
- */
-extern MBB_t *cmd_mbb;
+// Active buffer: target of the `mbb` verbs and of handlers producing bulk output.
+// The first registered buffer, then whatever `mbb select <name>` picked
+extern MBB_t *CmdMbb;
 
 //--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Register `MBB_t` buffer with command processor.
- * Buffer name (`mbb->name`) must be set before calling.
- * Hash of name is cached for fast lookup. If flash autosave is enabled,
- * buffer content is loaded from flash automatically.
- * First registered buffer becomes `cmd_mbb` (active) by default.
- * @param[in] mbb Pointer to `MBB_t` instance with `name` set
+ * @brief Register a buffer with the shell. Its `name` must be set, the hash of it is
+ *   cached for the lookup. The flash mirror is loaded when the buffer has one.
+ * @param[in] mbb Buffer with `name` set
  */
 void CMD_AddMemBuff(MBB_t *mbb);
 
 /**
- * @brief Register command handler.
- * If a handler with the same `name` already exists, it is overwritten
- * and a warning is logged.
- * Pass `NULL` as `name` to register the default handler
- * (called when no other command matches).
- * @param[in] name Command name (lowercase, or `NULL` for default handler)
- * @param[in] handler Function called when command is matched
+ * @brief Register a command. A repeated name replaces the handler with a warning,
+ *   `NULL` registers the default handler called when no command matches.
+ * @param[in] name Command word, matched case-insensitively
+ * @param[in] handler Handler
  */
 void CMD_AddCommand(const char *name, CMD_Handler_t handler);
 
-/**
- * @brief Enable/disable automatic flash save after MBB content changes.
- * @param[in] autosave `true` = save MBB to flash on every modifying command
- */
+// Save the active buffer to its flash mirror after every modifying command
 void CMD_SetAutosave(bool autosave);
 
-/**
- * @brief Set custom sleep handler for `pwr sleep` command.
- * @param[in] Sleep Sleep function or `NULL` to use default `PWR_Sleep`
- */
+// Hooks of the `pwr` verbs, `NULL` restores `PWR_Sleep` and the deferred `DbgReset`
 void CMD_SetSleep(void (*Sleep)(PWR_SleepMode_t));
-
-/**
- * @brief Set custom reset handler for `pwr reset` command.
- * @param[in] Reset Reset function or `NULL` to use default debug-flag reset
- */
 void CMD_SetReset(void (*Reset)(void));
 
-/**
- * @brief Set hook called for every line the console receives, before it is handled.
- * @param[in] Activity Hook function or `NULL` for none
- */
+// Hook called for every line the console receives, before it is handled
 void CMD_SetActivity(void (*Activity)(void));
 
-/**
- * @brief Report wrong argument count error.
- * Internal. Called by `CMD_Argc*` macros, not meant for direct use.
- * @param[in] cmd Command name (`argv[0]`)
- * @param[in] argc Actual argument count
- */
-void CMD_WrongArgc(char *cmd, uint16_t argc);
+// Error lines behind `CMD_Argc` and `CMD_ArgvExit`
+void CMD_WrongArgc(const char *cmd, uint16_t argc);
+void CMD_WrongArgv(const char *cmd, const char *argv, uint16_t pos);
 
 /**
- * @brief Report invalid argument error.
- * Internal. Called by `CMD_ArgvExit` macro, not meant for direct use.
- * @param[in] cmd Command name (`argv[0]`)
- * @param[in] argv Argument value
- * @param[in] pos Argument position (0-indexed)
- */
-void CMD_WrongArgv(char *cmd, char *argv, uint16_t pos);
-
-/**
- * @brief Process one command from input stream.
- * Reads available data, parses on newline, dispatches to matching handler.
- * Call this in main loop or dedicated CMD task.
- * @param[in,out] stream Input stream (UART, USB CDC, etc.)
- * @return `true` if a command was processed, `false` if no input ready
+ * @brief Take one line from the stream and dispatch it.
+ * @param[in,out] stream Input stream: console, USB or any `STREAM_t`
+ * @return `true` when a line was handled, `false` when nothing waited
  */
 bool CMD_Step(STREAM_t *stream);
 
 //---------------------------------------------------------------------------------------- Triggers
 
-/**
- * @brief Get and clear pending trigger event.
- * @return Trigger code or `0` if no trigger pending
- */
+// Code set by the `trig` command, taken once; `1` when no code was given
 uint16_t TRIG_Event(void);
 
-/**
- * @brief Wait for any trigger (cooperative, yields to scheduler).
- * @return Trigger code received
- */
+// Wait for any trigger or for `code`, yielding to the scheduler
 uint16_t TRIG_Wait(void);
-
-/**
- * @brief Wait for specific trigger code (cooperative, yields to scheduler).
- * @param[in] code Expected trigger code
- */
 void TRIG_WaitFor(uint16_t code);
 
 //-------------------------------------------------------------------------------------------------

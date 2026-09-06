@@ -7,11 +7,13 @@
 #define PWMI_H_
 
 #include "device.h"
-
 #include "gpio.h"
 #include "tim.h"
+#include "vrts.h"
+#include "xdef.h"
+#include "main.h"
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef PWMI_AUTO_OVERSAMPLING
   // Average a channel until its accumulated period passes `threshold`, so a slow signal
@@ -24,6 +26,8 @@
   // Widen the accumulators to 64 bits, which only the 32-bit timers can ever need
   #define PWMI_USED_TIM2 0
 #endif
+
+//--------------------------------------------------------------------------------------- Structure
 
 /**
  * @brief Frequency and duty measurement of up to four PWM inputs sharing one timer.
@@ -114,5 +118,4 @@ void PWMI_Init(PWMI_t *pwmi);
 bool PWMI_Loop(PWMI_t *pwmi);
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

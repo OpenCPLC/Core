@@ -6,15 +6,14 @@
 #ifndef IRQ_H_
 #define IRQ_H_
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "dma.h"
 
+//---------------------------------------------------------------------------------------- Priority
 
-//-------------------------------------------------------------------------------------------------
-
-// Cross-platform code uses: VeryHigh/High/Medium/Low (0/4/8/12)
-// 16 priority levels. Recorded and never acted on: nothing preempts here
+// 16 levels, portable code uses the four main ones: `VeryHigh`, `High`, `Medium`, `Low`.
+// Recorded and never acted on, nothing preempts here
 typedef enum {
   IRQ_Priority_VeryHigh   = 0,
   IRQ_Priority_VeryHigh_1 = 1,
@@ -34,8 +33,9 @@ typedef enum {
   IRQ_Priority_Low_3      = 15
 } IRQ_Priority_t;
 
-//-------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------- Vectors
 
+// The G0 vector numbers, the ones the board files name
 typedef enum {
   IRQ_NonMaskableInt = -14,
   IRQ_HardFault = -13,
@@ -77,13 +77,6 @@ typedef enum {
   IRQ_Invalid = -127
 } IRQ_t;
 
-//-------------------------------------------------------------------------------------------------
-
-
-
-
-//------------------------------------------------------------------------------------------- Types
-
 typedef void (*IRQ_Handler_t)(void *);
 
 //------------------------------------------------------------------------------------------ Enable
@@ -124,5 +117,4 @@ void IRQ_ClearPendingEXTI(uint8_t line);
 void IRQ_ClearPendingUSB(void);
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

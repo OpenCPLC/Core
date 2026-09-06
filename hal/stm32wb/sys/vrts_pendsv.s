@@ -21,9 +21,6 @@ PendSV_Handler:
   ldr r2,=vrts_now_thread
   ldr r1,[r2]
   str r0,[r1]
-  // push {lr}
-  // bl vrts_not_exist_fnc
-  // pop {lr}
   ldr r2,=vrts_next_thread
   ldr r1,[r2]
   ldr r0,[r1]

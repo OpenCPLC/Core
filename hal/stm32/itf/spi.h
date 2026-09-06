@@ -6,7 +6,7 @@
 #include "gpio.h"
 #include "dma.h"
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------- Types
 
 typedef enum {
   SPI_Prescaler_2   = 0,
@@ -19,7 +19,7 @@ typedef enum {
   SPI_Prescaler_256 = 7
 } SPI_Prescaler_t;
 
-//---------------------------------------------------------------------------------- Family Include
+//---------------------------------------------------------------------------------- Family include
 
 #if defined(STM32G0)
   #include "spi_g0.h"
@@ -27,17 +27,17 @@ typedef enum {
   #include "spi_wb.h"
 #endif
 
-//---------------------------------------------------------------------------------------- Pin Maps
+//---------------------------------------------------------------------------------------- Pin maps
 
 extern const GPIO_Map_t SPI_SCK_MAP[];
 extern const GPIO_Map_t SPI_MISO_MAP[];
 extern const GPIO_Map_t SPI_MOSI_MAP[];
 
-//------------------------------------------------------------------------------------ Internal API
+//---------------------------------------------------------------------------------------- Internal
 
+// Family glue: the DMAMUX request of each direction
 void SPI_DmaSetRxRequest(SPI_TypeDef *reg, DMA_t *dma);
 void SPI_DmaSetTxRequest(SPI_TypeDef *reg, DMA_t *dma);
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

@@ -2,16 +2,10 @@
 
 #include "flash.h"
 
+#include <string.h>
+
 #if defined(STM32WB)
   #include "hsem_wb.h"
-
-// The CPU2 stack stretches its radio timing around erases when told ahead; the real
-// send lives in `wpan_wb.c`, a build without the radio keeps this stub
-__attribute__((weak)) void WPAN_FlashEraseActivity(bool active)
-{
-  unused(active);
-}
-
   #define flash_take() HSEM_Wait(HSEM_FLASH)
   #define flash_give() HSEM_Give(HSEM_FLASH)
 #else
@@ -20,32 +14,31 @@ __attribute__((weak)) void WPAN_FlashEraseActivity(bool active)
   #define WPAN_FlashEraseActivity(active)
 #endif
 
-//----------------------------------------------------------------------------- Compatibility Layer
+//--------------------------------------------------------------------------------------- Constants
 
-#define FLASH_START_ADDR ((uint32_t)0x08000000)
-#define FLASH_KEY1 ((uint32_t)0x45670123)
-#define FLASH_KEY2 ((uint32_t)0xCDEF89AB)
+#define FLASH_START_ADDR 0x08000000u
+#define FLASH_KEY1 0x45670123u
+#define FLASH_KEY2 0xCDEF89ABu
 
+// `CFGBSY` holds while the control register is being taken over, a write during it is lost.
+// The second bank of the dual-bank parts reports on `BSY2`, its pages start at 128.
 #if defined(STM32G0)
-  #define FLASH_BSY FLASH_SR_BSY1
   #define FLASH_PNB_POS 3
   #if defined(STM32G0C1xx)
-    #define FLASH_PNB_MASK (FLASH_CR_PNB | FLASH_CR_BKER)
+  #define FLASH_BSY (FLASH_SR_BSY1 | FLASH_SR_BSY2 | FLASH_SR_CFGBSY)
+  #define FLASH_PNB_MASK (FLASH_CR_PNB | FLASH_CR_BKER)
   #else
-    #define FLASH_PNB_MASK FLASH_CR_PNB
+  #define FLASH_BSY (FLASH_SR_BSY1 | FLASH_SR_CFGBSY)
+  #define FLASH_PNB_MASK FLASH_CR_PNB
   #endif
 #elif defined(STM32WB)
-  #define FLASH_BSY FLASH_SR_BSY
-  #define FLASH_PNB_POS FLASH_CR_PNB_Pos
-  #define FLASH_PNB_MASK FLASH_CR_PNB
-#elif defined(STM32G4)
-  #define FLASH_BSY FLASH_SR_BSY
+  #define FLASH_BSY (FLASH_SR_BSY | FLASH_SR_CFGBSY)
   #define FLASH_PNB_POS FLASH_CR_PNB_Pos
   #define FLASH_PNB_MASK FLASH_CR_PNB
 #endif
 
 // Busy bit and page-number field move between families, the error set does not.
-// `PROGERR` reports a write into a location that was not erased.
+// `PROGERR` reports a write into a location that was not erased
 #define FLASH_ERR_FLAGS (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | \
   FLASH_SR_PGAERR | FLASH_SR_SIZERR | FLASH_SR_PGSERR | \
   FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
@@ -53,13 +46,22 @@ __attribute__((weak)) void WPAN_FlashEraseActivity(bool active)
 
 //---------------------------------------------------------------------------------------- Internal
 
+#if defined(STM32WB)
+// The CPU2 stack stretches its radio timing around erases when told ahead; the real
+// send lives in `wpan_wb.c`, a build without the radio keeps this stub
+__attribute__((weak)) void WPAN_FlashEraseActivity(bool active)
+{
+  unused(active);
+}
+#endif
+
 static inline void flash_wait(void)
 {
   while(FLASH->SR & FLASH_BSY) __DSB();
 }
 
 // Page reads as erased: `0xFFFFFFFF` in every word
-static bool flash_page_is_erased(uint16_t page)
+static bool page_is_erased(uint16_t page)
 {
   const volatile uint32_t *word = (const volatile uint32_t *)FLASH_GetAddress(page, 0);
   for(uint32_t i = 0; i < FLASH_PAGE_SIZE / sizeof(uint32_t); i++) {
@@ -68,22 +70,8 @@ static bool flash_page_is_erased(uint16_t page)
   return true;
 }
 
-#if defined(STM32G0) && defined(STM32G0C1xx)
-/**
- * @brief Get bank bit for dual-bank G0C1.
- * @param[in] page Page index (0-255)
- * @return `BKER` mask (`0` or `1u << 13`)
- */
-static inline uint32_t flash_bank_bit(uint16_t page)
-{
-  return (page > 127) ? (1u << 13) : 0;
-}
-#endif
-
-//-------------------------------------------------------------------------------------------- Init
-
 // The semaphore spans unlock to finish, so every operation holds it exactly once
-static inline status_t flash_unlock(void)
+static status_t flash_unlock(void)
 {
   flash_take();
   flash_wait();
@@ -98,21 +86,15 @@ static inline status_t flash_unlock(void)
   return OK;
 }
 
-static inline void flash_lock(void)
-{
-  flash_wait();
-  FLASH->CR |= FLASH_CR_LOCK;
-}
-
-// Latch error flags, clear status and lock flash
+// Latch the error flags, clear the status, lock and release
 static status_t flash_finish(void)
 {
   uint32_t sr = FLASH->SR;
   FLASH->SR = FLASH_CLR_FLAGS;
-  flash_lock();
+  flash_wait();
+  FLASH->CR |= FLASH_CR_LOCK;
   flash_give();
-  if(sr & FLASH_ERR_FLAGS) return ERR;
-  return OK;
+  return (sr & FLASH_ERR_FLAGS) ? ERR : OK;
 }
 
 //------------------------------------------------------------------------------------------- Erase
@@ -120,8 +102,7 @@ static status_t flash_finish(void)
 status_t FLASH_Erase(uint16_t page)
 {
   if(page >= FLASH_PAGES) return ERR;
-  // An empty page IS the erased state: skip the operation
-  if(flash_page_is_erased(page)) return OK;
+  if(page_is_erased(page)) return OK;
   WPAN_FlashEraseActivity(true);
   if(flash_unlock()) {
     WPAN_FlashEraseActivity(false);
@@ -130,11 +111,11 @@ status_t FLASH_Erase(uint16_t page)
   FLASH->SR = FLASH_CLR_FLAGS;
   FLASH->CR &= ~FLASH_PNB_MASK;
   #if defined(STM32G0) && defined(STM32G0C1xx)
-    // Dual-bank: BKER picks the bank, PNB is the page within it (0..127), not absolute.
-    FLASH->CR |= flash_bank_bit(page) |
-      ((uint32_t)(page & 0x7Fu) << FLASH_PNB_POS) | FLASH_CR_PER;
+  // Dual bank: `BKER` picks the bank, `PNB` is the page within it, not the absolute one
+  uint32_t bank = page > 127 ? FLASH_CR_BKER : 0;
+  FLASH->CR |= bank | ((uint32_t)(page & 0x7Fu) << FLASH_PNB_POS) | FLASH_CR_PER;
   #else
-    FLASH->CR |= ((uint32_t)page << FLASH_PNB_POS) | FLASH_CR_PER;
+  FLASH->CR |= ((uint32_t)page << FLASH_PNB_POS) | FLASH_CR_PER;
   #endif
   FLASH->CR |= FLASH_CR_STRT;
   flash_wait();
@@ -143,13 +124,11 @@ status_t FLASH_Erase(uint16_t page)
   status_t ret = flash_finish();
   WPAN_FlashEraseActivity(false);
   if(ret) return ERR;
-  // `EOP` is gated by `EOPIE` on G0/WB/L4, so a real erase never sets it here.
-  // Success is read from the flash itself: the page, erased
-  if(!flash_page_is_erased(page)) return ERR;
-  return OK;
+  // `EOP` is gated by `EOPIE`, so success is read from the flash itself
+  return page_is_erased(page) ? OK : ERR;
 }
 
-//------------------------------------------------------------------------------------ Address/Read
+//-------------------------------------------------------------------------------------------- Read
 
 uint32_t FLASH_GetAddress(uint16_t page, int16_t offset)
 {
@@ -158,13 +137,12 @@ uint32_t FLASH_GetAddress(uint16_t page, int16_t offset)
 
 uint32_t FLASH_Read(uint32_t addr)
 {
-  return *(uint32_t *)addr;
+  return *(const uint32_t *)addr;
 }
 
 //------------------------------------------------------------------------------------------- Write
 
-// Doubleword program: requires 8B-aligned address and uninterrupted store pair.
-// IRQ between `data1` and `data2` triggers `PROGERR`/`SIZERR` on G0/WB/G4.
+// The two stores must not be split by an interrupt: a gap raises `PROGERR` or `SIZERR`
 status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2)
 {
   if(addr & 7u) return ERR;
@@ -185,51 +163,44 @@ status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2)
   return OK;
 }
 
-// Fast (row) program: 256B aligned, MUST execute from RAM (RWW conflict otherwise).
-// Linker must place this in `.data#` and copy at startup.
-status_t FLASH_WriteFast(uint32_t addr, uint32_t *data)
+status_t FLASH_WriteFast(uint32_t addr, const uint32_t *data)
 {
   if(addr & 0xFFu) return ERR;
-  uint32_t self = (uint32_t)&FLASH_WriteFast & ~1u; // mask Thumb bit
+  // Linker placed this function in flash: a row program from there would stall the core
+  uint32_t self = (uint32_t)&FLASH_WriteFast & ~1u; // without the Thumb bit
   if(self >= FLASH_START_ADDR && self < FLASH_START_ADDR + (FLASH_PAGES * FLASH_PAGE_SIZE)) {
-    return ERR; // not in RAM: linker misconfig
+    return ERR;
   }
   if(flash_unlock()) return ERR;
   FLASH->SR = FLASH_CLR_FLAGS;
   FLASH->CR |= FLASH_CR_FSTPG;
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
-  for(int i = 0; i < 64; i++) {
-    *(volatile uint32_t *)addr = data[i];
-    addr += 4u;
-  }
+  for(int i = 0; i < 64; i++) *(volatile uint32_t *)(addr + 4u * i) = data[i];
   flash_wait();
   FLASH->CR &= ~FLASH_CR_FSTPG;
   __set_PRIMASK(primask);
   if(flash_finish()) return ERR;
-  // Same `EOPIE` gate as the erase: verify the row against the source instead
-  addr -= 256u;
+  // Same `EOPIE` gate as the erase: the row is verified against the source
   for(int i = 0; i < 64; i++) {
-    if(*(volatile uint32_t *)(addr + 4u * (uint32_t)i) != data[i]) return ERR;
+    if(*(volatile uint32_t *)(addr + 4u * i) != data[i]) return ERR;
   }
   return OK;
 }
 
-status_t FLASH_WritePage(uint16_t page, uint8_t *data)
+status_t FLASH_WritePage(uint16_t page, const uint8_t *data)
 {
   if(FLASH_Erase(page)) return ERR;
   uint32_t addr = FLASH_GetAddress(page, 0);
   for(uint32_t i = 0; i < FLASH_PAGE_SIZE; i += 256) {
-    if(FLASH_WriteFast(addr, (uint32_t *)data)) return ERR;
-    addr += 256;
-    data += 256;
+    if(FLASH_WriteFast(addr + i, (const uint32_t *)(data + i))) return ERR;
   }
   return OK;
 }
 
-//------------------------------------------------------------------------------- Compare/Save/Load
+//------------------------------------------------------------------------------------------ Record
 
-bool FLASH_Compare(uint16_t page, uint8_t *data, uint16_t size)
+bool FLASH_Compare(uint16_t page, const uint8_t *data, uint16_t size)
 {
   if(page >= FLASH_PAGES) return false;
   uint32_t addr = FLASH_GetAddress(page, 0);
@@ -238,15 +209,14 @@ bool FLASH_Compare(uint16_t page, uint8_t *data, uint16_t size)
   uint32_t raw = FLASH_Read(addr);
   if(raw == 0xFFFFFFFFu) return false;
   if((uint16_t)raw != size) return false;
-  return memcmp(data, (uint8_t *)(addr + 4u), size) == 0;
+  return memcmp(data, (const uint8_t *)(addr + 4u), size) == 0;
 }
 
-// Layout: [size:4B][data:size B] padded to 8B boundary per DW write.
-// Real footprint = `align_up(size + 4, 8)`. Header DW = `(size, data[0..3])`.
-// Header is written LAST as a commit marker: a torn save leaves it erased,
-// so `FLASH_Load`/`FLASH_Compare` reject the record instead of a half-written body.
-// Single-slot only; for CRC-grade torn-write safety use PDB/EEPROM.
-status_t FLASH_Save(uint16_t page, uint8_t *data, uint16_t size)
+// Layout: `[size:4B][data:size B]` in doublewords, so the header doubleword carries
+// the size and the first four data bytes. The header is written last as the commit
+// marker: a torn save leaves it erased and `FLASH_Load` sees no record.
+// Single slot, no checksum; torn-write safety of the body is what PDB and EEPROM add
+status_t FLASH_Save(uint16_t page, const uint8_t *data, uint16_t size)
 {
   if(page >= FLASH_PAGES) return ERR;
   if(size == 0) return ERR;
@@ -259,10 +229,9 @@ status_t FLASH_Save(uint16_t page, uint8_t *data, uint16_t size)
   uint16_t first = size > 4 ? 4 : size;
   uint32_t w1 = 0xFFFFFFFFu;
   memcpy(&w1, data, first);
-  uint8_t *body = data + first;
+  const uint8_t *body = data + first;
   uint16_t left = size - first;
-  uint32_t addr = head + 8u; // body begins after the reserved header doubleword
-  uint32_t d[2];
+  uint32_t addr = head + 8u; // the body follows the header doubleword
   while(left) {
     if(addr >= end_page) {
       page++;
@@ -270,8 +239,7 @@ status_t FLASH_Save(uint16_t page, uint8_t *data, uint16_t size)
       if(FLASH_Erase(page)) return ERR;
       end_page = FLASH_GetAddress(page + 1, 0);
     }
-    d[0] = 0xFFFFFFFFu;
-    d[1] = 0xFFFFFFFFu;
+    uint32_t d[2] = { 0xFFFFFFFFu, 0xFFFFFFFFu };
     uint16_t chunk = left > 8 ? 8 : left;
     memcpy(d, body, chunk);
     if(FLASH_Write(addr, d[0], d[1])) return ERR;
@@ -279,8 +247,7 @@ status_t FLASH_Save(uint16_t page, uint8_t *data, uint16_t size)
     body += chunk;
     left -= chunk;
   }
-  if(FLASH_Write(head, (uint32_t)size, w1)) return ERR; // commit marker LAST
-  return OK;
+  return FLASH_Write(head, size, w1);
 }
 
 uint16_t FLASH_Load(uint16_t page, uint8_t *data)
@@ -293,7 +260,7 @@ uint16_t FLASH_Load(uint16_t page, uint8_t *data)
   uint16_t size = (uint16_t)raw;
   if(size == 0) return 0;
   if(flash_end - addr < 4u + size) return 0;
-  memcpy(data, (uint8_t *)(addr + 4u), size);
+  memcpy(data, (const uint8_t *)(addr + 4u), size);
   return size;
 }
 

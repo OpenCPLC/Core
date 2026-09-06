@@ -3,18 +3,23 @@
 #ifndef SYS_H_
 #define SYS_H_
 
-#include <stdio.h>
-#include <stdlib.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "heap.h"
 
+//--------------------------------------------------------------------------------------------- API
+
+// Heap and the exit request on `Ctrl+C`; the request is polled by the main loop
 void sys_init(void);
 int sys_exit_requested(void);
 void sys_exit_request(void);
 
+// Fatal error: the hook runs first, then the message goes to `stderr` and the process ends
 void panic(const char *message);
 void panic_hook(void (*handler)(void));
 
+// Whole files, `file_load` allocates the buffer with `malloc`; `0` and `NULL` when absent
 bool file_save(const char *name, const uint8_t *data, size_t size);
 size_t file_load(const char *name, uint8_t **data);
 
@@ -28,4 +33,5 @@ size_t file_load(const char *name, uint8_t **data);
 static inline void __disable_irq(void) {}
 static inline void __enable_irq(void) {}
 
+//-------------------------------------------------------------------------------------------------
 #endif

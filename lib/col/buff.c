@@ -2,15 +2,17 @@
 
 #include "buff.h"
 
+#include "heap.h"
+
 //------------------------------------------------------------------------------------------- State
 
-uint16_t BUFF_Size(BUFF_t *buff)
+uint16_t BUFF_Size(const BUFF_t *buff)
 {
   if(buff->_msg_head != buff->_msg_tail) return buff->_msg_size[buff->_msg_tail];
   return 0;
 }
 
-uint16_t BUFF_MessageCount(BUFF_t *buff)
+uint16_t BUFF_MessageCount(const BUFF_t *buff)
 {
   if(buff->_msg_head >= buff->_msg_tail) return buff->_msg_head - buff->_msg_tail;
   return BUFF_MSG_LIMIT - buff->_msg_tail + buff->_msg_head;
@@ -142,12 +144,12 @@ uint16_t BUFF_Read(BUFF_t *buff, uint8_t *dst)
   return size;
 }
 
-uint16_t BUFF_Peek(BUFF_t *buff, uint8_t *dst)
+uint16_t BUFF_Peek(const BUFF_t *buff, uint8_t *dst)
 {
   uint16_t size = BUFF_Size(buff);
   if(!size) return 0;
   uint16_t n = size;
-  uint8_t *ptr = (uint8_t*)buff->_tail;
+  const uint8_t *ptr = (const uint8_t *)buff->_tail;
   while(n) {
     if(dst) *dst++ = *ptr;
     ptr++;
@@ -168,7 +170,7 @@ char *BUFF_ReadString(BUFF_t *buff)
   if(!size) return NULL;
   char *str = heap_new(size + 1);
   if(!str) return NULL;
-  BUFF_Read(buff, (uint8_t*)str);
+  BUFF_Read(buff, (uint8_t *)str);
   str[size] = '\0';
   return str;
 }

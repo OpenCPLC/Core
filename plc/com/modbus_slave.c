@@ -2,6 +2,8 @@
 
 #include "modbus_slave.h"
 
+#include "heap.h"
+
 MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
 {
   if(UART_SendActive(modbus->uart)) return MODBUS_Status_UartBusy;
@@ -25,7 +27,6 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
   uint16_t size_tx = 0;
   MODBUS_Fnc_t function_code = (MODBUS_Fnc_t)modbus->buffer_rx[1];
   switch(function_code) {
-    //---------------------------------------------------------------------------------------------
     case MODBUS_Fnc_ReadBits:
     case MODBUS_Fnc_ReadOuts:
       if(size_rx != 8) return MODBUS_Status_InvalidSize;
@@ -60,7 +61,6 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
         }
       }
       break;
-    //---------------------------------------------------------------------------------------------
     case MODBUS_Fnc_ReadHoldingRegisters:
     case MODBUS_Fnc_ReadInputRegisters:
       if(size_rx != 8) return MODBUS_Status_InvalidSize;
@@ -79,7 +79,6 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
         modbus->buffer_tx[3 + (i * 2) + 1] = (uint8_t)value;
       }
       break;
-    //---------------------------------------------------------------------------------------------
     case MODBUS_Fnc_PresetBit:
       if(size_rx != 8) return MODBUS_Status_InvalidSize;
       size_tx = 6;
@@ -98,7 +97,6 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
         modbus->update_any = true;
       }
       break;
-    //---------------------------------------------------------------------------------------------
     case MODBUS_Fnc_PresetRegister:
       if(size_rx != 8) return MODBUS_Status_InvalidSize;
       size_tx = 6;
@@ -113,7 +111,6 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
         modbus->update_any = true;
       }
       break;
-    //---------------------------------------------------------------------------------------------
     case MODBUS_Fnc_WriteBits:
       if(size_rx < 10 || (size_rx != modbus->buffer_rx[6] + 9))
         return MODBUS_Status_InvalidSize;
@@ -153,7 +150,6 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
         }
       }
       break;
-    //---------------------------------------------------------------------------------------------
     case MODBUS_Fnc_WriteRegisters:
       count = (modbus->buffer_rx[4] << 8) | modbus->buffer_rx[5];
       if(!count || count > MODBUS_WRITE_REGISTERS_MAX) return MODBUS_Status_InvalidSize;
@@ -174,7 +170,6 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
         }
       }
       break;
-    //---------------------------------------------------------------------------------------------
     default:
       size_tx = size_rx;
       modbus->buffer_tx = (uint8_t *)heap_alloc(size_tx + 2);

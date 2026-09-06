@@ -2,12 +2,32 @@
 
 #include "max31865.h"
 
-//-------------------------------------------------------------------------------------------------
+#include <math.h>
+#include "log.h"
+#include "vrts.h"
 
-/**
- * @brief Initialize the MAX31865 module for RTD sensor operation.
- * @param[in,out] rtd Pointer to MAX31865 instance
- */
+//---------------------------------------------------------------------------------------- Internal
+
+static status_t get_data(MAX31865_t *rtd)
+{
+  if(timeout(100, WAIT_&GPIO_In, rtd->ready)) return ERR;
+  SPI_Master_Read(rtd->spi, MAX31865_Reg_Read_RTD_MSB, rtd->_buff, 3);
+  if(timeout(50, WAIT_&SPI_Master_IsFree, rtd->spi)) return ERR;
+  rtd->_raw = ((uint16_t)rtd->_buff[1] << 7) | (rtd->_buff[2] >> 1);
+  return OK;
+}
+
+static status_t set_config(MAX31865_t *rtd, uint8_t config)
+{
+  rtd->_buff[0] = MAX31865_Reg_Write_Configuration;
+  rtd->_buff[1] = config;
+  SPI_Master_Write(rtd->spi, rtd->_buff, 2);
+  if(timeout(50, WAIT_&SPI_Master_IsFree, rtd->spi)) return ERR;
+  return OK;
+}
+
+//--------------------------------------------------------------------------------------------- API
+
 void MAX31865_Init(MAX31865_t *rtd)
 {
   if(rtd->cs) {
@@ -18,111 +38,76 @@ void MAX31865_Init(MAX31865_t *rtd)
   GPIO_Init(rtd->ready);
   if(!rtd->nominal_ohms) rtd->nominal_ohms = RTD_Type_PT100;
   if(!rtd->reference_ohms) rtd->reference_ohms = 4 * rtd->nominal_ohms;
-  rtd->raw_float = NaN;
+  rtd->_raw_float = NaN;
 }
 
-static status_t MAX31865_GetData(MAX31865_t *rtd)
-{
-  if(timeout(100, WAIT_&GPIO_In, rtd->ready)) return ERR;
-  SPI_Master_Read(rtd->spi, MAX31865_Reg_Read_RTD_MSB, rtd->buff, 3);
-  if(timeout(50, WAIT_&SPI_Master_IsFree, rtd->spi)) return ERR;
-  rtd->raw = ((uint16_t)rtd->buff[1] << 7) | (rtd->buff[2] >> 1);
-  return OK;
-}
-
-static status_t MAX31865_SetConfig(MAX31865_t *rtd, uint8_t config)
-{
-  rtd->buff[0] = MAX31865_Reg_Write_Configuration;
-  rtd->buff[1] = config;
-  SPI_Master_Write(rtd->spi, rtd->buff, 2);
-  if(timeout(50, WAIT_&SPI_Master_IsFree, rtd->spi)) return ERR;
-  return OK;
-}
-
-/**
- * @brief Main measurement loop for the RTD sensor.
- * Runs configuration, performs measurement, computes temperature.
- * @param[in,out] rtd Pointer to MAX31865 instance
- * @return `OK` on success, `ERR` on SPI / timeout failure, `BUSY` if SPI not free
- */
 status_t MAX31865_Loop(MAX31865_t *rtd)
 {
-  if(tick_away(&rtd->interval_tick)) return OK;
-  if(tick_over(&rtd->expiry_tick)) {
-    rtd->raw_float = NaN;
-  }
+  if(tick_away(&rtd->_interval_tick)) return OK;
+  if(tick_over(&rtd->_expiry_tick)) rtd->_raw_float = NaN;
   if(rtd->cs) rtd->spi->cs = rtd->cs;
   uint8_t cfg = (rtd->wire << 4) | rtd->reject;
   if(SPI_Master_IsBusy(rtd->spi)) return BUSY;
-  if(MAX31865_SetConfig(rtd, MAX31865_CFG_BIAS | cfg)) return ERR;
+  if(set_config(rtd, MAX31865_CFG_BIAS | cfg)) return ERR;
   delay(10);
   if(rtd->oversampling) {
-    if(MAX31865_SetConfig(rtd, MAX31865_CFG_BIAS | MAX31865_CFG_AUTO | cfg)) return ERR;
+    if(set_config(rtd, MAX31865_CFG_BIAS | MAX31865_CFG_AUTO | cfg)) return ERR;
     float value = 0;
     for(uint16_t n = 0; n < rtd->oversampling; n++) {
-      if(MAX31865_GetData(rtd)) return ERR;
-      value += (float)rtd->raw;
+      if(get_data(rtd)) return ERR;
+      value += (float)rtd->_raw;
     }
-    rtd->raw_float = value / rtd->oversampling;
+    rtd->_raw_float = value / rtd->oversampling;
   }
   else {
-    if(MAX31865_SetConfig(rtd, MAX31865_CFG_BIAS | MAX31865_CFG_SHOT | cfg)) return ERR;
-    if(MAX31865_GetData(rtd)) return ERR;
-    rtd->raw_float = (float)rtd->raw;
+    if(set_config(rtd, MAX31865_CFG_BIAS | MAX31865_CFG_SHOT | cfg)) return ERR;
+    if(get_data(rtd)) return ERR;
+    rtd->_raw_float = (float)rtd->_raw;
   }
-  // Read Errors
-  if(MAX31865_SetConfig(rtd, MAX31865_CFG_FSCLR | cfg)) return ERR;
-  LOG_Debug("MAX31865 %s raw value: %.2f", rtd->name, rtd->raw_float);
-  rtd->expiry_tick = tick_keep(rtd->expiry_ms);
-  rtd->interval_tick = tick_keep(rtd->interval_ms);
+  // Fault status cleared for the next round
+  if(set_config(rtd, MAX31865_CFG_FSCLR | cfg)) return ERR;
+  LOG_Debug("MAX31865 %s raw value: %.2f", rtd->name, rtd->_raw_float);
+  rtd->_expiry_tick = tick_keep(rtd->expiry_ms);
+  rtd->_interval_tick = tick_keep(rtd->interval_ms);
   return OK;
 }
 
-//-------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------- Convert
 
-#define MAX31865_A 3.9083e-3
-#define MAX31865_B -5.775e-7
+// Callendar-Van Dusen coefficients of platinum
+#define MAX31865_A  3.9083e-3f
+#define MAX31865_B  -5.775e-7f
 #define MAX31865_Z1 (-MAX31865_A)
 #define MAX31865_Z2 (MAX31865_A * MAX31865_A - (4 * MAX31865_B))
 
-/**
- * @brief Compute RTD resistance in Ω from the raw measurement.
- * @param[in] rtd Pointer to MAX31865 instance
- * @return Resistance in Ω, `NaN` if no valid measurement
- */
-float RTD_Resistance_Ohm(MAX31865_t *rtd)
+float RTD_Resistance_Ohm(const MAX31865_t *rtd)
 {
-  if(isNaN(rtd->raw_float)) return NaN;
-  return rtd->raw_float * rtd->reference_ohms / 32768;
+  if(isNaN(rtd->_raw_float)) return NaN;
+  return rtd->_raw_float * rtd->reference_ohms / 32768;
 }
 
-/**
- * @brief Compute temperature in °C from RTD resistance (Callendar-Van Dusen).
- * @param[in] rtd Pointer to MAX31865 instance
- * @return Temperature in °C, `NaN` if no valid measurement
- */
-float RTD_Temperature_C(MAX31865_t *rtd)
+// The quadratic above 0 deg C, a fifth-order polynomial fit below
+float RTD_Temperature_C(const MAX31865_t *rtd)
 {
-  if(isNaN(rtd->raw_float)) return NaN;
+  if(isNaN(rtd->_raw_float)) return NaN;
   float ohms = RTD_Resistance_Ohm(rtd);
   float z3 = (4 * MAX31865_B) / rtd->nominal_ohms;
   float z4 = 2 * MAX31865_B;
   float temp = MAX31865_Z2 + (z3 * ohms);
-  temp = (sqrt(temp) + MAX31865_Z1) / z4;
+  temp = (sqrtf(temp) + MAX31865_Z1) / z4;
   if(temp >= 0) return temp;
-  ohms /= rtd->nominal_ohms;
-  ohms *= 100;
+  ohms = ohms / rtd->nominal_ohms * 100;
   float x = ohms;
-  temp = -242.02;
-  temp += 2.2228 * x;
+  temp = -242.02f;
+  temp += 2.2228f * x;
   x *= ohms;
-  temp += 2.5859e-3 * x;
+  temp += 2.5859e-3f * x;
   x *= ohms;
-  temp -= 4.8260e-6 * x;
+  temp -= 4.8260e-6f * x;
   x *= ohms;
-  temp -= 2.8183e-8 * x;
+  temp -= 2.8183e-8f * x;
   x *= ohms;
-  temp += 1.5243e-10 * x;
+  temp += 1.5243e-10f * x;
   return temp;
 }
 

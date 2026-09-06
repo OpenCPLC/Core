@@ -2,6 +2,8 @@
 
 #include "pdb.h"
 
+#include <string.h>
+
 //---------------------------------------------------------------------------------------- Internal
 
 static void _page_bounds(PDB_t *pdb, uint16_t page, uint32_t *start, uint32_t *end)
@@ -19,7 +21,7 @@ static void _calc_bounds(PDB_t *pdb)
 static bool _slot_erased(uint32_t addr, uint16_t size)
 {
   for(uint16_t i = 0; i < size; i += 4) {
-    if(*(volatile uint32_t *)(addr + i) != 0xFFFFFFFF) return false;
+    if(*(volatile uint32_t *)(addr + i) != 0xFFFFFFFFu) return false;
   }
   return true;
 }
@@ -28,7 +30,7 @@ static bool _record_valid(PDB_t *pdb, uint32_t addr)
 {
   if(!pdb->crc) return true;
   uint16_t len = pdb->payload_size + pdb->crc->width / 8;
-  return CRC_Error(pdb->crc, (uint8_t *)addr, len) == OK;
+  return CRC_Error(pdb->crc, (const uint8_t *)addr, len) == OK;
 }
 
 // Scan page, locate slot after the last non-erased record.
@@ -40,7 +42,7 @@ static PDB_Status_t _scan_page(PDB_t *pdb, uint16_t page, uint32_t *cursor)
 {
   uint32_t start, end;
   _page_bounds(pdb, page, &start, &end);
-  uint32_t last_used = start; // Slot after last non-erased record.
+  uint32_t last_used = start; // slot after the last non-erased record
   uint16_t valid_count = 0;
   bool any_used = false;
   for(uint32_t addr = start; addr < end; addr += pdb->_record_size) {
@@ -180,7 +182,7 @@ status_t PDB_Insert(PDB_t *pdb, const void *record)
   if(pdb->_pointer >= pdb->_pointer_end) {
     if(_advance_page(pdb)) return ERR;
   }
-  uint64_t buf[PDB_RECORD_LIMIT / 8]; // 8B-aligned, satisfies doubleword write.
+  uint64_t buf[PDB_RECORD_LIMIT / 8]; // 8-byte aligned for the doubleword writes
   uint8_t *bytes = (uint8_t *)buf;
   memcpy(bytes, record, pdb->payload_size);
   uint16_t used = pdb->payload_size;

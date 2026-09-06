@@ -9,6 +9,8 @@
 #include "log.h"
 #include "main.h"
 
+//------------------------------------------------------------------------------------------ Config
+
 #ifndef CRON_MAX_TASKS
   // Maximum number of cron tasks
   #define CRON_MAX_TASKS 16
@@ -29,9 +31,9 @@
 #define cron_bit(n) ((uint64_t)1 << (n))
 // Match all values for a field
 #define cron_any (~(uint64_t)0)
-// Match a single value `x` (e.g. `cron_at(8)` = 8)
+// Match a single value `x`, `cron_at(8)` = 8
 #define cron_at(x) cron_bit(x)
-// Match inclusive range `[a..b]` (e.g. `cron_range(1,5)` = 1..5)
+// Match the inclusive range `[a..b]`, `cron_range(1, 5)` = 1..5
 #define cron_range(a, b) ((cron_bit((b) - (a) + 1) - 1) << (a))
 
 //------------------------------------------------------------------------------------------- Types
@@ -104,5 +106,4 @@ bool CRON_Disable(uint16_t handle);
 void CRON_Step(void);
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

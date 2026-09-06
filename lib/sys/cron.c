@@ -11,8 +11,8 @@
 
 static CRON_t tasks[CRON_MAX_TASKS];
 
-// Match current datetime against task spec, POSIX `month_day`/`week_day` rule
-static bool CRON_Match(const CRON_t *t, const RTC_Datetime_t *now)
+// Match the datetime against the task, POSIX `month_day`/`week_day` rule
+static bool cron_match(const CRON_t *t, const RTC_Datetime_t *now)
 {
   if(!(t->minute & ((uint64_t)1 << now->minute))) return false;
   if(!(t->hour & (1u << now->hour))) return false;
@@ -98,6 +98,8 @@ void CRON_Step(void)
   for(uint16_t i = 0; i < CRON_MAX_TASKS; i++) {
     CRON_t *t = &tasks[i];
     if(!t->_used || !t->enabled) continue;
-    if(CRON_Match(t, &now)) t->Handler(t->arg);
+    if(cron_match(t, &now)) t->Handler(t->arg);
   }
 }
+
+//-------------------------------------------------------------------------------------------------

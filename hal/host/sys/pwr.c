@@ -1,6 +1,7 @@
 // hal/host/sys/pwr.c
 
 #include "pwr.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,29 +14,25 @@
   #include <unistd.h>
 #endif
 
-//---------------------------------------------------------------------- Program path (for restart)
+//------------------------------------------------------------------------------------ Program path
 
-static char pwr_exe_path[1024] = {0};
-static char **pwr_argv = NULL;
+static char pwr_exe_path[1024];
+static char **pwr_argv;
 
-/**
- * @brief Store program path and arguments for restart
- * @note Call this from main() if you want PWR_Reset() to work
- */
 void PWR_StoreArgs(int argc, char **argv)
 {
   if(argc > 0 && argv && argv[0]) {
     #if defined(_WIN32) || defined(_WIN64)
-      GetModuleFileNameA(NULL, pwr_exe_path, sizeof(pwr_exe_path));
+    GetModuleFileNameA(NULL, pwr_exe_path, sizeof(pwr_exe_path));
     #else
-      // Try /proc/self/exe first (Linux)
-      ssize_t len = readlink("/proc/self/exe", pwr_exe_path, sizeof(pwr_exe_path) - 1);
-      if(len > 0) {
-        pwr_exe_path[len] = '\0';
-      }
-      else {
-        strncpy(pwr_exe_path, argv[0], sizeof(pwr_exe_path) - 1);
-      }
+    // `/proc/self/exe` first, the argument as the fallback
+    ssize_t len = readlink("/proc/self/exe", pwr_exe_path, sizeof(pwr_exe_path) - 1);
+    if(len > 0) {
+      pwr_exe_path[len] = '\0';
+    }
+    else {
+      strncpy(pwr_exe_path, argv[0], sizeof(pwr_exe_path) - 1);
+    }
     #endif
     pwr_argv = argv;
   }
@@ -61,23 +58,18 @@ void PWR_Sleep(PWR_SleepMode_t mode)
   exit(0);
 }
 
-//--------------------------------------------------------------- BKPR (RAM-based, lost on restart)
+//-------------------------------------------------------------------------------------------- BKPR
 
-static uint32_t bkpr_regs[5] = {0};
+static uint32_t bkpr_regs[BKPR_4 + 1];
 
 void BKPR_Write(BKPR_t reg, uint32_t value)
 {
-  if(reg <= BKPR_4) {
-    bkpr_regs[reg] = value;
-  }
+  if(reg <= BKPR_4) bkpr_regs[reg] = value;
 }
 
 uint32_t BKPR_Read(BKPR_t reg)
 {
-  if(reg <= BKPR_4) {
-    return bkpr_regs[reg];
-  }
-  return 0;
+  return reg <= BKPR_4 ? bkpr_regs[reg] : 0;
 }
 
 //-------------------------------------------------------------------------------------------------

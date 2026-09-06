@@ -1,6 +1,7 @@
 // hal/host/per/rtc.c
 
 #include "rtc.h"
+
 #include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -11,8 +12,8 @@
 
 //----------------------------------------------------------------------------------------- Globals
 
-bool RtcReady = false;
-bool RtcInit = false;
+bool RtcReady;
+bool RtcInit;
 
 #if(RTC_WEEKDAYS_LONGNAMES)
   const char *RtcWeekdays[8] = { "Everyday", "Monday", "Tuesday", "Wednesday",
@@ -23,25 +24,25 @@ bool RtcInit = false;
 
 //---------------------------------------------------------------------------------------- Internal
 
-static int64_t rtc_offset_sec = 0; // offset from system time
+static int64_t rtc_offset_sec; // the calendar against the system clock
 static RTC_AlarmCfg_t rtc_alarms[RTC_ALARM_COUNT];
 static bool rtc_alarm_enabled[RTC_ALARM_COUNT];
 static bool rtc_alarm_event[RTC_ALARM_COUNT];
 // Timestamp each alarm last fired at, so one match yields one event
 static uint64_t rtc_alarm_stamp[RTC_ALARM_COUNT];
-static bool rtc_wakeup_event = false;
+static bool rtc_wakeup_event;
 
 static uint64_t rtc_get_system_ms(void)
 {
   #if defined(_WIN32) || defined(_WIN64)
-    FILETIME ft;
-    GetSystemTimeAsFileTime(&ft);
-    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-    return (t / 10000) - 11644473600000ull; // convert to Unix ms
+  FILETIME ft;
+  GetSystemTimeAsFileTime(&ft);
+  uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+  return (t / 10000) - 11644473600000ull; // 1601 to 1970
   #else
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
   #endif
 }
 
@@ -58,13 +59,13 @@ static uint8_t get_days_in_month(uint8_t month, uint16_t year)
   return days_in_month[month];
 }
 
-// Convert tm weekday (0=Sun) to RTC weekday (1=Mon, 7=Sun)
+// `tm` counts Sunday as `0`, the RTC counts Monday as `1` and Sunday as `7`
 static uint8_t tm_wday_to_rtc(int wday)
 {
   return wday == 0 ? 7 : (uint8_t)wday;
 }
 
-//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------- Init
 
 status_t RTC_Init(void)
 {
@@ -85,7 +86,7 @@ RTC_Datetime_t RTC_UnixToDatetime(uint64_t timestamp)
   time_t t = (time_t)timestamp;
   struct tm *tm = gmtime(&t);
   if(tm) {
-    dt.year = (uint8_t)(tm->tm_year - 100); // tm_year is years since 1900
+    dt.year = (uint8_t)(tm->tm_year - 100); // `tm_year` counts from 1900
     dt.month = (uint8_t)(tm->tm_mon + 1);
     dt.month_day = (uint8_t)tm->tm_mday;
     dt.week_day = tm_wday_to_rtc(tm->tm_wday);
@@ -107,9 +108,9 @@ uint64_t RTC_DatetimeToUnix(const RTC_Datetime_t *date)
   tm.tm_min = date->minute;
   tm.tm_sec = date->second;
   #if defined(_WIN32) || defined(_WIN64)
-    return (uint64_t)_mkgmtime(&tm);
+  return (uint64_t)_mkgmtime(&tm);
   #else
-    return (uint64_t)timegm(&tm);
+  return (uint64_t)timegm(&tm);
   #endif
 }
 
@@ -272,23 +273,14 @@ void RTC_AlarmIntervalEnable(RTC_Alarm_t alarm, uint32_t interval_sec)
 
 void RTC_AlarmDisable(RTC_Alarm_t alarm)
 {
-  if(alarm < RTC_ALARM_COUNT) {
-    rtc_alarm_enabled[alarm] = false;
-  }
+  if(alarm < RTC_ALARM_COUNT) rtc_alarm_enabled[alarm] = false;
 }
 
-//----------------------------------------------------------------------------- Wakeup timer (stub)
+//------------------------------------------------------------------------------------ Wakeup timer
 
-void RTC_WakeupTimerEnable(uint32_t sec)
-{
-  unused(sec);
-  // stub - no hardware wakeup on desktop
-}
-
-void RTC_WakeupTimerDisable(void)
-{
-  // stub
-}
+// Nothing to wake off-target, only `RTC_ForceWakeupTimer` raises the event
+void RTC_WakeupTimerEnable(uint32_t sec) { unused(sec); }
+void RTC_WakeupTimerDisable(void) {}
 
 //------------------------------------------------------------------------------------------- Check
 
@@ -296,7 +288,7 @@ bool RTC_CheckDaystamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t o
 {
   uint32_t now = RTC_Daystamp();
   int32_t diff = (int32_t)now - (int32_t)stamp_alarm;
-  if(diff < 0) diff += 86400; // wrap around midnight
+  if(diff < 0) diff += 86400; // across midnight
   return (diff >= (int32_t)offset_min_sec && diff <= (int32_t)offset_max_sec);
 }
 
@@ -304,7 +296,7 @@ bool RTC_CheckWeekstamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t 
 {
   uint32_t now = RTC_Weekstamp();
   int32_t diff = (int32_t)now - (int32_t)stamp_alarm;
-  if(diff < 0) diff += 604800; // wrap around week
+  if(diff < 0) diff += 604800; // across the week end
   return (diff >= (int32_t)offset_min_sec && diff <= (int32_t)offset_max_sec);
 }
 
@@ -323,7 +315,6 @@ bool RTC_AlarmCheck(RTC_Alarm_t alarm, uint32_t offset_min_sec, uint32_t offset_
 bool RTC_Event(RTC_Alarm_t alarm)
 {
   if(alarm >= RTC_ALARM_COUNT) return false;
-  // Check if alarm should fire (within 1 second window)
   if(rtc_alarm_enabled[alarm] && !rtc_alarm_event[alarm]) {
     uint64_t now = RTC_Timestamp();
     if(rtc_alarm_stamp[alarm] != now && RTC_AlarmCheck(alarm, 0, 0)) {

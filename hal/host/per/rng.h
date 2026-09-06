@@ -7,7 +7,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-//--------------------------------------------------------------------------- Compatibility (stubs)
+//------------------------------------------------------------------------------------------- Types
+
+// The target clock routes, recorded and ignored
 
 typedef enum {
   RNG_Source_Void = 0,
@@ -25,34 +27,20 @@ typedef enum {
 
 //--------------------------------------------------------------------------------------------- API
 
-/**
- * @brief Get random 32-bit value.
- * @return Random number
- */
-uint32_t RNG_Run(void);
-
-/**
- * @brief Initialize RNG (seeds from system entropy).
- * @param[in] source Ignored on desktop
- * @param[in] div Ignored on desktop
- */
+// Open the OS entropy source; `RNG_Run` and `RNG_Fill` open it on their own when needed
 void RNG_Init(RNG_Source_t source, RNG_Divider_t div);
 
+// One random word, or a buffer of random bytes
+uint32_t RNG_Run(void);
+void RNG_Fill(uint8_t *buf, uint16_t len);
+
 /**
- * @brief Get random value in range [min, max).
- * @param[in] min Minimum value (inclusive)
- * @param[in] max Maximum value (exclusive)
- * @return Random number in range
+ * @brief Random value in `[min, max)`.
+ * @param[in] min Lowest value, inclusive
+ * @param[in] max Bound, exclusive
+ * @return Random value, `min` when the range is empty
  */
 int32_t rng(int32_t min, int32_t max);
 
-/**
- * @brief Fill buffer with random bytes.
- * @param[out] buf Buffer to fill
- * @param[in] len Buffer length
- */
-void RNG_Fill(uint8_t *buf, uint16_t len);
-
 //-------------------------------------------------------------------------------------------------
-
 #endif

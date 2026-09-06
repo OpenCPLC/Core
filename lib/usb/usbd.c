@@ -110,17 +110,17 @@ static uint8_t *put_serial(USBD_t *usbd, uint8_t *dst)
 {
   if(usbd->serial) return put_utf16(usbd, dst, usbd->serial);
   #ifdef UID_BASE
-    const uint8_t *uid = (const uint8_t *)UID_BASE;
-    static const char hex[] = "0123456789ABCDEF";
-    for(uint8_t i = 0; i < 12; i++) {
-      *dst++ = (uint8_t)hex[uid[i] >> 4];
-      *dst++ = 0;
-      *dst++ = (uint8_t)hex[uid[i] & 0x0F];
-      *dst++ = 0;
-    }
-    return dst;
+  const uint8_t *uid = (const uint8_t *)UID_BASE;
+  static const char hex[] = "0123456789ABCDEF";
+  for(uint8_t i = 0; i < 12; i++) {
+    *dst++ = (uint8_t)hex[uid[i] >> 4];
+    *dst++ = 0;
+    *dst++ = (uint8_t)hex[uid[i] & 0x0F];
+    *dst++ = 0;
+  }
+  return dst;
   #else
-    return put_utf16(usbd, dst, "0");
+  return put_utf16(usbd, dst, "0");
   #endif
 }
 

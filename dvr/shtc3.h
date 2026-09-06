@@ -15,7 +15,7 @@
 
 typedef enum {
   SHTC3_CMD_Sleep = 0xB098,
-  SHTC3_CMD_WakuUp = 0x3517,
+  SHTC3_CMD_WakeUp = 0x3517,
   SHTC3_Mode_NormalClockEnabled = 0x7CA2,
   SHTC3_Mode_NormalClockDisable = 0x7866,
   SHTC3_Mode_LowPowerClockEnabled = 0x6458,

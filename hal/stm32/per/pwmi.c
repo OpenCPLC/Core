@@ -6,23 +6,23 @@
 // still carries the previous channel's capture, so nothing may be accumulated yet
 #define PWMI_CONFIG_NOT_READY 0xFFFF
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------- Internal
 
-static void PWMI_Run(PWMI_t *pwmi);
+static void run(PWMI_t *pwmi);
 
-static void PWMI_Interrupt(PWMI_t *pwmi)
+static void irq_handler(PWMI_t *pwmi)
 {
-  if(pwmi->reg->SR & TIM_SR_TIF) PWMI_Run(pwmi);
+  if(pwmi->reg->SR & TIM_SR_TIF) run(pwmi);
 }
 
 // Longest period the counter can still express, which is the point where waiting any
 // longer tells us nothing new. Taken from `ARR` so it follows the configured span
-static float PWMI_GetTimeoutMax_ms(PWMI_t *pwmi)
+static float timeout_max_ms(PWMI_t *pwmi)
 {
   return (float)pwmi->prescaler * (float)pwmi->reg->ARR * 1000.0f / (float)SystemCoreClock;
 }
 
-static void PWMI_Begin(PWMI_t *pwmi)
+static void begin(PWMI_t *pwmi)
 {
   for(uint8_t chan = TIM_CH1; chan <= TIM_CH4; chan++) {
     pwmi->frequency[chan] = NaN;
@@ -45,7 +45,7 @@ static void PWMI_Begin(PWMI_t *pwmi)
     pwmi->trig3->rise_detect = true;
     pwmi->trig3->fall_detect = false;
     pwmi->trig3->irq_priority = pwmi->irq_priority;
-    pwmi->trig3->RiseHandler = (void (*)(void *))&PWMI_Run;
+    pwmi->trig3->RiseHandler = (EXTI_Handler_t)run;
     pwmi->trig3->rise_arg = pwmi;
     EXTI_Init(pwmi->trig3);
   }
@@ -55,7 +55,7 @@ static void PWMI_Begin(PWMI_t *pwmi)
     pwmi->trig4->rise_detect = true;
     pwmi->trig4->fall_detect = false;
     pwmi->trig4->irq_priority = pwmi->irq_priority;
-    pwmi->trig4->RiseHandler = (void (*)(void *))&PWMI_Run;
+    pwmi->trig4->RiseHandler = (EXTI_Handler_t)run;
     pwmi->trig4->rise_arg = pwmi;
     EXTI_Init(pwmi->trig4);
   }
@@ -64,7 +64,7 @@ static void PWMI_Begin(PWMI_t *pwmi)
   for(uint8_t chan = TIM_CH1; chan <= TIM_CH4; chan++) {
     if(pwmi->channel[chan]) GPIO_InitAlternate(&TIM_CHx_MAP[pwmi->channel[chan]], false);
   }
-  IRQ_EnableTIM(pwmi->reg, pwmi->irq_priority, (void (*)(void *))&PWMI_Interrupt, pwmi);
+  IRQ_EnableTIM(pwmi->reg, pwmi->irq_priority, (IRQ_Handler_t)irq_handler, pwmi);
   #if(PWMI_AUTO_OVERSAMPLING)
   if(!pwmi->threshold) {
     if(TIM_Is32bit(pwmi->reg)) pwmi->threshold = 0xFFFFFF;
@@ -73,12 +73,12 @@ static void PWMI_Begin(PWMI_t *pwmi)
   #else
   if(!pwmi->oversampling) pwmi->oversampling = 1;
   #endif
-  if(!pwmi->timeout_ms) pwmi->timeout_ms = PWMI_GetTimeoutMax_ms(pwmi);
+  if(!pwmi->timeout_ms) pwmi->timeout_ms = (uint32_t)timeout_max_ms(pwmi);
 }
 
 // The software state goes first: a trigger latched during the previous pass would fire
 // the handler the moment `TIE` is unmasked, and it must not land mid-reset
-static void PWMI_Reset(PWMI_t *pwmi)
+static void reset(PWMI_t *pwmi)
 {
   pwmi->_count = PWMI_CONFIG_NOT_READY;
   pwmi->_inc = TIM_CH1;
@@ -92,7 +92,7 @@ static void PWMI_Reset(PWMI_t *pwmi)
   pwmi->reg->DIER |= TIM_DIER_TIE;
 }
 
-static void PWMI_Run(PWMI_t *pwmi)
+static void run(PWMI_t *pwmi)
 {
   pwmi->_timeout_tick = tick_keep(pwmi->timeout_ms);
   // `_inc` already points at the next candidate,
@@ -189,23 +189,23 @@ static void PWMI_Run(PWMI_t *pwmi)
 
 // A silent channel never raises a trigger, so the sequence is pushed on by hand:
 // its partial sum is dropped and the sentinel steers the next run into the advance path
-static void PWMI_Skip(PWMI_t *pwmi)
+static void skip(PWMI_t *pwmi)
 {
   TIM_Channel_t chan = pwmi->_chan;
   pwmi->_reload[chan] = 0;
   pwmi->_value[chan] = 0;
   pwmi->_count = PWMI_CONFIG_NOT_READY;
-  PWMI_Run(pwmi);
+  run(pwmi);
 }
 
 // The trigger interrupt stays enabled for the whole pass
 // and is switched off only once the last configured channel has been measured
-static bool PWMI_IsRunning(PWMI_t *pwmi)
+static bool is_running(PWMI_t *pwmi)
 {
   return (pwmi->reg->DIER & TIM_DIER_TIE) != 0;
 }
 
-static float PWMI_GetFrequency(PWMI_t *pwmi, TIM_Channel_t chan)
+static void publish_frequency(PWMI_t *pwmi, TIM_Channel_t chan)
 {
   #if(PWMI_AUTO_OVERSAMPLING)
   uint16_t ovs = pwmi->_oversampling[chan];
@@ -214,33 +214,30 @@ static float PWMI_GetFrequency(PWMI_t *pwmi, TIM_Channel_t chan)
   #endif
   if(!pwmi->_reload[chan]) {
     pwmi->frequency[chan] = NaN;
-    return NaN;
+    return;
   }
   // `_reload` holds `ovs` full periods measured in prescaled timer ticks
-  pwmi->frequency[chan] =
-    (float)SystemCoreClock * ovs / pwmi->prescaler / pwmi->_reload[chan];
-  return pwmi->frequency[chan];
+  pwmi->frequency[chan] = (float)SystemCoreClock * ovs / pwmi->prescaler / pwmi->_reload[chan];
 }
 
-static float PWMI_GetDuty(PWMI_t *pwmi, TIM_Channel_t chan)
+static void publish_duty(PWMI_t *pwmi, TIM_Channel_t chan)
 {
   if(!pwmi->_reload[chan]) {
     pwmi->duty[chan] = NaN;
-    return NaN;
+    return;
   }
   pwmi->duty[chan] = 100.0f * pwmi->_value[chan] / pwmi->_reload[chan];
-  return pwmi->duty[chan];
 }
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- API
 
 void PWMI_Init(PWMI_t *pwmi)
 {
-  PWMI_Begin(pwmi);
+  begin(pwmi);
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
-  PWMI_Reset(pwmi);
-  PWMI_Run(pwmi);
+  reset(pwmi);
+  run(pwmi);
   __set_PRIMASK(primask);
   pwmi->_init = true;
 }
@@ -248,24 +245,24 @@ void PWMI_Init(PWMI_t *pwmi)
 bool PWMI_Loop(PWMI_t *pwmi)
 {
   if(!pwmi->_init) return false;
-  // `PWMI_Run` is owned by the interrupts for the whole pass, so the thread-side steps
+  // `run` is owned by the interrupts for the whole pass, so the thread-side steps
   // mask them to keep a trigger from landing mid-step. The publish loop stays outside:
   // the pass is over by then and nothing mutates the state it reads
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
   // Only a sequence still in progress can stall: once it ends there is nothing to skip
-  if(PWMI_IsRunning(pwmi) && tick_over(&pwmi->_timeout_tick)) PWMI_Skip(pwmi);
-  bool done = !PWMI_IsRunning(pwmi);
+  if(is_running(pwmi) && tick_over(&pwmi->_timeout_tick)) skip(pwmi);
+  bool done = !is_running(pwmi);
   __set_PRIMASK(primask);
   if(!done) return false;
   for(uint8_t chan = TIM_CH1; chan <= TIM_CH4; chan++) {
-    PWMI_GetFrequency(pwmi, chan);
-    PWMI_GetDuty(pwmi, chan);
+    publish_frequency(pwmi, chan);
+    publish_duty(pwmi, chan);
   }
   primask = __get_PRIMASK();
   __disable_irq();
-  PWMI_Reset(pwmi);
-  PWMI_Run(pwmi);
+  reset(pwmi);
+  run(pwmi);
   __set_PRIMASK(primask);
   return true;
 }

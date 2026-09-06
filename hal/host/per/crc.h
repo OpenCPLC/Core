@@ -42,10 +42,10 @@ typedef struct {
  * @brief Calculate CRC checksum.
  * @param[in] crc CRC algorithm configuration
  * @param[in] data Pointer to input data
- * @param[in] count Data length in bytes
+ * @param[in] count Data length in bytes, a whole flash image fits
  * @return CRC checksum
  */
-uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count);
+uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count);
 
 /**
  * @brief Calculate CRC and append to data (big-endian).

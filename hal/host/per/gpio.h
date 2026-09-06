@@ -6,18 +6,19 @@
 #ifndef GPIO_H_
 #define GPIO_H_
 
-#include "device.h"
-
 #include <stdbool.h>
-#include <stdlib.h>
-#include <stdarg.h>
+#include <stdint.h>
+#include "device.h"
 #include "irq.h"
 
+//------------------------------------------------------------------------------------------ Config
+
 #ifndef GPIO_INCLUDE_WAKEUP
+  // Standby pull configuration in `GPIO_t`, applied by `GPIO_Init`
   #define GPIO_INCLUDE_WAKEUP 0
 #endif
 
-//-------------------------------------------------------------------------------------- GPIO Types
+//------------------------------------------------------------------------------------------- Types
 
 typedef enum {
   GPIO_Mode_Input = 0,
@@ -52,21 +53,13 @@ typedef enum {
 } GPIO_WakeupPull_t;
 #endif
 
-//------------------------------------------------------------------------------------ GPIO Presets
+//----------------------------------------------------------------------------------------- Presets
 
-#if(GPIO_INCLUDE_WAKEUP)
-  #define GPIO_DEFAULT { NULL, 0, false, GPIO_Mode_Input, GPIO_Pull_None, \
-    GPIO_OutType_PushPull, GPIO_Speed_VeryLow, GPIO_WakeupPull_None, 0, false }
-  #define GPIO_ALTERNATE { NULL, 0, false, GPIO_Mode_Alternate, GPIO_Pull_None, \
-    GPIO_OutType_PushPull, GPIO_Speed_VeryHigh, GPIO_WakeupPull_None, 0, false }
-#else
-  #define GPIO_DEFAULT { NULL, 0, false, GPIO_Mode_Input, GPIO_Pull_None, \
-    GPIO_OutType_PushPull, GPIO_Speed_VeryLow, 0, false }
-  #define GPIO_ALTERNATE { NULL, 0, false, GPIO_Mode_Alternate, GPIO_Pull_None, \
-    GPIO_OutType_PushPull, GPIO_Speed_VeryHigh, 0, false }
-#endif
+// Initializers: an input at rest, and an alternate function pin at full speed
+#define GPIO_DEFAULT { .mode = GPIO_Mode_Input, .speed = GPIO_Speed_VeryLow }
+#define GPIO_ALTERNATE { .mode = GPIO_Mode_Alternate, .speed = GPIO_Speed_VeryHigh }
 
-//---------------------------------------------------------------------------------- GPIO Structure
+//--------------------------------------------------------------------------------------- Structure
 
 /**
  * @brief GPIO pin configuration and state.
@@ -90,7 +83,7 @@ typedef struct {
   GPIO_OutType_t out_type;
   GPIO_Speed_t speed;
   #if(GPIO_INCLUDE_WAKEUP)
-    GPIO_WakeupPull_t wakeup_pull;
+  GPIO_WakeupPull_t wakeup_pull;
   #endif
   uint8_t alternate;
   bool set;
@@ -110,7 +103,7 @@ typedef struct {
 } GPIO_Map_t;
 #pragma pack()
 
-//---------------------------------------------------------------------------------------- GPIO API
+//--------------------------------------------------------------------------------------------- API
 
 /**
  * @brief Initialize GPIO pin.
@@ -188,7 +181,7 @@ bool GPIO_In(GPIO_t *gpio);
  */
 bool GPIO_NotIn(GPIO_t *gpio);
 
-//-------------------------------------------------------------------------------------- EXTI Types
+//-------------------------------------------------------------------------------------------- EXTI
 
 typedef void (*EXTI_Handler_t)(void *arg);
 

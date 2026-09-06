@@ -10,16 +10,19 @@
 #include "vrts.h"
 #include "main.h"
 
+//------------------------------------------------------------------------------------------ Config
+
 #ifndef ADC_RECORD
+  // DMA recording API, `ADC_Record_t`; off leaves the one-shot conversions only
   #define ADC_RECORD 1
 #endif
+
+//---------------------------------------------------------------------------------- Family include
 
 #if defined(STM32G0)
   #include "adc_g0.h"
 #elif defined(STM32WB)
   #include "adc_wb.h"
-#elif defined(STM32G4)
-  #include "adc_g4.h"
 #endif
 
 //------------------------------------------------------------------------------------------ Macros
@@ -115,12 +118,13 @@ typedef struct {
   uint16_t *output;
   ADC_SamplingTime_t sampling_time;
   ADC_Oversampling_t oversampling;
+  // internal
   uint8_t _active;
 } ADC_Measure_t;
 
 #if(ADC_RECORD)
 
-/** @brief DMA callback, executed in interrupt context: set a flag and leave */
+// DMA callback, interrupt context: set a flag and leave
 typedef void (*ADC_DmaCallback_t)(void *arg);
 
 /**
@@ -162,6 +166,7 @@ typedef struct {
   ADC_DmaCallback_t HalfCallback;
   ADC_DmaCallback_t CompleteCallback;
   void *callback_arg;
+  // internal
   DMA_t _dma;
   uint8_t _pad;
 } ADC_Record_t;
@@ -189,8 +194,9 @@ typedef struct {
   ADC_Prescaler_t prescaler;
   ADC_Measure_t measure;
   #if(ADC_RECORD)
-    ADC_Record_t record;
+  ADC_Record_t record;
   #endif
+  // internal
   volatile ADC_State_t _busy;
   uint16_t _overrun;
 } ADC_t;
@@ -302,32 +308,23 @@ uint16_t ADC_Overruns(ADC_t *adc);
  */
 void ADC_Stop(ADC_t *adc);
 
-/** @brief `true` while a job is in progress */
+// Job in progress, or none: the ADC takes the next one
 bool ADC_IsBusy(ADC_t *adc);
-
-/** @brief `true` when the ADC is free to start a job */
 bool ADC_IsFree(ADC_t *adc);
 
-/** @brief Yield to the scheduler until the job in progress completes */
+// Yield to the scheduler until the job in progress completes
 void ADC_Wait(ADC_t *adc);
 
-/**
- * @brief Enable the ADC and wait until it is ready.
- * @param[in,out] adc Pointer to ADC structure
- */
+// Enable the ADC and wait until it is ready, or stop any conversion and disable it
 void ADC_Enable(ADC_t *adc);
-
-/**
- * @brief Stop any conversion and disable the ADC.
- * @param[in,out] adc Pointer to ADC structure
- */
 void ADC_Disable(ADC_t *adc);
 
 //---------------------------------------------------------------------------------------- Internal
 
-// Enable analog mode, or the internal source, for every channel on the list (per family)
+// Family glue: analog mode, or the internal source, for every channel on the list
 void ADC_InitGPIO(ADC_t *adc, uint8_t *chan, uint8_t count);
 
+// Divider, conversion cycles and oversampling ratio behind each enum value
 extern const uint16_t ADC_PRESCALER_TAB[];
 extern const uint16_t ADC_SAMPLING_TIME_TAB[];
 extern const uint16_t ADC_OVERSAMPLING_RATIO_TAB[];

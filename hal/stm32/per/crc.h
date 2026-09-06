@@ -3,43 +3,29 @@
 #ifndef CRC_H_
 #define CRC_H_
 
-#include <stdint.h>
 #include <stdbool.h>
-#if defined(STM32G0)
-  #include "stm32g0xx.h"
-#elif defined(STM32WB)
-  #include "stm32wbxx.h"
-#elif defined(STM32G4)
-  #include "stm32g4xx.h"
-#endif
+#include <stdint.h>
 #include "xdef.h"
 #include "main.h"
-
-//----------------------------------------------------------------------------------- Compatibility
-
-#if defined(STM32G0)
-  #define RCC_CRC_EN()  (RCC->AHBENR |= RCC_AHBENR_CRCEN)
-#elif defined(STM32WB) || defined(STM32G4)
-  #define RCC_CRC_EN()  (RCC->AHB1ENR |= RCC_AHB1ENR_CRCEN)
-#endif
 
 //------------------------------------------------------------------------------------------ Config
 
 #ifndef CRC_PRESETS
+  // Preset tables below, off saves their flash
   #define CRC_PRESETS 1
 #endif
 
-//------------------------------------------------------------------------------------------- Types
+//--------------------------------------------------------------------------------------- Structure
 
 /**
- * @brief CRC algorithm configuration.
- * @param[in] width CRC width in bits (8, 16, or 32)
+ * @brief CRC algorithm, run on the hardware unit.
+ * @param[in] width CRC width [bits], `8`, `16` or `32`
  * @param[in] polynomial Generator polynomial
- * @param[in] initial Initial CRC register value
- * @param[in] reflect_data_in Bit-reflect input bytes (0 = none, 8/16/32 = width)
- * @param[in] reflect_data_out Bit-reflect final CRC
- * @param[in] final_xor XOR mask applied to final CRC
- * @param[in] invert_out Invert final CRC byte order
+ * @param[in] initial Initial register value
+ * @param[in] reflect_data_in Bit-reflect input words, `0` = none, `8`, `16` or `32` bits
+ * @param[in] reflect_data_out Bit-reflect the final value
+ * @param[in] final_xor Mask applied to the final value
+ * @param[in] invert_out Swap the byte order of the final value
  */
 typedef struct {
   uint8_t width;
@@ -54,53 +40,47 @@ typedef struct {
 //--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Calculate CRC checksum.
- * @param[in] crc CRC algorithm configuration
- * @param[in] data Pointer to input data
- * @param[in] count Data length in bytes
- * @return CRC checksum
+ * @brief Checksum of a byte range.
+ * @param[in] crc Algorithm
+ * @param[in] data Bytes
+ * @param[in] count Number of bytes, a whole flash image fits
+ * @return Checksum
  */
-uint32_t CRC_Run(const CRC_t *crc, void *data, uint16_t count);
+uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count);
 
 /**
- * @brief Calculate CRC and append to data (big-endian).
- * @param[in] crc CRC algorithm configuration
- * @param[in,out] data Data buffer (must have space for CRC)
- * @param[in] count Data length in bytes (without CRC)
- * @return New length including CRC bytes
+ * @brief Append the checksum big-endian after the data.
+ * @param[in] crc Algorithm
+ * @param[in,out] data Bytes with room for the checksum behind them
+ * @param[in] count Number of bytes without the checksum
+ * @return Length with the checksum
  */
 uint16_t CRC_Append(const CRC_t *crc, uint8_t *data, uint16_t count);
 
 /**
- * @brief Verify CRC at end of data.
- * @param[in] crc CRC algorithm configuration
- * @param[in] data Data buffer with CRC appended
- * @param[in] count Total length including CRC bytes
- * @return `ERR` if mismatch, `OK` if valid
+ * @brief Verify the checksum at the end of the data.
+ * @param[in] crc Algorithm
+ * @param[in] data Bytes with the checksum appended
+ * @param[in] count Length with the checksum
+ * @return `OK` when valid, `ERR` on a mismatch or a range shorter than the checksum
  */
-status_t CRC_Error(const CRC_t *crc, uint8_t *data, uint16_t count);
+status_t CRC_Error(const CRC_t *crc, const uint8_t *data, uint16_t count);
 
-/**
- * @brief Verify CRC at end of data.
- * @param[in] crc CRC algorithm configuration
- * @param[in] data Data buffer with CRC appended
- * @param[in] count Total length including CRC bytes
- * @return Non-zero if CRC valid, `0` if mismatch
- */
-status_t CRC_Ok(const CRC_t *crc, uint8_t *data, uint16_t count);
+// `true` when the checksum at the end of the data is valid
+bool CRC_Ok(const CRC_t *crc, const uint8_t *data, uint16_t count);
 
 //----------------------------------------------------------------------------------------- Presets
 
 #if(CRC_PRESETS)
-  extern const CRC_t crc32_iso;
-  extern const CRC_t crc32_aixm;
-  extern const CRC_t crc32_autosar;
-  extern const CRC_t crc32_cksum;
-  extern const CRC_t crc16_kermit;
-  extern const CRC_t crc16_modbus;
-  extern const CRC_t crc16_buypass;
-  extern const CRC_t crc8_maxim;
-  extern const CRC_t crc8_smbus;
+extern const CRC_t crc32_iso;
+extern const CRC_t crc32_aixm;
+extern const CRC_t crc32_autosar;
+extern const CRC_t crc32_cksum;
+extern const CRC_t crc16_kermit;
+extern const CRC_t crc16_modbus;
+extern const CRC_t crc16_buypass;
+extern const CRC_t crc8_maxim;
+extern const CRC_t crc8_smbus;
 #endif
 
 //-------------------------------------------------------------------------------------------------

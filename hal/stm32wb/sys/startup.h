@@ -6,6 +6,10 @@
 #include <stdint.h>
 #include "system_stm32wbxx.h"
 #include "stm32wbxx.h"
+#include "xdef.h"
+
+// Default handler, an application definition of the same name replaces it
+#define STARTUP_WEAK __attribute__((weak))
 
 //--------------------------------------------------------------------------------------------- ADC
 
@@ -65,10 +69,10 @@ extern void (* volatile LPTIM2_Cb)(void *); extern void * volatile LPTIM2_CbArg;
 
 //--------------------------------------------------------------------------------------------- I2C
 
-extern void (* volatile I2C1_EventCallback)(void *); extern void * volatile I2C1_CbArg;
-extern void (* volatile I2C1_ErrorCallback)(void *);
-extern void (* volatile I2C3_EventCallback)(void *); extern void * volatile I2C3_CbArg;
-extern void (* volatile I2C3_ErrorCallback)(void *);
+extern void (* volatile I2C1_Cb)(void *); extern void * volatile I2C1_CbArg;
+extern void (* volatile I2C1_ErrCb)(void *);
+extern void (* volatile I2C3_Cb)(void *); extern void * volatile I2C3_CbArg;
+extern void (* volatile I2C3_ErrCb)(void *);
 
 //--------------------------------------------------------------------------------------------- SPI
 

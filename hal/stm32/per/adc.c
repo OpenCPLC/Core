@@ -1,9 +1,10 @@
 // hal/stm32/per/adc.c
 
 #include "adc.h"
+
 #include <string.h>
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------- State
 
 bool ADC_IsBusy(ADC_t *adc) { return adc->_busy != ADC_State_Free; }
 bool ADC_IsFree(ADC_t *adc) { return adc->_busy == ADC_State_Free; }
@@ -20,9 +21,10 @@ uint16_t ADC_Overruns(ADC_t *adc)
   return count;
 }
 
-//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------- Read
 
-static uint16_t ADC_ReadAs(ADC_t *adc, uint8_t chan, ADC_SamplingTime_t sampling_time,
+// One channel through the `measure` job, the configuration is restored after
+static uint16_t read_as(ADC_t *adc, uint8_t chan, ADC_SamplingTime_t sampling_time,
   ADC_Oversampling_t oversampling)
 {
   uint16_t out = 0;
@@ -42,24 +44,22 @@ static uint16_t ADC_ReadAs(ADC_t *adc, uint8_t chan, ADC_SamplingTime_t sampling
 uint16_t ADC_Read(ADC_t *adc, uint8_t chan)
 {
   if(adc->measure.chan_count) {
-    return ADC_ReadAs(adc, chan, adc->measure.sampling_time, adc->measure.oversampling);
+    return read_as(adc, chan, adc->measure.sampling_time, adc->measure.oversampling);
   }
-  return ADC_ReadAs(adc, chan, ADC_SamplingTime_Max, (ADC_Oversampling_t){0});
+  return read_as(adc, chan, ADC_SamplingTime_Max, (ADC_Oversampling_t){0});
 }
-
-//-------------------------------------------------------------------------------------------------
 
 // Longest sampling time, no oversampling: the calibration data lives on the native
 // 12-bit scale. The first conversion is discarded, it covers the source startup time
-static uint16_t ADC_ReadInternal(ADC_t *adc, uint8_t chan)
+static uint16_t read_internal(ADC_t *adc, uint8_t chan)
 {
-  ADC_ReadAs(adc, chan, ADC_SamplingTime_Max, (ADC_Oversampling_t){0});
-  return ADC_ReadAs(adc, chan, ADC_SamplingTime_Max, (ADC_Oversampling_t){0});
+  read_as(adc, chan, ADC_SamplingTime_Max, (ADC_Oversampling_t){0});
+  return read_as(adc, chan, ADC_SamplingTime_Max, (ADC_Oversampling_t){0});
 }
 
 uint16_t ADC_Vdda_mV(ADC_t *adc)
 {
-  uint16_t raw = ADC_ReadInternal(adc, ADC_IN_VREFEN);
+  uint16_t raw = read_internal(adc, ADC_IN_VREFEN);
   if(!raw) return 0;
   return (uint16_t)((uint32_t)ADC_CAL_VDDA_mV * ADC_VREFINT_CAL / raw);
 }
@@ -67,11 +67,11 @@ uint16_t ADC_Vdda_mV(ADC_t *adc)
 float ADC_Temperature_C(ADC_t *adc)
 {
   uint16_t vdda = ADC_Vdda_mV(adc);
-  float data = (float)ADC_ReadInternal(adc, ADC_IN_TSEN) * vdda / ADC_CAL_VDDA_mV;
+  float data = (float)read_internal(adc, ADC_IN_TSEN) * vdda / ADC_CAL_VDDA_mV;
   return 30.0f + 100.0f * (data - ADC_TS_CAL1) / (float)(ADC_TS_CAL2 - ADC_TS_CAL1);
 }
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------ Record
 #if(ADC_RECORD)
 
 status_t ADC_LastSamples(ADC_t *adc, uint16_t *buffer, uint16_t count, bool sort)
@@ -81,6 +81,7 @@ status_t ADC_LastSamples(ADC_t *adc, uint16_t *buffer, uint16_t count, bool sort
   uint16_t *src = adc->record.buff;
   uint16_t len = adc->record.buff_len;
   if(!src || !len || !count || count > len) return ERR;
+  // Two matching reads: the counter moves under the DMA
   volatile uint16_t cnt1, cnt2;
   do {
     cnt1 = cha->CNDTR;

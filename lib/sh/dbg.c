@@ -1,113 +1,98 @@
 // lib/sh/dbg.c
 
 #include "dbg.h"
+
+#include <string.h>
 #include "cmd.h"
+#include "heap.h"
 #include "log.h"
 #include "pwr.h"
-#include "heap.h"
 
-// The whole buffer is copied out through one allocation, so the heap has to be able to
-// hold it with room left for the block it lives in
+// The whole batch is copied out through one allocation, so the heap has to hold it
+// with room left for the block header
 _Static_assert(HEAP_SIZE > DBG_TX_SIZE + 128, "HEAP_SIZE must exceed DBG_TX_SIZE");
 
-//------------------------------------------------------------------------------------------- Basic
+//----------------------------------------------------------------------------------------- Console
 
-static uint8_t dbg_buffer_rx[DBG_RX_SIZE];
-static uint8_t dbg_buffer_tx[DBG_TX_SIZE];
+static uint8_t rx_memory[DBG_RX_SIZE];
+static uint8_t tx_memory[DBG_TX_SIZE];
 
-static BUFF_t dbg_buff = {
-  .memory = dbg_buffer_rx,
-  .size = DBG_RX_SIZE,
-  .console_mode = true
-};
-
-static MBB_t dbg_file = {
-  .name = "debug",
-  .buffer = dbg_buffer_tx,
-  .limit = DBG_TX_SIZE
-};
+static BUFF_t rx_buff = { .memory = rx_memory, .size = DBG_RX_SIZE, .console_mode = true };
+static MBB_t tx_file = { .name = "debug", .buffer = tx_memory, .limit = DBG_TX_SIZE };
 
 UART_t *DbgUart;
-MBB_t *DbgFile = &dbg_file;
+MBB_t *DbgFile = &tx_file;
+volatile bool DbgReset;
 bool DbgEcho = true;
 
-void DBG_SwitchMode(bool data_mode)
+// Binary transfer: no console parsing, no echo, frames closed by the port timeout
+static void switch_mode(bool data_mode)
 {
-  if(data_mode) {
-    DbgUart->buff->console_mode = false;
-    DbgEcho = false;
-    UART_SetTimeout(DbgUart, DBG_DATAMODE_TIMEOUT);
-  }
-  else {
-    DbgUart->buff->console_mode = true;
-    DbgEcho = true;
-    UART_SetTimeout(DbgUart, 0);
-  }
+  DbgUart->buff->console_mode = !data_mode;
+  DbgEcho = !data_mode;
+  UART_SetTimeout(DbgUart, data_mode ? DBG_DATAMODE_TIMEOUT : 0);
 }
 
-STREAM_t dbg_stream = {
+static STREAM_t stream = {
   .name = "debug",
   .modify = STREAM_Modify_Lowercase,
   .Size = DBG_Size,
   .Read = DBG_ReadString,
-  .SwitchMode = DBG_SwitchMode
+  .SwitchMode = switch_mode
 };
 
 void DBG_Init(UART_t *uart)
 {
   DbgUart = uart;
-  DbgUart->buff = &dbg_buff;
+  DbgUart->buff = &rx_buff;
   UART_Init(DbgUart);
 }
 
-volatile bool DbgReset;
-
-// Holds `CMD_Step` back until pending input has been echoed,
-// so the echoed line always precedes the command output.
-// With `DBG_ECHO_MODE` off nothing calls `BUFF_Echo`, so `_echo` never follows `_head`
-// (console mode skips the auto-advance in `BUFF_Push`):
-// the gate has to stay open or the shell stops reacting after the first byte.
-static bool BUFF_EchoIdle(BUFF_t *buff)
+// Holds `CMD_Step` back until pending input has been echoed, so the echoed line
+// always precedes the command output. With `DBG_ECHO_MODE` off nothing calls
+// `BUFF_Echo`, so `_echo` never follows `_head` (console mode skips the auto-advance
+// in `BUFF_Push`): the gate has to stay open or the shell stops after the first byte
+static bool echo_idle(void)
 {
   #if(DBG_ECHO_MODE)
-    return buff->_echo == buff->_head;
+  return rx_buff._echo == rx_buff._head;
   #else
-    unused(buff);
-    return true;
+  return true;
   #endif
 }
 
 #if(DBG_ECHO_MODE)
 
-static char EchoValue;
-static bool EchoEnter = false;
-static bool EchoInput = false;
-
-void DBG_Echo(void)
+// Typed bytes back to the console: backspace erases, enter closes the line,
+// a line in progress hides the logs until it is closed
+static void echo(void)
 {
-  while(BUFF_Echo(&dbg_buff, &EchoValue)) {
-    if(EchoValue == '\b' || EchoValue == 0x7F) {
-      BUFF_Pop(&dbg_buff, NULL);
-      if(BUFF_Pop(&dbg_buff, NULL)) DBG_Char(0x7F);
+  static bool entered = false;
+  static bool typing = false;
+  char value;
+  while(BUFF_Echo(&rx_buff, &value)) {
+    if(value == '\b' || value == 0x7F) {
+      BUFF_Pop(&rx_buff, NULL);
+      if(BUFF_Pop(&rx_buff, NULL)) DBG_Char(0x7F);
       continue;
     }
-    if(EchoValue == '\n' || EchoValue == '\f') {
+    if(value == '\n' || value == '\f') {
       LogPrintFlag = true;
-      if(!EchoEnter) {
-        DBG_String(EchoValue == '\n' ? ANSI_GREEN "^E" ANSI_END : ANSI_RED "^C" ANSI_END);
+      if(!entered) {
+        DBG_String(value == '\n' ? ANSI_GREEN "^E" ANSI_END : ANSI_RED "^C" ANSI_END);
         DBG_Enter();
       }
-      EchoEnter = true;
-      EchoInput = false;
+      entered = true;
+      typing = false;
       continue;
     }
-    if(!EchoInput) {
+    if(!typing) {
       DBG_String(ANSI_ORANGE ">> " ANSI_END);
       LogPrintFlag = false;
     }
-    EchoInput = true;
-    EchoEnter = false;
-    DBG_Char(EchoValue);
+    typing = true;
+    entered = false;
+    DBG_Char(value);
   }
 }
 
@@ -117,19 +102,17 @@ void DBG_Loop(void)
 {
   while(1) {
     #if(DBG_ECHO_MODE)
-      DBG_Echo();
+    echo();
     #endif
-    if(BUFF_EchoIdle(&dbg_buff)) {
-      CMD_Step(&dbg_stream);
-    }
+    if(echo_idle()) CMD_Step(&stream);
     if(UART_IsFree(DbgUart)) {
       heap_clear();
       if(DbgFile->size) {
-        uint8_t *buffer = (uint8_t *)heap_new(DbgFile->size);
+        uint8_t *batch = heap_new(DbgFile->size);
         // A heap too small to copy the batch out costs log lines, never the device
-        if(buffer) {
-          memcpy(buffer, DbgFile->buffer, DbgFile->size);
-          UART_Send(DbgUart, buffer, DbgFile->size);
+        if(batch) {
+          memcpy(batch, DbgFile->buffer, DbgFile->size);
+          UART_Send(DbgUart, batch, DbgFile->size);
         }
         MBB_Clear(DbgFile);
       }
@@ -139,7 +122,7 @@ void DBG_Loop(void)
   }
 }
 
-//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------- Port
 
 void DBG_Wait(void)
 {
@@ -151,63 +134,45 @@ void DBG_WaitBlock(void)
   while(UART_IsBusy(DbgUart)) __NOP();
 }
 
-void DBG_Send(uint8_t *array, uint16_t length)
+void DBG_Send(const uint8_t *data, uint16_t len)
 {
   DBG_Wait();
-  UART_Send(DbgUart, array, length);
+  UART_Send(DbgUart, data, len);
   DBG_Wait();
 }
 
-void DBG_SendFile(MBB_t *file)
-{
-  DBG_Send(file->buffer, file->size);
-}
-
-void DBG_DefaultFile(void)
-{
-  DbgFile = &dbg_file;
-}
-
-void DBG_SetFile(MBB_t *file)
-{
-  DbgFile = file;
-}
+void DBG_SendFile(MBB_t *file) { DBG_Send(file->buffer, file->size); }
+void DBG_SetFile(MBB_t *file) { DbgFile = file; }
+void DBG_DefaultFile(void) { DbgFile = &tx_file; }
 
 //-------------------------------------------------------------------------------------------- Read
 
-uint16_t DBG_Size(void)
-{
-  return UART_Size(DbgUart);
-}
+uint16_t DBG_Size(void) { return UART_Size(DbgUart); }
+uint16_t DBG_Read(uint8_t *data) { return UART_Read(DbgUart, data); }
+char *DBG_ReadString(void) { return UART_ReadString(DbgUart); }
 
-uint16_t DBG_Read(uint8_t *array)
-{
-  return UART_Read(DbgUart, array);
-}
-
-char *DBG_ReadString(void)
-{
-  return UART_ReadString(DbgUart);
-}
-
-//--------------------------------------------------------------------------------------------- Add
+//------------------------------------------------------------------------------------------ Output
 
 int32_t DBG_Char(uint8_t data) { return MBB_Char(DbgFile, data); }
 int32_t DBG_Char16(uint16_t data) { return MBB_Char16(DbgFile, data); }
 int32_t DBG_Char32(uint32_t data) { return MBB_Char32(DbgFile, data); }
 int32_t DBG_Char64(uint64_t data) { return MBB_Char64(DbgFile, data); }
-int32_t DBG_Data(uint8_t *array, uint16_t length) { return MBB_Data(DbgFile, array, length); }
-int32_t DBG_String(char *string) { return MBB_String(DbgFile, string); }
+int32_t DBG_Data(const uint8_t *data, uint16_t len) { return MBB_Data(DbgFile, data, len); }
+int32_t DBG_String(const char *str) { return MBB_String(DbgFile, str); }
 int32_t DBG_Enter(void) { return MBB_Enter(DbgFile); }
 int32_t DBG_DropLastLine(void) { return MBB_DropLastLine(DbgFile); }
 int32_t DBG_Bool(bool value) { return MBB_Bool(DbgFile, value); }
+
 int32_t DBG_Int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint8_t fill_space) {
   return MBB_Int(DbgFile, nbr, base, sign, fill_zero, fill_space);
 }
+
 int32_t DBG_Float(float nbr, uint8_t accuracy) { return MBB_Float(DbgFile, nbr, accuracy, 1); }
+
 int32_t DBG_FloatSpace(float nbr, uint8_t accuracy, uint8_t fill_space) {
   return MBB_Float(DbgFile, nbr, accuracy, fill_space);
 }
+
 int32_t DBG_Dec(int64_t nbr) { return MBB_Dec(DbgFile, nbr); }
 int32_t DBG_uDec(uint64_t nbr) { return MBB_uDec(DbgFile, nbr); }
 int32_t DBG_Hex8(uint8_t nbr) { return MBB_Hex8(DbgFile, nbr); }
@@ -215,19 +180,19 @@ int32_t DBG_Hex16(uint16_t nbr) { return MBB_Hex16(DbgFile, nbr); }
 int32_t DBG_Hex32(uint32_t nbr) { return MBB_Hex32(DbgFile, nbr); }
 int32_t DBG_Bin8(uint8_t nbr) { return MBB_Bin8(DbgFile, nbr); }
 
-int32_t DBG_Date(RTC_Datetime_t *datetime) { return MBB_Date(DbgFile, datetime); }
-int32_t DBG_Time(RTC_Datetime_t *datetime) { return MBB_Time(DbgFile, datetime); }
-int32_t DBG_TimeMs(RTC_Datetime_t *datetime) { return MBB_TimeMs(DbgFile, datetime); }
-int32_t DBG_Datetime(RTC_Datetime_t *datetime) { return MBB_Datetime(DbgFile, datetime); }
-int32_t DBG_DatetimeMs(RTC_Datetime_t *datetime) { return MBB_DatetimeMs(DbgFile, datetime); }
-int32_t DBG_AlarmTime(RTC_AlarmCfg_t *alarm) { return MBB_AlarmTime(DbgFile, alarm); }
-int32_t DBG_Alarm(RTC_AlarmCfg_t *alarm) { return MBB_Alarm(DbgFile, alarm); }
+int32_t DBG_Date(const RTC_Datetime_t *dt) { return MBB_Date(DbgFile, dt); }
+int32_t DBG_Time(const RTC_Datetime_t *dt) { return MBB_Time(DbgFile, dt); }
+int32_t DBG_TimeMs(const RTC_Datetime_t *dt) { return MBB_TimeMs(DbgFile, dt); }
+int32_t DBG_Datetime(const RTC_Datetime_t *dt) { return MBB_Datetime(DbgFile, dt); }
+int32_t DBG_DatetimeMs(const RTC_Datetime_t *dt) { return MBB_DatetimeMs(DbgFile, dt); }
+int32_t DBG_AlarmTime(const RTC_AlarmCfg_t *alarm) { return MBB_AlarmTime(DbgFile, alarm); }
+int32_t DBG_Alarm(const RTC_AlarmCfg_t *alarm) { return MBB_Alarm(DbgFile, alarm); }
 
 int32_t MBB_Print(MBB_t *mbb)
 {
   int32_t size = 0;
   size += DBG_String(ANSI_CREAM);
-  size += DBG_String((char *)mbb->name);
+  size += DBG_String(mbb->name);
   size += DBG_String(ANSI_END);
   size += DBG_Char(' ');
   size += DBG_uDec(mbb->size);
@@ -244,13 +209,9 @@ int32_t MBB_Print(MBB_t *mbb)
 int32_t MBB_PrintContent(MBB_t *mbb)
 {
   int32_t size = 0;
-  uint8_t *byte = mbb->buffer;
-  uint16_t count = mbb->size;
-  while(count) {
-    size += DBG_Hex8(*byte);
+  for(uint16_t i = 0; i < mbb->size; i++) {
+    size += DBG_Hex8(mbb->buffer[i]);
     size += DBG_Char(' ');
-    count--;
-    byte++;
   }
   return size;
 }

@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 
+//---------------------------------------------------------------------------------- Family include
+
 #if defined(STM32G0)
   #include "stm32g0xx.h"
   #include "dma_g0.h"
@@ -13,8 +15,9 @@
   #include "dma_wb.h"
 #endif
 
-//-------------------------------------------------------------------------------- DMA Register Set
+//------------------------------------------------------------------------------------------- Types
 
+// Register set of one channel, resolved from its number by `DMA_SetRegisters`
 typedef struct {
   DMA_TypeDef *reg;
   DMA_Channel_TypeDef *cha;
@@ -22,7 +25,9 @@ typedef struct {
   uint8_t pos;
 } DMA_t;
 
-//----------------------------------------------------------------------------------- DMA ISR Flags
+//------------------------------------------------------------------------------------------- Flags
+
+// Interrupt flags of channel `pos`, four bits per channel
 
 #define DMA_ISR_GIF(pos)  (DMA_ISR_GIF1  << ((pos) * 4))
 #define DMA_ISR_TCIF(pos) (DMA_ISR_TCIF1 << ((pos) * 4))
@@ -31,7 +36,10 @@ typedef struct {
 
 //--------------------------------------------------------------------------------------------- API
 
+// Resolve channel `nbr` into `dma`
 void DMA_SetRegisters(DMA_CHx_t nbr, DMA_t *dma);
+
+// Drop every interrupt flag of the channel
 void DMA_ClearFlags(DMA_t *dma);
 
 //-------------------------------------------------------------------------------------------------

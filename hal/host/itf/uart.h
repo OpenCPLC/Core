@@ -61,7 +61,7 @@ bool UART_SendActive(UART_t *uart);
 bool UART_IsBusy(UART_t *uart);
 bool UART_IsFree(UART_t *uart);
 
-status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len);
+status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len);
 
 uint16_t UART_Size(UART_t *uart);
 uint16_t UART_MessageCount(UART_t *uart);
@@ -72,22 +72,24 @@ void UART_Clear(UART_t *uart);
 
 uint32_t UART_CalcTime_ms(UART_t *uart, uint16_t len);
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------ Device
 
-static const uint8_t _host_uid[12] = {
+// Unique ID, the 96 bits the target reads at `UID_BASE`
+static const uint8_t HOST_UID[12] = {
   0x48, 0x4F, 0x53, 0x54, // "HOST"
   0x50, 0x4C, 0x41, 0x54, // "PLAT"
   0x46, 0x4F, 0x52, 0x4D  // "FORM"
 };
-#define UID_BASE ((uintptr_t)(const void *)_host_uid)
+#define UID_BASE ((uintptr_t)(const void *)HOST_UID)
 
-#define __NOP()         ((void)0)
-#define __WFI()         ((void)0)
-#define __WFE()         ((void)0)
-#define __SEV()         ((void)0)
-#define __ISB()         ((void)0)
-#define __DSB()         ((void)0)
-#define __DMB()         ((void)0)
+// CMSIS intrinsics, nothing to wait for off-target
+#define __NOP() ((void)0)
+#define __WFI() ((void)0)
+#define __WFE() ((void)0)
+#define __SEV() ((void)0)
+#define __ISB() ((void)0)
+#define __DSB() ((void)0)
+#define __DMB() ((void)0)
 
 //-------------------------------------------------------------------------------------------------
 #endif

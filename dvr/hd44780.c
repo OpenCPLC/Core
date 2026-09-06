@@ -1,11 +1,12 @@
 // dvr/hd44780.c
 
 #include "hd44780.h"
+
 #include "vrts.h"
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------- Internal
 
-static bool HD44780_ExpanderWrite(HD44780_t *hd, uint8_t data)
+static bool expander_write(HD44780_t *hd, uint8_t data)
 {
   data |= hd->_backlight;
   if(!hd->i2c) return false;
@@ -14,33 +15,33 @@ static bool HD44780_ExpanderWrite(HD44780_t *hd, uint8_t data)
   return !I2C_Master_Nack(hd->i2c);
 }
 
-static bool HD44780_Set4Bits(HD44780_t *hd, uint8_t value)
+static bool set_4bits(HD44780_t *hd, uint8_t value)
 {
-  if(!HD44780_ExpanderWrite(hd, value & ~HD44780_EN)) return false;
-  if(!HD44780_ExpanderWrite(hd, value | HD44780_EN)) return false;
-  if(!HD44780_ExpanderWrite(hd, value & ~HD44780_EN)) return false;
+  if(!expander_write(hd, value & ~HD44780_EN)) return false;
+  if(!expander_write(hd, value | HD44780_EN)) return false;
+  if(!expander_write(hd, value & ~HD44780_EN)) return false;
   return true;
 }
 
-static bool HD44780_Send(HD44780_t *hd, uint8_t value, uint8_t mode)
+static bool send(HD44780_t *hd, uint8_t value, uint8_t mode)
 {
   uint8_t high = value & 0xF0;
   uint8_t low = (value << 4) & 0xF0;
-  if(!HD44780_Set4Bits(hd, high | mode)) return false;
-  if(!HD44780_Set4Bits(hd, low | mode)) return false;
+  if(!set_4bits(hd, high | mode)) return false;
+  if(!set_4bits(hd, low | mode)) return false;
   return true;
 }
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- API
 
 bool HD44780_Write(HD44780_t *hd, uint8_t value)
 {
-  return HD44780_Send(hd, value, HD44780_RS);
+  return send(hd, value, HD44780_RS);
 }
 
 bool HD44780_Command(HD44780_t *hd, uint8_t cmd)
 {
-  return HD44780_Send(hd, cmd, 0);
+  return send(hd, cmd, 0);
 }
 
 bool HD44780_Loc(HD44780_t *hd, uint8_t x, uint8_t y)
@@ -57,7 +58,7 @@ bool HD44780_Char(HD44780_t *hd, char value, uint8_t x, uint8_t y)
   return true;
 }
 
-bool HD44780_Str(HD44780_t *hd, char *str, uint8_t x, uint8_t y)
+bool HD44780_Str(HD44780_t *hd, const char *str, uint8_t x, uint8_t y)
 {
   if(!HD44780_Loc(hd, x, y)) return false;
   while(*str) {
@@ -133,7 +134,7 @@ bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_t exec)
       break;
     case HD44780_Exec_BacklightOn:
     case HD44780_Exec_BacklightOff:
-      if(!HD44780_ExpanderWrite(hd, 0)) return false;
+      if(!expander_write(hd, 0)) return false;
       break;
   }
   return true;
@@ -149,13 +150,13 @@ bool HD44780_Init(HD44780_t *hd)
   hd->_row_offsets[2] = 0x00 + hd->columns;
   hd->_row_offsets[3] = 0x40 + hd->columns;
   hd->_backlight = HD44780_Backlight_On;
-  if(!HD44780_Set4Bits(hd, 0x03 << 4)) return false;
+  if(!set_4bits(hd, 0x03 << 4)) return false;
   delay(4);
-  if(!HD44780_Set4Bits(hd, 0x03 << 4)) return false;
+  if(!set_4bits(hd, 0x03 << 4)) return false;
   delay(1);
-  if(!HD44780_Set4Bits(hd, 0x03 << 4)) return false;
+  if(!set_4bits(hd, 0x03 << 4)) return false;
   delay(1);
-  if(!HD44780_Set4Bits(hd, 0x02 << 4)) return false;
+  if(!set_4bits(hd, 0x02 << 4)) return false;
   uint8_t mode = HD44780_Mode_4Bit;
   if(hd->rows > 1) mode |= HD44780_Mode_2Line;
   if(hd->size5x10) mode |= HD44780_Mode_Dots5x10;
@@ -171,7 +172,7 @@ bool HD44780_Init(HD44780_t *hd)
   return true;
 }
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------- Extra chars
 
 bool HD44780_ExtraChars(HD44780_t *hd)
 {

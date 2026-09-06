@@ -1,57 +1,45 @@
 // hal/stm32wb/per/adc_wb.c
 
 #include "adc.h"
+
 #include "dma.h"
 
-//------------------------------------------------------------------------------------------- Const
+//------------------------------------------------------------------------------------------ Tables
 
 const uint16_t ADC_PRESCALER_TAB[] = { 1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256 };
+const uint16_t ADC_SAMPLING_TIME_TAB[] = { 15, 19, 25, 37, 60, 105, 260, 653 };
+const uint16_t ADC_OVERSAMPLING_RATIO_TAB[] = { 2, 4, 8, 16, 32, 64, 128, 256 };
 
 uint32_t ADC_Frequency_Hz(ADC_t *adc)
 {
   if(adc->clock == ADC_Clock_PLLP || adc->clock == ADC_Clock_PLLSAI) return 0;
   return SystemCoreClock / ADC_PRESCALER_TAB[adc->prescaler];
 }
-const uint16_t ADC_SAMPLING_TIME_TAB[] = { 15, 19, 25, 37, 60, 105, 260, 653 };
-const uint16_t ADC_OVERSAMPLING_RATIO_TAB[] = { 2, 4, 8, 16, 32, 64, 128, 256 };
 
 //---------------------------------------------------------------------------------------- Internal
 
-static ADC_Common_TypeDef *ADC_GetCommon(ADC_t *adc)
+static ADC_Common_TypeDef *adc_common(ADC_t *adc)
 {
   unused(adc);
   return ADC1_COMMON;
 }
 
-static void ADC_SetSequence(ADC_t *adc, uint8_t *cha, uint8_t count)
+// `SQ1..SQ4` sit in `SQR1` past the length field, `SQ5..SQ16` fill `SQR2..SQR4` five each
+static void set_sequence(ADC_t *adc, uint8_t *cha, uint8_t count)
 {
   if(count > 16) count = 16;
-  adc->reg->SQR1 = 0;
-  adc->reg->SQR2 = 0;
-  adc->reg->SQR3 = 0;
-  adc->reg->SQR4 = 0;
-  if(!count) return;
-  adc->reg->SQR1 = ((uint32_t)(count - 1) << ADC_SQR1_L_Pos)
-    | ((uint32_t)cha[0] << ADC_SQR1_SQ1_Pos);
-  if(--count == 0) return;
-  adc->reg->SQR1 |= (uint32_t)cha[1] << ADC_SQR1_SQ2_Pos; if(--count == 0) return;
-  adc->reg->SQR1 |= (uint32_t)cha[2] << ADC_SQR1_SQ3_Pos; if(--count == 0) return;
-  adc->reg->SQR1 |= (uint32_t)cha[3] << ADC_SQR1_SQ4_Pos; if(--count == 0) return;
-  adc->reg->SQR2 |= (uint32_t)cha[4] << ADC_SQR2_SQ5_Pos; if(--count == 0) return;
-  adc->reg->SQR2 |= (uint32_t)cha[5] << ADC_SQR2_SQ6_Pos; if(--count == 0) return;
-  adc->reg->SQR2 |= (uint32_t)cha[6] << ADC_SQR2_SQ7_Pos; if(--count == 0) return;
-  adc->reg->SQR2 |= (uint32_t)cha[7] << ADC_SQR2_SQ8_Pos; if(--count == 0) return;
-  adc->reg->SQR2 |= (uint32_t)cha[8] << ADC_SQR2_SQ9_Pos; if(--count == 0) return;
-  adc->reg->SQR3 |= (uint32_t)cha[9] << ADC_SQR3_SQ10_Pos; if(--count == 0) return;
-  adc->reg->SQR3 |= (uint32_t)cha[10] << ADC_SQR3_SQ11_Pos; if(--count == 0) return;
-  adc->reg->SQR3 |= (uint32_t)cha[11] << ADC_SQR3_SQ12_Pos; if(--count == 0) return;
-  adc->reg->SQR3 |= (uint32_t)cha[12] << ADC_SQR3_SQ13_Pos; if(--count == 0) return;
-  adc->reg->SQR3 |= (uint32_t)cha[13] << ADC_SQR3_SQ14_Pos; if(--count == 0) return;
-  adc->reg->SQR4 |= (uint32_t)cha[14] << ADC_SQR4_SQ15_Pos; if(--count == 0) return;
-  adc->reg->SQR4 |= (uint32_t)cha[15] << ADC_SQR4_SQ16_Pos;
+  volatile uint32_t *sqr = &adc->reg->SQR1;
+  sqr[0] = count ? (uint32_t)(count - 1) << ADC_SQR1_L_Pos : 0;
+  sqr[1] = 0;
+  sqr[2] = 0;
+  sqr[3] = 0;
+  for(uint8_t i = 0; i < count; i++) {
+    if(i < 4) sqr[0] |= (uint32_t)cha[i] << (6u * (i + 1));
+    else sqr[1 + (i - 4) / 5] |= (uint32_t)cha[i] << (6u * ((i - 4) % 5));
+  }
 }
 
-static void ADC_SetSamplingTime(ADC_t *adc, uint8_t *cha, uint8_t count, ADC_SamplingTime_t st)
+static void set_sampling_time(ADC_t *adc, uint8_t *cha, uint8_t count, ADC_SamplingTime_t st)
 {
   uint32_t smpr1 = 0, smpr2 = 0;
   while(count--) {
@@ -63,7 +51,7 @@ static void ADC_SetSamplingTime(ADC_t *adc, uint8_t *cha, uint8_t count, ADC_Sam
   adc->reg->SMPR2 = smpr2;
 }
 
-static void ADC_SetOversampling(ADC_t *adc, ADC_Oversampling_t *ovs)
+static void set_oversampling(ADC_t *adc, ADC_Oversampling_t *ovs)
 {
   adc->reg->CFGR2 =
     (ovs->shift << ADC_CFGR2_OVSS_Pos) |
@@ -73,7 +61,7 @@ static void ADC_SetOversampling(ADC_t *adc, ADC_Oversampling_t *ovs)
 
 //----------------------------------------------------------------------------------------- Handler
 
-static void ADC_IRQHandler(ADC_t *adc)
+static void irq_handler(ADC_t *adc)
 {
   if(adc->reg->ISR & ADC_ISR_OVR) {
     adc->reg->ISR = ADC_ISR_OVR;
@@ -88,7 +76,7 @@ static void ADC_IRQHandler(ADC_t *adc)
 }
 
 #if(ADC_RECORD)
-static void ADC_DMA_IRQHandler(ADC_t *adc)
+static void dma_handler(ADC_t *adc)
 {
   uint32_t isr = adc->record._dma.reg->ISR;
   uint8_t pos = adc->record._dma.pos;
@@ -116,7 +104,7 @@ static void ADC_DMA_IRQHandler(ADC_t *adc)
 
 void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
 {
-  ADC_Common_TypeDef *common = ADC_GetCommon(adc);
+  ADC_Common_TypeDef *common = adc_common(adc);
   while(count--) {
     uint8_t ch = *cha++;
     switch(ch) {
@@ -192,10 +180,10 @@ status_t ADC_Measure(ADC_t *adc)
   if(adc->_busy) return BUSY;
   adc->_busy = ADC_State_Measure;
   adc->measure._active = 0;
-  ADC_SetOversampling(adc, &adc->measure.oversampling);
-  ADC_SetSamplingTime(adc, adc->measure.chan, adc->measure.chan_count,
+  set_oversampling(adc, &adc->measure.oversampling);
+  set_sampling_time(adc, adc->measure.chan, adc->measure.chan_count,
     adc->measure.sampling_time);
-  ADC_SetSequence(adc, adc->measure.chan, adc->measure.chan_count);
+  set_sequence(adc, adc->measure.chan, adc->measure.chan_count);
   // Single-shot by nature: the sequence ends on its own after the last channel,
   // which keeps the data rate at the interrupt's pace instead of racing a free-running ADC
   adc->reg->CFGR &= ~(ADC_CFGR_EXTEN | ADC_CFGR_CONT);
@@ -212,10 +200,10 @@ status_t ADC_Record(ADC_t *adc)
 {
   if(adc->_busy) return BUSY;
   adc->_busy = ADC_State_Record;
-  ADC_SetOversampling(adc, &adc->record.oversampling);
-  ADC_SetSamplingTime(adc, adc->record.chan, adc->record.chan_count,
+  set_oversampling(adc, &adc->record.oversampling);
+  set_sampling_time(adc, adc->record.chan, adc->record.chan_count,
     adc->record.sampling_time);
-  ADC_SetSequence(adc, adc->record.chan, adc->record.chan_count);
+  set_sequence(adc, adc->record.chan, adc->record.chan_count);
   adc->record._dma.cha->CCR &= ~DMA_CCR_EN;
   adc->record._dma.cha->CMAR = (uint32_t)adc->record.buff;
   adc->record._dma.cha->CNDTR = adc->record.buff_len;
@@ -263,7 +251,7 @@ void ADC_Init(ADC_t *adc)
 {
   if(!adc->reg) adc->reg = ADC1;
   ADC_Disable(adc);
-  ADC_Common_TypeDef *common = ADC_GetCommon(adc);
+  ADC_Common_TypeDef *common = adc_common(adc);
   // Register route per `ADC_Clock_t`: reset `00` is no clock at all,
   // `Default` is the system clock on this family
   static const uint8_t clock_sel[] = { 3, 3, 2, 1 };
@@ -286,7 +274,7 @@ void ADC_Init(ADC_t *adc)
     adc->record._dma.cha->CPAR = (uint32_t)&adc->reg->DR;
     adc->record._dma.cha->CCR = DMA_CCR_MINC | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0;
     adc->reg->CFGR |= ADC_CFGR_DMAEN | ADC_CFGR_DMACFG;
-    IRQ_EnableDMA(adc->record.dma, adc->irq_priority, (IRQ_Handler_t)ADC_DMA_IRQHandler, adc);
+    IRQ_EnableDMA(adc->record.dma, adc->irq_priority, (IRQ_Handler_t)dma_handler, adc);
   }
   #endif
   ADC_InitGPIO(adc, adc->measure.chan, adc->measure.chan_count);
@@ -296,7 +284,7 @@ void ADC_Init(ADC_t *adc)
   }
   #endif
   adc->reg->IER |= ADC_IER_OVRIE;
-  IRQ_EnableADC(adc->irq_priority, (IRQ_Handler_t)ADC_IRQHandler, adc);
+  IRQ_EnableADC(adc->irq_priority, (IRQ_Handler_t)irq_handler, adc);
   ADC_Enable(adc);
 }
 

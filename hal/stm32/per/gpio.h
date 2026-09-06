@@ -4,8 +4,7 @@
 #define GPIO_H_
 
 #include <stdbool.h>
-#include <stdlib.h>
-#include <stdarg.h>
+#include <stdint.h>
 #if defined(STM32G0)
   #include "stm32g0xx.h"
 #elif defined(STM32WB)
@@ -13,14 +12,16 @@
 #endif
 #include "irq.h"
 #include "pwr.h"
-#include "vrts.h"
 #include "main.h"
 
+//------------------------------------------------------------------------------------------ Config
+
 #ifndef GPIO_INCLUDE_WAKEUP
+  // Standby pull configuration in `GPIO_t`, applied by `GPIO_Init`
   #define GPIO_INCLUDE_WAKEUP 0
 #endif
 
-//-------------------------------------------------------------------------------------- GPIO Types
+//------------------------------------------------------------------------------------------- Types
 
 typedef enum {
   GPIO_Mode_Input = 0,
@@ -55,34 +56,26 @@ typedef enum {
 } GPIO_WakeupPull_t;
 #endif
 
-//------------------------------------------------------------------------------------ GPIO Presets
+//----------------------------------------------------------------------------------------- Presets
 
-#if(GPIO_INCLUDE_WAKEUP)
-  #define GPIO_DEFAULT { NULL, 0, false, GPIO_Mode_Input, GPIO_Pull_None, \
-    GPIO_OutType_PushPull, GPIO_Speed_VeryLow, GPIO_WakeupPull_None, 0, false }
-  #define GPIO_ALTERNATE { NULL, 0, false, GPIO_Mode_Alternate, GPIO_Pull_None, \
-    GPIO_OutType_PushPull, GPIO_Speed_VeryHigh, GPIO_WakeupPull_None, 0, false }
-#else
-  #define GPIO_DEFAULT { NULL, 0, false, GPIO_Mode_Input, GPIO_Pull_None, \
-    GPIO_OutType_PushPull, GPIO_Speed_VeryLow, 0, false }
-  #define GPIO_ALTERNATE { NULL, 0, false, GPIO_Mode_Alternate, GPIO_Pull_None, \
-    GPIO_OutType_PushPull, GPIO_Speed_VeryHigh, 0, false }
-#endif
+// Initializers: an input at rest, and an alternate function pin at full speed
+#define GPIO_DEFAULT { .mode = GPIO_Mode_Input, .speed = GPIO_Speed_VeryLow }
+#define GPIO_ALTERNATE { .mode = GPIO_Mode_Alternate, .speed = GPIO_Speed_VeryHigh }
 
-//---------------------------------------------------------------------------------- GPIO Structure
+//--------------------------------------------------------------------------------------- Structure
 
 /**
- * @brief GPIO pin configuration and state.
- * @param[in] port GPIO port pointer (`GPIOA`, `GPIOB`, etc.)
- * @param[in] pin Pin number (0-15)
- * @param[in] reverse Invert logic level
- * @param[in] mode Pin mode (`GPIO_Mode_Input`, `GPIO_Mode_Output`, etc.)
+ * @brief One pin, its configuration and its level.
+ * @param[in] port Port registers, `GPIOA`, `GPIOB`, ...
+ * @param[in] pin Pin number, `0..15`
+ * @param[in] reverse Invert the logic level
+ * @param[in] mode Pin mode
  * @param[in] pull Pull configuration
- * @param[in] out_type Output type (push-pull or open-drain)
+ * @param[in] out_type Push-pull or open-drain
  * @param[in] speed Output speed
- * @param[in] wakeup_pull Standby wakeup pull (if `GPIO_INCLUDE_WAKEUP`)
- * @param[in] alternate Alternate function number (0-15)
- * @param[in] set Initial output state
+ * @param[in] wakeup_pull Standby pull, with `GPIO_INCLUDE_WAKEUP`
+ * @param[in] alternate Alternate function number, `0..15`
+ * @param[in,out] set Level, applied by `GPIO_Init`, tracked by the setters
  */
 typedef struct {
   GPIO_TypeDef *port;
@@ -93,15 +86,15 @@ typedef struct {
   GPIO_OutType_t out_type;
   GPIO_Speed_t speed;
   #if(GPIO_INCLUDE_WAKEUP)
-    GPIO_WakeupPull_t wakeup_pull;
+  GPIO_WakeupPull_t wakeup_pull;
   #endif
   uint8_t alternate;
   bool set;
 } GPIO_t;
 
 /**
- * @brief GPIO alternate function mapping (for pin tables).
- * @param[in] port GPIO port pointer
+ * @brief Alternate function of a pin, the entry of a pin map.
+ * @param[in] port Port registers
  * @param[in] pin Pin number
  * @param[in] alternate Alternate function number
  */
@@ -113,107 +106,74 @@ typedef struct {
 } GPIO_Map_t;
 #pragma pack()
 
-//---------------------------------------------------------------------------------------- GPIO API
+//--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Initialize GPIO pin.
+ * @brief Configure a pin and apply its level.
  * @param[in,out] gpio Pointer to GPIO structure
  */
 void GPIO_Init(GPIO_t *gpio);
 
 /**
- * @brief Initialize multiple GPIO pins (NULL-terminated list).
- * @param[in,out] gpio First GPIO pointer, followed by more, terminated with `NULL`
+ * @brief Configure pins from a `NULL`-terminated list.
+ * @param[in,out] gpio First pin, the rest follow as arguments, `NULL` last
  */
 void GPIO_InitList(GPIO_t *gpio, ...);
 
 /**
- * @brief Initialize GPIO in alternate mode from pin map.
- * @param[in] map Pointer to `GPIO_Map_t`
- * @param[in] open_drain `true` = open-drain with pull-up (I2C), `false` = push-pull high-speed
+ * @brief Configure a pin in alternate mode from a pin map entry.
+ * @param[in] map Map entry
+ * @param[in] open_drain `true` = open-drain with pull-up (I2C), `false` = push-pull, full speed
  */
 void GPIO_InitAlternate(const GPIO_Map_t *map, bool open_drain);
 
 /**
- * @brief Initialize GPIO as high-speed output (power supply control).
+ * @brief Configure a pin as a full-speed output, for a supply switch.
  * @param[in,out] gpio Pointer to GPIO structure
  */
 void GPIO_SupplyInit(GPIO_t *gpio);
 
 /**
- * @brief Set GPIO pin mode.
+ * @brief Change the mode of a configured pin.
  * @param[in,out] gpio Pointer to GPIO structure
  * @param[in] mode New mode
  */
 void GPIO_Mode(GPIO_t *gpio, GPIO_Mode_t mode);
-
-/**
- * @brief Set GPIO to input mode.
- * @param[in,out] gpio Pointer to GPIO structure
- */
 void GPIO_ModeInput(GPIO_t *gpio);
-
-/**
- * @brief Set GPIO to output mode.
- * @param[in,out] gpio Pointer to GPIO structure
- */
 void GPIO_ModeOutput(GPIO_t *gpio);
 
-/**
- * @brief Set GPIO pin high (respects `reverse` flag).
- * @param[in,out] gpio Pointer to GPIO structure
- */
+// Drive the pin high, low or the other way; `reverse` flips the electrical level
 void GPIO_Set(GPIO_t *gpio);
-
-/**
- * @brief Set GPIO pin low (respects `reverse` flag).
- * @param[in,out] gpio Pointer to GPIO structure
- */
 void GPIO_Rst(GPIO_t *gpio);
-
-/**
- * @brief Toggle GPIO pin.
- * @param[in,out] gpio Pointer to GPIO structure
- */
 void GPIO_Tgl(GPIO_t *gpio);
 
-/**
- * @brief Read GPIO input state (respects `reverse` flag).
- * @param[in] gpio Pointer to GPIO structure
- * @return `true` if high, `false` if low
- */
+// Input level, `reverse` flips it; `NotIn` is the negation
 bool GPIO_In(GPIO_t *gpio);
-
-/**
- * @brief Read inverted GPIO input state.
- * @param[in] gpio Pointer to GPIO structure
- * @return `true` if low, `false` if high
- */
 bool GPIO_NotIn(GPIO_t *gpio);
 
-//-------------------------------------------------------------------------------------- EXTI Types
+//-------------------------------------------------------------------------------------------- EXTI
 
 typedef void (*EXTI_Handler_t)(void *arg);
 
 /**
- * @brief External interrupt configuration.
- * @param[in] port GPIO port pointer
- * @param[in] pin Pin number (0-15)
- * @param[in] mode Pin mode (typically `GPIO_Mode_Input`)
+ * @brief External interrupt on a pin.
+ * @param[in] port Port registers
+ * @param[in] pin Pin number, `0..15`
+ * @param[in] mode Pin mode, `GPIO_Mode_Input` as a rule
  * @param[in] pull Pull configuration
- * @param[in] rise_detect Enable rising edge detection
- * @param[in] fall_detect Enable falling edge detection
- * @param[in] irq_enable Enable interrupt on init
+ * @param[in] rise_detect Interrupt on the rising edge
+ * @param[in] fall_detect Interrupt on the falling edge
+ * @param[in] irq_enable Enabled by `EXTI_Init`
  * @param[in] irq_priority Interrupt priority
- * @param[in] oneshot Disable interrupt after first trigger
- * @param[in] RiseHandler Rising edge callback
- * @param[in] rise_arg Argument for `RiseHandler`
- * @param[in] FallHandler Falling edge callback
- * @param[in] fall_arg Argument for `FallHandler`
+ * @param[in] oneshot Disable after the first edge
+ * @param[in] RiseHandler Called on a rising edge, `NULL` = none
+ * @param[in] rise_arg Argument of `RiseHandler`
+ * @param[in] FallHandler Called on a falling edge, `NULL` = none
+ * @param[in] fall_arg Argument of `FallHandler`
  * Internal:
- * @param _rise_cnt Rising edge event counter
- * @param _fall_cnt Falling edge event counter
- * @param _state Current pin state
+ * @param _rise_cnt Rising edges since the last read
+ * @param _fall_cnt Falling edges since the last read
+ * @param _state Level at the last edge
  */
 typedef struct {
   GPIO_TypeDef *port;
@@ -235,54 +195,30 @@ typedef struct {
   bool _state;
 } EXTI_t;
 
-//---------------------------------------------------------------------------------------- EXTI API
-
 /**
- * @brief Initialize external interrupt.
+ * @brief Configure the pin, route it to its EXTI line and arm the interrupt.
  * @param[in,out] exti Pointer to EXTI structure
  */
 void EXTI_Init(EXTI_t *exti);
 
-/**
- * @brief Enable EXTI interrupt.
- * @param[in,out] exti Pointer to EXTI structure
- */
+// Unmask or mask the line, an edge latched while masked is dropped on unmask
 void EXTI_On(EXTI_t *exti);
-
-/**
- * @brief Disable EXTI interrupt.
- * @param[in,out] exti Pointer to EXTI structure
- */
 void EXTI_Off(EXTI_t *exti);
 
-/**
- * @brief Get total edge count and clear counters.
- * @param[in,out] exti Pointer to EXTI structure
- * @return Sum of rise and fall events
- */
+// Edges since the last read, counters cleared: both, rising, falling
 uint16_t EXTI_Events(EXTI_t *exti);
-
-/**
- * @brief Get rising edge count and clear counter.
- * @param[in,out] exti Pointer to EXTI structure
- * @return Rising edge count
- */
 uint16_t EXTI_Rise(EXTI_t *exti);
-
-/**
- * @brief Get falling edge count and clear counter.
- * @param[in,out] exti Pointer to EXTI structure
- * @return Falling edge count
- */
 uint16_t EXTI_Fall(EXTI_t *exti);
 
-/**
- * @brief Read current EXTI pin state.
- * @param[in] exti Pointer to EXTI structure
- * @return `true` if high
- */
+// Pin level
 bool EXTI_In(EXTI_t *exti);
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------- Internal
 
+#if(GPIO_INCLUDE_WAKEUP)
+// Family glue: standby pull of the pin from `wakeup_pull`
+void GPIO_BackendWakeup(GPIO_t *gpio);
+#endif
+
+//-------------------------------------------------------------------------------------------------
 #endif

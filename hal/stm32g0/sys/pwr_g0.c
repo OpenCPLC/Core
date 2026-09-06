@@ -2,11 +2,18 @@
 
 #include "pwr.h"
 
-#define IWDG_KEY_REFRESH 0xAAAA
-#define IWDG_KEY_ACCESS  0x5555
-#define IWDG_KEY_START   0xCCCC
+//--------------------------------------------------------------------------------------- Constants
 
-//------------------------------------------------------------------------------- Platform-specific
+#define IWDG_KEY_REFRESH 0xAAAAu
+#define IWDG_KEY_ACCESS  0x5555u
+#define IWDG_KEY_START   0xCCCCu
+
+#define FLASH_KEY1    0x45670123u
+#define FLASH_KEY2    0xCDEF89ABu
+#define FLASH_OPTKEY1 0x08192A3Bu
+#define FLASH_OPTKEY2 0x4C5D6E7Fu
+
+//------------------------------------------------------------------------------------------- Remap
 
 void RAMP_PA11_PA12(void)
 {
@@ -93,10 +100,13 @@ void RCC_EnableDMA(void *dma)
   switch((uint32_t)dma) {
     case (uint32_t)DMA1: RCC->AHBENR |= RCC_AHBENR_DMA1EN; break;
     #ifdef DMA2
-      case (uint32_t)DMA2: RCC->AHBENR |= RCC_AHBENR_DMA2EN; break;
+    case (uint32_t)DMA2: RCC->AHBENR |= RCC_AHBENR_DMA2EN; break;
     #endif
   }
 }
+
+void RCC_EnableCRC(void) { RCC->AHBENR |= RCC_AHBENR_CRCEN; }
+void RCC_EnableRNG(void) { RCC->AHBENR |= RCC_AHBENR_RNGEN; }
 
 #ifdef USB_DRD_FS
 void RCC_EnableUSB(void)
@@ -116,8 +126,8 @@ void RCC_EnableUSB(void)
 uint32_t RCC_GetClock(void) { return SystemCoreClock; }
 
 // Wait-state count, not a bit mask: the header's `FLASH_ACR_LATENCY_0/1/2` are masks.
-// Raised before the clock and lowered after it.
-static void RCC_SetFlashLatency(uint32_t freq_Hz)
+// Raised before the clock and lowered after it
+static void set_flash_latency(uint32_t freq_Hz)
 {
   uint32_t latency;
   if(freq_Hz > 48000000) latency = 2;
@@ -128,7 +138,7 @@ static void RCC_SetFlashLatency(uint32_t freq_Hz)
   while((FLASH->ACR & FLASH_ACR_LATENCY) != latency);
 }
 
-static uint32_t RCC_SetHSI(uint8_t div)
+static uint32_t set_hsi(uint8_t div)
 {
   if(div > 7) div = 7;
   RCC->CR = (RCC->CR & ~RCC_CR_HSIDIV) | (div << RCC_CR_HSIDIV_Pos) | RCC_CR_HSION;
@@ -163,9 +173,9 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
   }
   else {
     freq_Hz = (16000000 / m) * n / r;
-    RCC_SetHSI(0);
+    set_hsi(0);
   }
-  RCC_SetFlashLatency(freq_Hz);
+  set_flash_latency(freq_Hz);
   RCC->CR &= ~RCC_CR_PLLON;
   while(RCC->CR & RCC_CR_PLLRDY);
   RCC->PLLCFGR = ((m - 1) << RCC_PLLCFGR_PLLM_Pos) |
@@ -184,8 +194,8 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
 uint32_t RCC_2MHz(void)
 {
   RCC->APBENR1 |= RCC_APBENR1_PWREN;
-  RCC_SetHSI(3);
-  RCC_SetFlashLatency(2000000);
+  set_hsi(3);
+  set_flash_latency(2000000);
   // Low-power run comes last, it caps the frequency further still.
   PWR->CR1 |= PWR_CR1_LPR;
   while(!(PWR->SR2 & PWR_SR2_REGLPF));
@@ -194,8 +204,8 @@ uint32_t RCC_2MHz(void)
 
 uint32_t RCC_16MHz(void)
 {
-  uint32_t freq_Hz = RCC_SetHSI(0);
-  RCC_SetFlashLatency(16000000);
+  uint32_t freq_Hz = set_hsi(0);
+  set_flash_latency(16000000);
   return freq_Hz;
 }
 
@@ -209,17 +219,16 @@ void PWR_Reset(void) { NVIC_SystemReset(); }
 void PWR_Sleep(PWR_SleepMode_t mode)
 {
   RCC->APBENR1 |= RCC_APBENR1_PWREN;
-  // G0: Stop0=000, Stop1=001, Standby=011, Shutdown=100
-  // Stop2 not available on G0, map to Stop1
+  // `LPMS`: Stop0 `000`, Stop1 `001`, Standby `011`, Shutdown `100`; no Stop2, it maps to Stop1
   static const uint8_t mode_bits[] = { 0b000, 0b001, 0b001, 0b011, 0b011, 0b100 };
-  // `PWR_SleepMode_Error` names a wakeup cause, not a mode, and sits past the table.
+  // `PWR_SleepMode_Error` names a wakeup cause, not a mode, and sits past the table
   if(mode >= PWR_SleepMode_Error) return;
   if((PWR->SR2 & PWR_SR2_REGLPF) && (mode == PWR_SleepMode_Stop0)) return;
   PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | mode_bits[mode];
   if(mode == PWR_SleepMode_StandbySRAM) PWR->CR3 |= PWR_CR3_RRS;
   else PWR->CR3 &= ~PWR_CR3_RRS;
   SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
-  PWR->SCR = 0x013F; // Clear all wakeup flags
+  PWR->SCR = 0x013Fu; // clear every wakeup flag
   __SEV(); __WFE(); __WFE();
   // `SLEEPDEEP` must not outlive the call: a later `__WFI` would enter Stop
   SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
@@ -233,13 +242,26 @@ void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
   else PWR->CR4 &= ~(1u << pin);
 }
 
+status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
+{
+  RCC->APBENR1 |= RCC_APBENR1_PWREN;
+  unused(RCC->APBENR1);
+  PWR->CR3 = (PWR->CR3 & ~0x3Fu) | (wakeup_mask & 0x3Fu);
+  PWR->CR4 = (PWR->CR4 & ~0x3Fu) | (falling_mask & 0x3Fu);
+  PWR->SCR = 0x013Fu; // clear the wakeup and standby flags, stale ones bounce right back
+  PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | PWR_CR1_LPMS_2;
+  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+  __DSB();
+  while(1) __WFI();
+}
+
 //-------------------------------------------------------------------------------------------- BKPR
 
 void BKPR_Write(BKPR_t reg, uint32_t value)
 {
   RCC->APBENR1 |= RCC_APBENR1_PWREN;
   PWR->CR1 |= PWR_CR1_DBP;
-  // G0: backup registers in TAMP peripheral
+  // The backup registers live in `TAMP` on this family
   *((volatile uint32_t *)(TAMP_BASE + 0x100u + (4u * reg))) = value;
   PWR->CR1 &= ~PWR_CR1_DBP;
 }
@@ -251,20 +273,20 @@ uint32_t BKPR_Read(BKPR_t reg)
 
 void BKP_DomainReset(void)
 {
-  if(!BOR_WasReset()) return; // domain can only be corrupted by a power-on.
+  if(!BOR_WasReset()) return; // only a power-on can corrupt the domain
   RCC->APBENR1 |= RCC_APBENR1_PWREN;
   PWR->CR1 |= PWR_CR1_DBP;
   while(!(PWR->CR1 & PWR_CR1_DBP));
-  RCC->BDCR = RCC_BDCR_BDRST; // set `BDRST`, clear `LSCO`/`LSE`/`RTCSEL`
-  (void)RCC->BDCR; // read back lengthens reset pulse
-  RCC->BDCR = 0; // release reset
+  RCC->BDCR = RCC_BDCR_BDRST; // `BDRST` on, `LSCO`, `LSE` and `RTCSEL` cleared
+  unused(RCC->BDCR); // the read back lengthens the reset pulse
+  RCC->BDCR = 0;
 }
 
 //-------------------------------------------------------------------------------------------- IWDG
 
 void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 {
-  if(reload > 0x0FFF) reload = 0x0FFF;
+  if(reload > 0x0FFFu) reload = 0x0FFFu;
   // A halted core would starve the dog: pause it whenever the debugger holds the CPU
   RCC->APBENR1 |= RCC_APBENR1_DBGEN;
   DBG->APBFZ1 |= DBG_APB_FZ1_DBG_IWDG_STOP;
@@ -285,14 +307,13 @@ void IWDG_Init_ms(uint32_t timeout_ms)
 {
   uint8_t time = IWDG_Time_125us;
   uint32_t reload;
-  while((reload = (timeout_ms * 8) >> time) > 0x0FFF && time < IWDG_Time_8ms) time++;
+  while((reload = (timeout_ms * 8) >> time) > 0x0FFFu && time < IWDG_Time_8ms) time++;
   if(!reload) reload = 1;
   IWDG_Init((IWDG_Time_t)time, (uint16_t)reload);
 }
 
-
-// `RMVF` clears all reset flags at once: latch on first read so `IWDG_WasReset`
-// and `BOR_WasReset` do not clobber each other.
+// `RMVF` clears every reset flag at once: latched on the first read, so `IWDG_WasReset`
+// and `BOR_WasReset` do not clobber each other
 static uint32_t rst_csr;
 static bool rst_latched;
 
@@ -308,31 +329,12 @@ static uint32_t rst_flags(void)
 
 bool IWDG_WasReset(void) { return (rst_flags() & RCC_CSR_IWDGRSTF) != 0; }
 
-status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
-{
-  RCC->APBENR1 |= RCC_APBENR1_PWREN;
-  (void)RCC->APBENR1;
-  PWR->CR3 = (PWR->CR3 & ~0x3Fu) | (wakeup_mask & 0x3Fu);
-  PWR->CR4 = (PWR->CR4 & ~0x3Fu) | (falling_mask & 0x3Fu);
-  PWR->SCR = 0x013Fu; // clear the wakeup and standby flags, stale ones bounce right back
-  PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | PWR_CR1_LPMS_2;
-  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
-  __DSB();
-  while(1) __WFI();
-}
-
-
 //--------------------------------------------------------------------------------------------- BOR
-
-#define FLASH_KEY1    0x45670123u
-#define FLASH_KEY2    0xCDEF89ABu
-#define FLASH_OPTKEY1 0x08192A3Bu
-#define FLASH_OPTKEY2 0x4C5D6E7Fu
 
 BOR_Level_t BOR_GetLevel(void)
 {
-  // G0: `BOR_EN` plus separate rising/falling level fields (2-bit, 0-3).
-  // Portable level is register level + 1 when enabled, else `BOR_Level_1V7`.
+  // `BOR_EN` plus 2-bit rising and falling level fields: the portable level is the
+  // register level plus one when enabled, `BOR_Level_1V7` otherwise
   if(!(FLASH->OPTR & FLASH_OPTR_BOR_EN)) return BOR_Level_1V7;
   uint32_t lv = (FLASH->OPTR & FLASH_OPTR_BORR_LEV) >> FLASH_OPTR_BORR_LEV_Pos;
   return (BOR_Level_t)(lv + 1);
@@ -341,15 +343,13 @@ BOR_Level_t BOR_GetLevel(void)
 status_t BOR_SetLevel(BOR_Level_t level)
 {
   if(level > BOR_Level_2V8) level = BOR_Level_2V8;
-  if(BOR_GetLevel() == level) return OK; // already set: no flash wear, no reset
+  if(BOR_GetLevel() == level) return OK; // no flash wear, no reset
   while(FLASH->SR & FLASH_SR_BSY1) __DSB();
-  // Unlock flash control register
   if(FLASH->CR & FLASH_CR_LOCK) {
     FLASH->KEYR = FLASH_KEY1;
     FLASH->KEYR = FLASH_KEY2;
     if(FLASH->CR & FLASH_CR_LOCK) return ERR;
   }
-  // Unlock option bytes
   if(FLASH->CR & FLASH_CR_OPTLOCK) {
     FLASH->OPTKEYR = FLASH_OPTKEY1;
     FLASH->OPTKEYR = FLASH_OPTKEY2;
@@ -358,18 +358,18 @@ status_t BOR_SetLevel(BOR_Level_t level)
   uint32_t optr = FLASH->OPTR;
   optr &= ~(FLASH_OPTR_BOR_EN | FLASH_OPTR_BORR_LEV | FLASH_OPTR_BORF_LEV);
   if(level != BOR_Level_1V7) {
-    uint32_t lv = (uint32_t)level - 1; // portable level 1..4 maps to register 0..3.
+    uint32_t lv = (uint32_t)level - 1; // portable `1..4` is register `0..3`
     optr |= FLASH_OPTR_BOR_EN;
     optr |= (lv << FLASH_OPTR_BORR_LEV_Pos) | (lv << FLASH_OPTR_BORF_LEV_Pos);
   }
   FLASH->OPTR = optr;
   FLASH->CR |= FLASH_CR_OPTSTRT;
   while(FLASH->SR & FLASH_SR_BSY1) __DSB();
-  FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads option bytes, resets MCU (no return).
+  FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads the option bytes, a system reset
   while(1) __DSB();
 }
 
-// G0 has no dedicated BOR flag; brown-out reports via `PWRRSTF`.
+// No dedicated BOR flag on this family, a brown-out reports as `PWRRSTF`
 bool BOR_WasReset(void) { return (rst_flags() & RCC_CSR_PWRRSTF) != 0; }
 
 //-------------------------------------------------------------------------------------------------

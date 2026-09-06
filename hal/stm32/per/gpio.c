@@ -2,19 +2,21 @@
 
 #include "gpio.h"
 
-#if(GPIO_INCLUDE_WAKEUP)
-extern void GPIO_BackendWakeup(GPIO_t *gpio);
-#endif
+#include <stdarg.h>
 
 //-------------------------------------------------------------------------------------------- GPIO
+
+// Two-bit field of `pin` in a port register
+static inline void set_field(volatile uint32_t *reg, uint8_t pin, uint32_t value)
+{
+  *reg = (*reg & ~(3u << (2u * pin))) | (value << (2u * pin));
+}
 
 void GPIO_Init(GPIO_t *gpio)
 {
   RCC_EnableGPIO(gpio->port);
-  gpio->port->PUPDR = (gpio->port->PUPDR & ~(3u << (2u * gpio->pin))) |
-    (gpio->pull << (2u * gpio->pin));
-  gpio->port->OSPEEDR = (gpio->port->OSPEEDR & ~(3u << (2u * gpio->pin))) |
-    (gpio->speed << (2u * gpio->pin));
+  set_field(&gpio->port->PUPDR, gpio->pin, gpio->pull);
+  set_field(&gpio->port->OSPEEDR, gpio->pin, gpio->speed);
   if(gpio->out_type) gpio->port->OTYPER |= (1u << gpio->pin);
   else gpio->port->OTYPER &= ~(1u << gpio->pin);
   if(gpio->mode == GPIO_Mode_Alternate) {
@@ -23,12 +25,11 @@ void GPIO_Init(GPIO_t *gpio)
     gpio->port->AFR[afr_idx] =
       (gpio->port->AFR[afr_idx] & ~(0x0Fu << afr_pos)) | (gpio->alternate << afr_pos);
   }
-  gpio->port->MODER = (gpio->port->MODER & ~(3u << (2u * gpio->pin))) |
-    (gpio->mode << (2u * gpio->pin));
+  set_field(&gpio->port->MODER, gpio->pin, gpio->mode);
   if(gpio->set) GPIO_Set(gpio);
   else GPIO_Rst(gpio);
   #if(GPIO_INCLUDE_WAKEUP)
-    GPIO_BackendWakeup(gpio);
+  GPIO_BackendWakeup(gpio);
   #endif
 }
 
@@ -67,8 +68,7 @@ void GPIO_SupplyInit(GPIO_t *gpio)
 void GPIO_Mode(GPIO_t *gpio, GPIO_Mode_t mode)
 {
   gpio->mode = mode;
-  gpio->port->MODER = (gpio->port->MODER & ~(3u << (2u * gpio->pin))) |
-    (mode << (2u * gpio->pin));
+  set_field(&gpio->port->MODER, gpio->pin, mode);
 }
 
 void GPIO_ModeInput(GPIO_t *gpio) { GPIO_Mode(gpio, GPIO_Mode_Input); }

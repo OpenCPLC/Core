@@ -40,7 +40,7 @@ typedef enum {
   HD44780_Display_CursorOn = 0x02,
   HD44780_Display_CursorOff = 0x00,
   HD44780_Display_BlinkOn = 0x01,
-  HD44780_Display_BlinkOff = 0x00,
+  HD44780_Display_BlinkOff = 0x00
 } HD44780_Display_t;
 
 typedef enum {
@@ -78,7 +78,7 @@ typedef enum {
   HD44780_Exec_AutoscrollOn,
   HD44780_Exec_AutoscrollOff,
   HD44780_Exec_BacklightOn,
-  HD44780_Exec_BacklightOff,
+  HD44780_Exec_BacklightOff
 } HD44780_Exec_t;
 
 typedef enum {
@@ -88,7 +88,7 @@ typedef enum {
   HD44780_Char_ArrowDown = 4,
   HD44780_Char_BoxSet = 5,
   HD44780_Char_BoxRst = 6,
-  HD44780_Char_Degree = 7,
+  HD44780_Char_Degree = 7
 } HD44780_Char_t;
 
 //-------------------------------------------------------------------------------------------------
@@ -135,7 +135,7 @@ bool HD44780_Write(HD44780_t *hd, uint8_t value);
 bool HD44780_Command(HD44780_t *hd, uint8_t cmd);
 bool HD44780_Loc(HD44780_t *hd, uint8_t x, uint8_t y);
 bool HD44780_Char(HD44780_t *hd, char value, uint8_t x, uint8_t y);
-bool HD44780_Str(HD44780_t *hd, char *str, uint8_t x, uint8_t y);
+bool HD44780_Str(HD44780_t *hd, const char *str, uint8_t x, uint8_t y);
 bool HD44780_CreateChar(HD44780_t *hd, uint8_t loc, uint8_t *charmap);
 bool HD44780_Clear(HD44780_t *hd);
 bool HD44780_Home(HD44780_t *hd);

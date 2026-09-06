@@ -3,22 +3,22 @@
 #ifndef EEPROM_H_
 #define EEPROM_H_
 
-#include <stdint.h>
 #include <stdbool.h>
-#include <stdarg.h>
+#include <stdint.h>
 #include "flash.h"
 #include "xdef.h"
 #include "main.h"
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------- Types
 
+// What a storage half holds, the recovery decision of `EEPROM_Init` reads it
 typedef enum {
   EEPROM_State_None,
-  EEPROM_State_Empty,      // All slots erased.
-  EEPROM_State_Filled,     // Data written, no marker, no BEGIN (mid `_store_kv`).
-  EEPROM_State_InProgress, // BEGIN key at slot[0], no marker (rewrite-target mid-copy).
-  EEPROM_State_Full,       // All data slots written, marker erased, no BEGIN.
-  EEPROM_State_Complete,   // Marker present. Post-rewrite storage with generation.
+  EEPROM_State_Empty,      // every slot erased
+  EEPROM_State_Filled,     // data, no marker, no BEGIN: the active half mid-write
+  EEPROM_State_InProgress, // BEGIN at slot 0, no marker: a rewrite target mid-copy
+  EEPROM_State_Full,       // every data slot written, marker erased, no BEGIN
+  EEPROM_State_Complete    // marker present: a rewritten half carrying its generation
 } EEPROM_State_t;
 
 typedef enum {
@@ -26,21 +26,27 @@ typedef enum {
   EEPROM_Storage_B = 1
 } EEPROM_Storage_t;
 
+//--------------------------------------------------------------------------------------- Structure
+
 /**
- * @brief EEPROM emulation descriptor.
- * Two-storage layout (A/B). Last 8B slot of each storage is reserved for marker
- * with monotonic generation counter. Newer storage wins on `Complete/Complete`.
- * First 8B slot of a rewrite-target receives a BEGIN tag (`0xFFFFFFFD`, gen+1)
- * before any data is copied.
- * Power-loss recovery uniquely identifies the rewrite-target on next boot,
- * so no `Full/Full` data-loss path exists.
- * Reserved keys: `0xFFFFFFFF` (erased), `0xFFFFFFFE` (marker), `0xFFFFFFFD` (begin).
- * Partial flash writes may leave garbage slots.
- * `_read_key` may return a garbage value
- * if a corrupted slot's key field accidentally matches a user key
- * (probability ~2^-32 per bad write).
- * @param[in] page_start First flash page reserved for EEPROM
- * @param[in] page_count Number of flash pages (must be even and >= 2)
+ * @brief Key-value store over two flash halves, A and B, appended one 8-byte slot at a time.
+ *   A full half is rewritten into the other with one slot per key. The last slot of each
+ *   half is a marker with a generation counter, the newer half wins on `Complete/Complete`.
+ *   The first slot of a rewrite target takes a BEGIN tag before any data, so a power loss
+ *   mid-rewrite is recognized on the next boot and no `Full/Full` data-loss path exists.
+ *   Reserved keys: `0xFFFFFFFF` erased, `0xFFFFFFFE` marker, `0xFFFFFFFD` begin.
+ *   A torn write leaves a garbage slot; one whose key field happens to equal a user key
+ *   reads back as that key, a `2^-32` chance per bad write.
+ * @param[in] page_start First flash page
+ * @param[in] page_count Number of pages, even and at least `2`
+ * Internal:
+ * @param _storage_pages Pages of one half
+ * @param _addr_start First slot of each half
+ * @param _addr_end Past the last slot of each half
+ * @param _active Half taking writes
+ * @param _cursor Next slot to write
+ * @param _generation Generation of the active half
+ * @param _init Initialization completed flag
  */
 typedef struct {
   uint16_t page_start;
@@ -52,119 +58,101 @@ typedef struct {
   EEPROM_Storage_t _active;
   uint32_t _cursor;
   uint16_t _generation;
-  bool _initialized;
+  bool _init;
 } EEPROM_t;
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Initialize EEPROM emulation.
+ * @brief Scan both halves and recover the state, a second call is a no-op.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @return `OK` on success, `ERR` on invalid config
+ * @return `OK` on success, `ERR` on invalid config or a flash error
  */
 status_t EEPROM_Init(EEPROM_t *eeprom);
 
 /**
- * @brief Erase all EEPROM pages (both A and B).
- * @note Power loss mid-clear may leave stale data readable on next boot.
+ * @brief Erase both halves. A power loss mid-clear may leave stale data readable.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @return `OK` on success, `ERR` on error
+ * @return `OK` on success, `ERR` on a flash error
  */
 status_t EEPROM_Clear(EEPROM_t *eeprom);
 
 /**
- * @brief Write key/value pair to EEPROM.
+ * @brief Store a value under a key.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @param[in] key Entry key (reserved: `0xFFFFFFFF`, `0xFFFFFFFE`, `0xFFFFFFFD`)
+ * @param[in] key Entry key, the reserved ones are refused
  * @param[in] value Entry value
- * @return `OK` on success, `ERR` on error or reserved key
+ * @return `OK` on success, `ERR` on a flash error or a reserved key
  */
 status_t EEPROM_Write(EEPROM_t *eeprom, uint32_t key, uint32_t value);
 
 /**
- * @brief Read value by key from EEPROM.
+ * @brief Value under a key.
  * @param[in] eeprom Pointer to `EEPROM_t` instance
  * @param[in] key Entry key
- * @param[in] default_value Returned if key not found
+ * @param[in] default_value Returned when the key is absent
  * @return Stored value or `default_value`
  */
 uint32_t EEPROM_Read(EEPROM_t *eeprom, uint32_t key, uint32_t default_value);
 
 /**
- * @brief Save variable (uses address as key).
+ * @brief Store a variable under its own address.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @param[in] var Pointer to variable
- * @return `OK` on success, `ERR` on error
+ * @param[in] var Variable
+ * @return `OK` on success, `ERR` on a flash error
  */
 status_t EEPROM_Save(EEPROM_t *eeprom, uint32_t *var);
 
 /**
- * @brief Load variable (uses address as key).
+ * @brief Restore a variable stored under its own address.
  * @param[in] eeprom Pointer to `EEPROM_t` instance
- * @param[out] var Pointer to variable (updated if found)
- * @return `OK` if found, `ERR` if not found
+ * @param[out] var Variable, written only when found
+ * @return `OK` when found, `ERR` when absent
  */
 status_t EEPROM_Load(EEPROM_t *eeprom, uint32_t *var);
 
 /**
- * @brief Save multiple variables (NULL-terminated list).
+ * @brief Store variables from a `NULL`-terminated list.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @param[in] var First variable, then more via `...`, end with `NULL`
- * @return `OK` if all saved, `ERR` if any failed
+ * @param[in] var First variable, the rest follow as arguments, `NULL` last
+ * @return `OK` when every one was stored, `ERR` when any failed
  */
 status_t EEPROM_SaveList(EEPROM_t *eeprom, uint32_t *var, ...);
 
 /**
- * @brief Load multiple variables (NULL-terminated list).
+ * @brief Restore variables from a `NULL`-terminated list.
  * @param[in] eeprom Pointer to `EEPROM_t` instance
- * @param[out] var First variable, then more via `...`, end with `NULL`
- * @return `OK` if all found, `ERR` if any missing
+ * @param[out] var First variable, the rest follow as arguments, `NULL` last
+ * @return `OK` when every one was found, `ERR` when any is absent
  */
 status_t EEPROM_LoadList(EEPROM_t *eeprom, uint32_t *var, ...);
 
 /**
- * @brief Save 64-bit variable (two 32-bit entries keyed by `var` and `var+4`).
- * @note Not atomic.
- * Power loss between the two writes leaves halves from different epochs.
- * `EEPROM_Load64` cannot detect this and returns a torn value.
+ * @brief Store a 64-bit variable as two entries keyed by `var` and `var + 4`.
+ *   Not atomic: a power loss between the two writes leaves halves of different ages,
+ *   which `EEPROM_Load64` cannot tell apart from a whole value.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @param[in] var Pointer to 64-bit variable
- * @return `OK` on success, `ERR` on error
+ * @param[in] var Variable
+ * @return `OK` on success, `ERR` on a flash error
  */
 status_t EEPROM_Save64(EEPROM_t *eeprom, uint64_t *var);
 
 /**
- * @brief Load 64-bit variable.
- * Partial load (only half found) returns `ERR` without modifying `var`.
- * @note Not atomic. If halves were written across a power loss,
- * both may be present but belong to different epochs.
- * The returned value is torn, not `ERR`.
+ * @brief Restore a 64-bit variable, written only when both halves are found.
  * @param[in] eeprom Pointer to `EEPROM_t` instance
- * @param[out] var Pointer to 64-bit variable
- * @return `OK` on success, `ERR` on error
+ * @param[out] var Variable
+ * @return `OK` when found, `ERR` when either half is absent
  */
 status_t EEPROM_Load64(EEPROM_t *eeprom, uint64_t *var);
 
-/**
- * @brief Write float value to EEPROM.
- * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @param[in] key Entry key
- * @param[in] value Float value
- * @return `OK` on success, `ERR` on error
- */
+// Float stored and read back as its raw bits
 status_t EEPROM_WriteF32(EEPROM_t *eeprom, uint32_t key, float value);
-
-/**
- * @brief Read float value from EEPROM.
- * @param[in] eeprom Pointer to `EEPROM_t` instance
- * @param[in] key Entry key
- * @param[in] default_value Returned if key not found
- * @return Stored float or `default_value`
- */
 float EEPROM_ReadF32(EEPROM_t *eeprom, uint32_t key, float default_value);
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------- Cache
 
+// The `EEPROM_...` API on one instance registered with `CACHE_Init`,
+// `ERR` or the default before that
 status_t CACHE_Init(EEPROM_t *eeprom);
 status_t CACHE_Clear(void);
 status_t CACHE_Write(uint32_t key, uint32_t value);

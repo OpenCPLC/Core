@@ -3,94 +3,63 @@
 #ifndef HEAP_H_
 #define HEAP_H_
 
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
+#include <stddef.h>
 #include "main.h"
 
 //------------------------------------------------------------------------------------------ Config
 
 #ifndef HEAP_SIZE
-  // Heap memory region size in bytes
+  // Heap memory region [B]
   #define HEAP_SIZE 8192
 #endif
 
 #ifndef HEAP_ALIGN
-  // Allocation alignment in bytes
+  // Allocation alignment [B]
   #define HEAP_ALIGN 8
+#endif
+
+#ifndef HEAP_NEW_BLOCK
+  // Initial capacity and growth step of a thread's garbage collector list [pointers]
+  #define HEAP_NEW_BLOCK 16
 #endif
 
 //--------------------------------------------------------------------------------------- Allocator
 
-/**
- * @brief Heap memory block header.
- * The payload starts one header past the block, so the header size decides the
- * alignment every allocation gets. Aligned to `HEAP_ALIGN` for that reason: on a
- * 32-bit target the fields alone come to 12 bytes and would hand out 4-aligned memory.
- * @param size Size of data area in bytes (excluding header)
- * @param next Pointer to next block in `FreeList`
- * @param free `true` if free, `false` if allocated
- */
-typedef struct heap_block {
-  size_t size;
-  struct heap_block *next;
-  bool free;
-} __attribute__((aligned(HEAP_ALIGN))) heap_block_t;
-
-_Static_assert(sizeof(heap_block_t) % HEAP_ALIGN == 0, "header breaks payload alignment");
-
-// Initialize heap. Call once before `heap_alloc()`
+// Initialize heap, call once before `heap_alloc`
 void heap_init(void);
 
 /**
- * @brief Allocate a memory block from the heap.
- * @param[in] size Number of bytes to allocate
- * @return Pointer to allocated memory, or `NULL` if unavailable
+ * @brief Allocate a block. A full heap is a `vrts_panic`, never a `NULL`.
+ * @param[in] size Number of bytes
+ * @return Pointer to the block, aligned to `HEAP_ALIGN`
  */
 void *heap_alloc(size_t size);
 
 /**
- * @brief Reallocate (resize) an existing heap block.
- * @param[in] ptr Pointer returned by `heap_alloc()`, or `NULL`
- * @param[in] size New size in bytes (0 = free)
- * @return Pointer to resized block, or `NULL` if allocation failed
+ * @brief Resize a block, the content is kept.
+ * @param[in] ptr Pointer from `heap_alloc`, `NULL` allocates
+ * @param[in] size New size [B], `0` frees
+ * @return Pointer to the resized block, `NULL` after a free
  */
 void *heap_reloc(void *ptr, size_t size);
 
 /**
- * @brief Free a previously allocated memory block.
- * @param[in] ptr Pointer returned by `heap_alloc()`, or `NULL`
+ * @brief Release a block.
+ * @param[in] ptr Pointer from `heap_alloc`, `NULL` is ignored
  */
 void heap_free(void *ptr);
 
-//------------------------------------------------------------------------------- Garbage-collector
-
-#ifndef HEAP_NEW_BLOCK
-  // Initial and growth step for GC stack capacity
-  #define HEAP_NEW_BLOCK 16
-#endif
+//------------------------------------------------------------------------------- Garbage collector
 
 /**
- * @brief Memory stack for garbage collector, one per thread.
- * @param var Pointers to dynamically allocated variables
- * @param count Current number of variables in use
- * @param limit Current allocated capacity of `var` (auto-expands)
- */
-typedef struct {
-  void **var;
-  uint16_t count;
-  uint16_t limit;
-} heap_new_t;
-
-/**
- * @brief Allocate memory tracked by the garbage collector.
- * @param[in] size Number of bytes to allocate
- * @return Pointer to allocated memory, or `NULL` if allocation failed
+ * @brief Allocate a block owned by the calling thread's garbage collector.
+ *   Every block taken this way goes back with the next `heap_clear` of that thread.
+ * @param[in] size Number of bytes, `0` returns `NULL`
+ * @return Pointer to the block, `NULL` when the collector list cannot grow
  */
 void *heap_new(size_t size);
 
-// Free all GC-tracked memory for the active thread
+// Release every `heap_new` block of the calling thread
 void heap_clear(void);
 
 //-------------------------------------------------------------------------------------------------

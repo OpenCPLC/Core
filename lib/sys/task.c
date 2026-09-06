@@ -1,9 +1,10 @@
 // lib/sys/task.c
 
 #include "task.h"
+
 #include "log.h"
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------- Queue
 
 static bool task_equal(const void *a, const void *b)
 {
@@ -21,7 +22,7 @@ static int task_compare(const void *a, const void *b)
 
 static QUEUE_New(task_queue, TASK_t, TASK_LIMIT, task_equal, task_compare);
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- API
 
 // `QUEUE_Push` refuses a full queue and a key already waiting, the caller sees one `false`
 static inline void task_rejected(void)

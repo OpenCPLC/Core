@@ -7,7 +7,9 @@
 #include <stdbool.h>
 #include "xdef.h"
 
-//----------------------------------------------------------------------- RCC: Clock Enable (stubs)
+//------------------------------------------------------------------------------- RCC: Clock Enable
+
+// No clock tree off-target, every enable is accepted
 
 static inline void RCC_EnableTIM(void *tim) { unused(tim); }
 static inline void RCC_EnableGPIO(void *gpio) { unused(gpio); }
@@ -18,31 +20,28 @@ static inline void RCC_DisableI2C(void *i2c) { unused(i2c); }
 static inline void RCC_EnableSPI(void *spi) { unused(spi); }
 static inline void RCC_EnableDMA(void *dma) { unused(dma); }
 static inline void RCC_EnableUSB(void) {}
+static inline void RCC_EnableCRC(void) {}
+static inline void RCC_EnableRNG(void) {}
 
-//----------------------------------------------------------------------- RCC: System Clock (stubs)
+//------------------------------------------------------------------------------- RCC: System Clock
 
-static inline uint32_t RCC_GetClock(void) { return 64000000; } // Fake 64MHz
+// The clock a host pretends to run at, the target default
+#define HOST_CLOCK_Hz 64000000u
+
+static inline uint32_t RCC_GetClock(void) { return HOST_CLOCK_Hz; }
 static inline uint32_t RCC_SetHSE(uint32_t xtal_Hz) { return xtal_Hz; }
 static inline uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
 {
   unused(m); unused(n); unused(r);
-  return hse_Hz ? hse_Hz : 64000000;
+  return hse_Hz ? hse_Hz : HOST_CLOCK_Hz;
 }
 
 static inline uint32_t RCC_2MHz(void) { return 2000000; }
 static inline uint32_t RCC_16MHz(void) { return 16000000; }
 static inline uint32_t RCC_48MHz(void) { return 48000000; }
-static inline uint32_t RCC_64MHz(void) { return 64000000; }
+static inline uint32_t RCC_64MHz(void) { return HOST_CLOCK_Hz; }
 
-//-------------------------------------------------------------------------------- PWR: Sleep modes
-
-/**
- * @brief Store program path for PWR_Reset()
- * @param argc Argument count from main()
- * @param argv Argument vector from main()
- * @note Call at start of main() to enable restart functionality
- */
-void PWR_StoreArgs(int argc, char **argv);
+//--------------------------------------------------------------------------------------------- PWR
 
 typedef enum {
   PWR_SleepMode_Stop0 = 0,
@@ -59,7 +58,6 @@ typedef enum {
   PWR_Edge_Falling = 1
 } PWR_Edge_t;
 
-// Wakeup pins (stub enum for API compatibility)
 typedef enum {
   PWR_Wakeup_0 = 0,
   PWR_Wakeup_1 = 1,
@@ -69,28 +67,37 @@ typedef enum {
   PWR_Wakeup_5 = 5
 } PWR_WakeupPin_t;
 
-/**
- * @brief Reset (restart) the application
- * @note On host: restarts the process using execv()
- */
-void PWR_Reset(void);
+typedef enum {
+  PWR_Wakeup_Pin1 = (1 << 0),
+  PWR_Wakeup_Pin2 = (1 << 1),
+  PWR_Wakeup_Pin3 = (1 << 2),
+  PWR_Wakeup_Pin4 = (1 << 3),
+  PWR_Wakeup_Pin5 = (1 << 4)
+} PWR_Wakeup_t;
 
-/**
- * @brief Enter sleep mode (exit application)
- * @param mode Sleep mode (determines exit code)
- * @note On host: calls exit() with mode as exit code
- */
+// Program path and arguments, so `PWR_Reset` can restart the process; call from `main`
+void PWR_StoreArgs(int argc, char **argv);
+
+// Reset ends the process, sleep too: a message names the mode first
+void PWR_Reset(void);
 void PWR_Sleep(PWR_SleepMode_t mode);
 
-/**
- * @brief Set wakeup pin (stub, does nothing on host)
- */
 static inline void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
 {
   unused(pin); unused(edge);
 }
 
-//---------------------------------------------------- PWR: Backup registers (RAM-based simulation)
+// No power domain to leave on host, the request is refused
+static inline status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
+{
+  unused(wakeup_mask);
+  unused(falling_mask);
+  return ERR;
+}
+
+//-------------------------------------------------------------------------------------------- BKPR
+
+// Backup registers in RAM, lost with the process
 
 typedef enum {
   BKPR_0 = 0, BKPR_1, BKPR_2, BKPR_3, BKPR_4
@@ -102,7 +109,9 @@ uint32_t BKPR_Read(BKPR_t reg);
 // No backup domain on host, reset is a no-op
 static inline void BKP_DomainReset(void) {}
 
-//-------------------------------------------------------------------------- IWDG: Watchdog (stubs)
+//-------------------------------------------------------------------------------------------- IWDG
+
+// No watchdog off-target, a refresh is accepted and never awaited
 
 typedef enum {
   IWDG_Time_125us = 0,
@@ -123,33 +132,7 @@ static inline void IWDG_Init_ms(uint32_t timeout_ms) { unused(timeout_ms); }
 static inline void IWDG_Refresh(void) {}
 static inline bool IWDG_WasReset(void) { return false; }
 
-typedef enum {
-  PWR_Wakeup_Pin1 = (1 << 0),
-  PWR_Wakeup_Pin2 = (1 << 1),
-  PWR_Wakeup_Pin3 = (1 << 2),
-  PWR_Wakeup_Pin4 = (1 << 3),
-  PWR_Wakeup_Pin5 = (1 << 4)
-} PWR_Wakeup_t;
-
-typedef enum {
-  PWR_BOR_1V7 = 0,
-  PWR_BOR_2V0 = 1,
-  PWR_BOR_2V2 = 2,
-  PWR_BOR_2V5 = 3,
-  PWR_BOR_2V9 = 4
-} PWR_BOR_t;
-
-static inline void PWR_SetBOR(PWR_BOR_t level) { unused(level); }
-
-// No power domain to leave on host, the request is refused
-static inline status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
-{
-  unused(wakeup_mask);
-  unused(falling_mask);
-  return ERR;
-}
-
-//-------------------------------------------------------------------- BOR: Brown-Out Reset (stubs)
+//--------------------------------------------------------------------------------------------- BOR
 
 // No supply rail to guard on host, BOR is a no-op
 typedef enum {
@@ -165,5 +148,4 @@ static inline status_t BOR_SetLevel(BOR_Level_t level) { unused(level); return O
 static inline bool BOR_WasReset(void) { return false; }
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

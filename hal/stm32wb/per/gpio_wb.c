@@ -36,7 +36,7 @@ void GPIO_BackendWakeup(GPIO_t *gpio)
 
 //---------------------------------------------------------------------------------------- EXTI IRQ
 
-static void EXTI_IRQHandler(EXTI_t *exti)
+static void exti_irq_handler(EXTI_t *exti)
 {
   uint32_t mask = 1u << exti->pin;
   // WB has combined pending register PR1
@@ -108,7 +108,7 @@ void EXTI_Init(EXTI_t *exti)
   if(exti->irq_enable) EXTI_On(exti);
   else EXTI_Off(exti);
   // IRQ - WB has subpriority
-  IRQ_EnableEXTI(exti->pin, exti->irq_priority, (IRQ_Handler_t)EXTI_IRQHandler, exti);
+  IRQ_EnableEXTI(exti->pin, exti->irq_priority, (IRQ_Handler_t)exti_irq_handler, exti);
 }
 
 uint16_t EXTI_Events(EXTI_t *exti)

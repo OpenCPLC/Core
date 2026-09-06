@@ -3,43 +3,43 @@
 #ifndef DOUT_H_
 #define DOUT_H_
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "eeprom.h"
 #include "pwm.h"
 #include "main.h"
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef DOUT_RELAY_STUN_ms
-  /** Safety delay [ms] to prevent relay over-switching */
+  // Shortest state a relay may hold [ms], guards the contacts against chatter
   #define DOUT_RELAY_STUN_ms 200
 #endif
 
-#ifndef DOUT_BASH_LIMIT
-  /** Enable bash for DOUT, max outputs */
-  #define DOUT_BASH_LIMIT 0
-#endif
+//--------------------------------------------------------------------------------------- Structure
 
 /**
- * @brief Digital output descriptor
- * @param[in] relay Specifies if the output is relay-type (RO)
- * @param[in] name Display name used in `bash` queries
- * @param[in] gpio Reference to `GPIO_t`; fields `port` and `pin` must be configured
- * @param[in] pwm Pointer to `PWM_t` controller
- * @param[in] channel Channel of the `PWM_t` controller assigned to this output
- * @param[in] eeprom Pointer to `EEPROM_t` for non-volatile storage of the output value
- * @param[in] save Indicates whether the output state should be retained after reset
- * @param[out] value Output duty cycle [%]; should be set via `DOUT_Set()`
- * @param[out] cycles Total number of relay switching cycles
- * @param stun Internal timestamp guard that temporarily freezes output activity
- * @param ton_ms Internal storage of TON (on-time) used by `DOUT_Pulse`
- * @param toff_ms Internal storage of TOFF (off-time) used by `DOUT_Pulse`
- * @param pulse Internal counter of remaining pulses in a pulse sequence
+ * @brief Digital output: a relay (RO), a transistor (TO) or a triac (XO).
+ *   A relay drives its own pin, the others share a `PWM_t` timer and take one channel of it.
+ * @param[in] relay Relay output, switching cycles are counted
+ * @param[in] name Name shown in the shell
+ * @param[in] gpio Pin of a relay output, `port` and `pin` set by the board
+ * @param[in] pwm PWM timer of a transistor or triac output
+ * @param[in] channel Channel of `pwm` this output takes
+ * @param[in] eeprom Store of the retained state, `NULL` = nothing retained
+ * @param[in,out] save Retain `value` across resets, kept in `eeprom` itself
+ * @param[out] value Level of a relay, compare value of a PWM channel; set through the API
+ * @param[out] cycles Switching cycles of a relay, retained in `eeprom`
+ * Internal:
+ * @param _stun Deadline until which the output holds its state
+ * @param _ton_ms On time of the pulse sequence [ms]
+ * @param _toff_ms Off time of the pulse sequence [ms]
+ * @param _last_ms Off time after the last pulse [ms]
+ * @param _pulse Half-periods left in the pulse sequence
  */
 typedef struct {
   bool relay;
-  char *name;
+  const char *name;
   GPIO_t gpio;
   PWM_t *pwm;
   TIM_Channel_t channel;
@@ -47,35 +47,89 @@ typedef struct {
   uint32_t save;
   uint32_t value;
   uint32_t cycles;
-  uint64_t stun;
-  uint16_t ton_ms;
-  uint16_t toff_ms;
-  uint16_t last_ms;
-  uint8_t pulse;
+  // internal
+  uint64_t _stun;
+  uint16_t _ton_ms;
+  uint16_t _toff_ms;
+  uint16_t _last_ms;
+  uint8_t _pulse;
 } DOUT_t;
 
+//--------------------------------------------------------------------------------------------- API
+
+/**
+ * @brief Restore the retained state and configure the pin of a relay.
+ *   The `PWM_t` of a transistor or triac output is initialized by the board.
+ * @param[in,out] dout Digital output
+ */
 void DOUT_Init(DOUT_t *dout);
+
+/**
+ * @brief Apply the requested level and run the pulse sequence, every main loop pass.
+ * @param[in,out] dout Digital output
+ */
 void DOUT_Loop(DOUT_t *dout);
 
+/**
+ * @brief PWM frequency of the timer behind the output.
+ * @param[in] dout Digital output
+ * @return Frequency [Hz], `0` for a relay
+ */
 float DOUT_GetFrequency(const DOUT_t *dout);
+
+/**
+ * @brief Retune the timer behind the output, every output sharing it follows.
+ * @param[in,out] dout Digital output
+ * @param[in] frequency Target frequency [Hz]
+ * @return Frequency applied [Hz], `0` for a relay
+ */
 float DOUT_Frequency(DOUT_t *dout, float frequency);
+
+/**
+ * @brief Duty of the PWM channel behind the output.
+ * @param[in] dout Digital output
+ * @return Duty [%], `NaN` for a relay
+ */
 float DOUT_GetDuty(const DOUT_t *dout);
+
+/**
+ * @brief Set the duty of the PWM channel, retained when `save` is on.
+ * @param[in,out] dout Digital output
+ * @param[in] duty Duty [%], `0..100`
+ * @return Duty applied [%], `NaN` for a relay
+ */
 float DOUT_Duty(DOUT_t *dout, float duty);
+
+// Level requested of the output, applied by `DOUT_Loop`; `Preset` picks `Set` or `Rst`
 void DOUT_Set(DOUT_t *dout);
 void DOUT_Rst(DOUT_t *dout);
 void DOUT_Tgl(DOUT_t *dout);
 void DOUT_Preset(DOUT_t *dout, bool value);
+
+/**
+ * @brief Start a pulse sequence, the output returns to `value` after it.
+ *   A relay refuses times below `DOUT_RELAY_STUN_ms`.
+ * @param[in,out] dout Digital output
+ * @param[in] count Pulses, at most `127`
+ * @param[in] ton_ms On time [ms]
+ * @param[in] toff_ms Off time [ms]
+ * @param[in] freeze_ms Extra off time after the last pulse [ms]
+ * @return `true` when started, `false` while a sequence runs or the arguments are refused
+ */
 bool DOUT_Pulse(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms);
 bool DOUT_PulseFreeze(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms,
   uint16_t freeze_ms);
-bool DOUT_State(const DOUT_t *dout);
-bool DOUT_IsPulse(DOUT_t *dout);
-void DOUT_SaveValue(DOUT_t *dout, bool save);
 
-#if(DOUT_BASH_LIMIT)
-  void DOUT_Bash_Add(DOUT_t *dout);
-  void DOUT_Bash(char **argv, uint16_t argc);
-#endif
+// Level at the pin now, and whether a pulse sequence runs
+bool DOUT_State(const DOUT_t *dout);
+bool DOUT_IsPulse(const DOUT_t *dout);
+
+/**
+ * @brief Retain `value` across resets, the choice itself is retained too.
+ * @param[in,out] dout Digital output
+ * @param[in] save Retain
+ */
+void DOUT_SaveValue(DOUT_t *dout, bool save);
 
 //-------------------------------------------------------------------------------------------------
 #endif

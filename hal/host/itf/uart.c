@@ -1,6 +1,7 @@
 // hal/host/itf/uart.c
 
 #include "uart.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -17,29 +18,29 @@
 //----------------------------------------------------------------------------------- Console setup
 #if defined(_WIN32) || defined(_WIN64)
 
-static HANDLE hStdin;
+static HANDLE stdin_handle;
 static DWORD orig_mode;
 
-static void UART_InitConsole(void)
+static void console_init(void)
 {
-  hStdin = GetStdHandle(STD_INPUT_HANDLE);
-  GetConsoleMode(hStdin, &orig_mode);
-  SetConsoleMode(hStdin, orig_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT));
+  stdin_handle = GetStdHandle(STD_INPUT_HANDLE);
+  GetConsoleMode(stdin_handle, &orig_mode);
+  SetConsoleMode(stdin_handle, orig_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT));
 }
 
-static void UART_DeinitConsole(void)
+static void console_deinit(void)
 {
-  SetConsoleMode(hStdin, orig_mode);
+  SetConsoleMode(stdin_handle, orig_mode);
 }
 
 static int console_kbhit(void) { return _kbhit(); }
 static int console_getch(void) { return _getch(); }
 
-#else //------------------------------------------------------------------------------- Linux
+#else
 
 static struct termios orig_termios;
 
-static void UART_InitConsole(void)
+static void console_init(void)
 {
   struct termios raw;
   tcgetattr(STDIN_FILENO, &orig_termios);
@@ -51,7 +52,7 @@ static void UART_InitConsole(void)
   fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL) | O_NONBLOCK);
 }
 
-static void UART_DeinitConsole(void)
+static void console_deinit(void)
 {
   tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios);
 }
@@ -95,7 +96,7 @@ status_t UART_Init(UART_t *uart)
 {
   if(!uart->buff) return ERR;
   BUFF_Init(uart->buff);
-  UART_InitConsole();
+  console_init();
   uart->_init = true;
   return OK;
 }
@@ -103,7 +104,7 @@ status_t UART_Init(UART_t *uart)
 void UART_DeInit(UART_t *uart)
 {
   if(!uart->_init) return;
-  UART_DeinitConsole();
+  console_deinit();
   uart->_init = false;
 }
 
@@ -124,7 +125,7 @@ bool UART_IsFree(UART_t *uart) { return !uart->_tx_busy; }
 
 //-------------------------------------------------------------------------------------------- Send
 
-status_t UART_Send(UART_t *uart, uint8_t *data, uint16_t len)
+status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len)
 {
   if(!uart->_init) return ERR;
   if(uart->_tx_busy) return BUSY;
@@ -160,6 +161,7 @@ bool UART_Skip(UART_t *uart)
   console_drain(uart);
   return BUFF_Skip(uart->buff);
 }
+
 void UART_Clear(UART_t *uart) { BUFF_Clear(uart->buff); }
 
 // Frames waiting in the RX queue, the count `MODBUS_Loop` polls

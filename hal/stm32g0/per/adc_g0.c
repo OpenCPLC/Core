@@ -1,11 +1,14 @@
 // hal/stm32g0/per/adc_g0.c
 
 #include "adc.h"
+
 #include "dma.h"
 
-//------------------------------------------------------------------------------------------- Const
+//------------------------------------------------------------------------------------------ Tables
 
 const uint16_t ADC_PRESCALER_TAB[] = { 1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256 };
+const uint16_t ADC_SAMPLING_TIME_TAB[] = { 14, 16, 20, 25, 32, 52, 92, 173 };
+const uint16_t ADC_OVERSAMPLING_RATIO_TAB[] = { 2, 4, 8, 16, 32, 64, 128, 256 };
 
 uint32_t ADC_Frequency_Hz(ADC_t *adc)
 {
@@ -17,10 +20,8 @@ uint32_t ADC_Frequency_Hz(ADC_t *adc)
   }
   return base / ADC_PRESCALER_TAB[adc->prescaler];
 }
-const uint16_t ADC_SAMPLING_TIME_TAB[] = { 14, 16, 20, 25, 32, 52, 92, 173 };
-const uint16_t ADC_OVERSAMPLING_RATIO_TAB[] = { 2, 4, 8, 16, 32, 64, 128, 256 };
 
-//------------------------------------------------------------------------------------------- Setup
+//---------------------------------------------------------------------------------------- Internal
 
 // Up to 8 channels (numbers 0..14) go through the configurable sequencer,
 // which preserves the order of the `cha` list;
@@ -31,7 +32,7 @@ const uint16_t ADC_OVERSAMPLING_RATIO_TAB[] = { 2, 4, 8, 16, 32, 64, 128, 256 };
 // applies on its own `CCRDY` handshake:
 // one for a `CHSELRMOD` change (raised only when the bit really changes),
 // and one for the `CHSELR` write, so a conversion started right after is reliable
-static void ADC_SetChannels(ADC_t *adc, uint8_t *cha, uint8_t count, uint8_t pad)
+static void set_channels(ADC_t *adc, uint8_t *cha, uint8_t count, uint8_t pad)
 {
   bool seq = count + pad <= 8;
   for(uint8_t i = 0; i < count && seq; i++) {
@@ -65,7 +66,7 @@ static void ADC_SetChannels(ADC_t *adc, uint8_t *cha, uint8_t count, uint8_t pad
   }
 }
 
-static void ADC_SetOversampling(ADC_t *adc, ADC_Oversampling_t *ovs)
+static void set_oversampling(ADC_t *adc, ADC_Oversampling_t *ovs)
 {
   adc->reg->CFGR2 =
     (ovs->shift << ADC_CFGR2_OVSS_Pos) |
@@ -109,7 +110,7 @@ void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
 // alignment of everything that follows, so the run is aborted and counted instead of limping
 // on with shifted data. Restart policy belongs to the application: it alone knows whether
 // a gap in the stream is acceptable
-static void ADC_IRQHandler(ADC_t *adc)
+static void irq_handler(ADC_t *adc)
 {
   if(adc->reg->ISR & ADC_ISR_OVR) {
     adc->reg->ISR = ADC_ISR_OVR;
@@ -124,7 +125,7 @@ static void ADC_IRQHandler(ADC_t *adc)
 }
 
 #if(ADC_RECORD)
-static void ADC_DMA_IRQHandler(ADC_t *adc)
+static void dma_handler(ADC_t *adc)
 {
   uint32_t isr = adc->record._dma.reg->ISR;
   uint8_t pos = adc->record._dma.pos;
@@ -196,9 +197,9 @@ status_t ADC_Measure(ADC_t *adc)
   if(adc->_busy) return BUSY;
   adc->_busy = ADC_State_Measure;
   adc->measure._active = 0;
-  ADC_SetOversampling(adc, &adc->measure.oversampling);
+  set_oversampling(adc, &adc->measure.oversampling);
   adc->reg->SMPR = adc->measure.sampling_time;
-  ADC_SetChannels(adc, adc->measure.chan, adc->measure.chan_count, 0);
+  set_channels(adc, adc->measure.chan, adc->measure.chan_count, 0);
   // Single-shot by nature: the sequence ends on its own after the last channel,
   // which keeps the data rate at the interrupt's pace instead of racing a free-running ADC
   adc->reg->CFGR1 &= ~(ADC_CFGR1_EXTEN | ADC_CFGR1_CONT);
@@ -215,13 +216,13 @@ status_t ADC_Record(ADC_t *adc)
 {
   if(adc->_busy) return BUSY;
   adc->_busy = ADC_State_Record;
-  ADC_SetOversampling(adc, &adc->record.oversampling);
+  set_oversampling(adc, &adc->record.oversampling);
   adc->reg->SMPR = adc->record.sampling_time;
   // Sequencer + oversampling errata: pad multi-channel scans with one sacrificial
   // conversion, matching the buffer layout `adc_scan_len` promises the application
   adc->record._pad = (uint8_t)(adc_scan_len(adc->record.chan_count,
     adc->record.oversampling.enable) - adc->record.chan_count);
-  ADC_SetChannels(adc, adc->record.chan, adc->record.chan_count, adc->record._pad);
+  set_channels(adc, adc->record.chan, adc->record.chan_count, adc->record._pad);
   adc->record._dma.cha->CCR &= ~DMA_CCR_EN;
   adc->record._dma.cha->CMAR = (uint32_t)adc->record.buff;
   adc->record._dma.cha->CNDTR = adc->record.buff_len;
@@ -282,7 +283,7 @@ void ADC_Init(ADC_t *adc)
     adc->record._dma.cha->CPAR = (uint32_t)&adc->reg->DR;
     adc->record._dma.cha->CCR = DMA_CCR_MINC | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0;
     adc->reg->CFGR1 |= ADC_CFGR1_DMAEN | ADC_CFGR1_DMACFG;
-    IRQ_EnableDMA(adc->record.dma, adc->irq_priority, (IRQ_Handler_t)ADC_DMA_IRQHandler, adc);
+    IRQ_EnableDMA(adc->record.dma, adc->irq_priority, (IRQ_Handler_t)dma_handler, adc);
   }
   #endif
   ADC_InitGPIO(adc, adc->measure.chan, adc->measure.chan_count);
@@ -292,7 +293,7 @@ void ADC_Init(ADC_t *adc)
   }
   #endif
   adc->reg->IER |= ADC_IER_OVRIE;
-  IRQ_EnableADC(adc->irq_priority, (IRQ_Handler_t)ADC_IRQHandler, adc);
+  IRQ_EnableADC(adc->irq_priority, (IRQ_Handler_t)irq_handler, adc);
   ADC_Enable(adc);
 }
 

@@ -1,17 +1,16 @@
 // hal/host/sys/dma.h
 
-// Contract of the DMA controller a host build compiles against: the types, enums, fields and
-// prototypes firmware is written to. Implementations are inert - a host has no DMA controller.
+// Contract of the DMA controller a host build compiles against: the types, enums, fields
+// and prototypes firmware is written to. Implementations are inert, a host has no DMA.
 
 #ifndef DMA_H_
 #define DMA_H_
 
-#include <stdint.h>
 #include <stdbool.h>
-
+#include <stdint.h>
 #include "device.h"
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------- Types
 
 // Channel a peripheral is wired to. `DMA_None` leaves the peripheral unwired
 typedef enum {
@@ -43,14 +42,13 @@ typedef struct {
 
 /**
  * @brief Resolve a channel selector to its register set.
- * @param[out] dma Descriptor to fill
  * @param[in] channel Channel selector
+ * @param[out] dma Descriptor to fill
  */
-void DMA_SetRegisters(DMA_t *dma, DMA_CHx_t channel);
+void DMA_SetRegisters(DMA_CHx_t channel, DMA_t *dma);
 
 // Drop the transfer flags of a channel
 void DMA_ClearFlags(DMA_t *dma);
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

@@ -1,7 +1,9 @@
 // hal/host/sys/vrts.c
 
 #include "vrts.h"
+
 #include <stdio.h>
+#include "xdef.h"
 
 #if defined(_WIN32) || defined(_WIN64)
   #include <windows.h>
@@ -29,7 +31,7 @@ __attribute__((weak)) void vrts_panic(const char *msg)
 //----------------------------------------------------------------------------------------- Globals
 
 volatile uint64_t VrtsTicker;
-bool VrtsVirtualTime = false;
+bool VrtsVirtualTime;
 static uint32_t tick_ms = 1;
 static uint64_t start_time_ms;
 
@@ -38,14 +40,14 @@ static uint64_t start_time_ms;
 static uint64_t time_ms_get(void)
 {
   #if defined(_WIN32) || defined(_WIN64)
-    FILETIME ft;
-    GetSystemTimeAsFileTime(&ft);
-    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-    return t / 10000;
+  FILETIME ft;
+  GetSystemTimeAsFileTime(&ft);
+  uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+  return t / 10000;
   #else
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
   #endif
 }
 
@@ -67,13 +69,13 @@ static inline uint64_t vrts_ticker_get(void)
 static struct {
   void (*handlers[VRTS_THREAD_LIMIT])(void);
   #if defined(_WIN32) || defined(_WIN64)
-    HANDLE threads[VRTS_THREAD_LIMIT];
-    CRITICAL_SECTION lock;
-    CONDITION_VARIABLE turn;
+  HANDLE threads[VRTS_THREAD_LIMIT];
+  CRITICAL_SECTION lock;
+  CONDITION_VARIABLE turn;
   #else
-    pthread_t threads[VRTS_THREAD_LIMIT];
-    pthread_mutex_t lock;
-    pthread_cond_t turn;
+  pthread_t threads[VRTS_THREAD_LIMIT];
+  pthread_mutex_t lock;
+  pthread_cond_t turn;
   #endif
   uint32_t count;
   volatile uint32_t owner;
@@ -88,18 +90,18 @@ static __thread uint32_t vrts_me;
 static void sched_lock(void)
 {
   #if defined(_WIN32) || defined(_WIN64)
-    EnterCriticalSection(&vrts.lock);
+  EnterCriticalSection(&vrts.lock);
   #else
-    pthread_mutex_lock(&vrts.lock);
+  pthread_mutex_lock(&vrts.lock);
   #endif
 }
 
 static void sched_unlock(void)
 {
   #if defined(_WIN32) || defined(_WIN64)
-    LeaveCriticalSection(&vrts.lock);
+  LeaveCriticalSection(&vrts.lock);
   #else
-    pthread_mutex_unlock(&vrts.lock);
+  pthread_mutex_unlock(&vrts.lock);
   #endif
 }
 
@@ -107,9 +109,9 @@ static void sched_wait_turn(void)
 {
   while(vrts.owner != vrts_me) {
     #if defined(_WIN32) || defined(_WIN64)
-      SleepConditionVariableCS(&vrts.turn, &vrts.lock, INFINITE);
+    SleepConditionVariableCS(&vrts.turn, &vrts.lock, INFINITE);
     #else
-      pthread_cond_wait(&vrts.turn, &vrts.lock);
+    pthread_cond_wait(&vrts.turn, &vrts.lock);
     #endif
   }
 }
@@ -117,9 +119,9 @@ static void sched_wait_turn(void)
 static void sched_wake(void)
 {
   #if defined(_WIN32) || defined(_WIN64)
-    WakeAllConditionVariable(&vrts.turn);
+  WakeAllConditionVariable(&vrts.turn);
   #else
-    pthread_cond_broadcast(&vrts.turn);
+  pthread_cond_broadcast(&vrts.turn);
   #endif
 }
 
@@ -128,9 +130,9 @@ static void sched_wake(void)
 static void sched_idle(void)
 {
   #if defined(_WIN32) || defined(_WIN64)
-    Sleep(1);
+  Sleep(1);
   #else
-    usleep(1000);
+  usleep(1000);
   #endif
 }
 
@@ -148,15 +150,15 @@ static void *vrts_wrapper(void *param)
   // Landing pad for a handler that returns, same as the target
   while(1) let();
   #if defined(_WIN32) || defined(_WIN64)
-    return 0;
+  return 0;
   #else
-    return NULL;
+  return NULL;
   #endif
 }
 
 bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
 {
-  (void)stack; (void)size;
+  unused(stack); unused(size);
   if(!handler) return false;
   if(vrts.count >= VRTS_THREAD_LIMIT) return false;
   vrts.handlers[vrts.count] = handler;
@@ -168,11 +170,11 @@ void vrts_init(void)
 {
   if(!vrts.count) return;
   #if defined(_WIN32) || defined(_WIN64)
-    InitializeCriticalSection(&vrts.lock);
-    InitializeConditionVariable(&vrts.turn);
+  InitializeCriticalSection(&vrts.lock);
+  InitializeConditionVariable(&vrts.turn);
   #else
-    pthread_mutex_init(&vrts.lock, NULL);
-    pthread_cond_init(&vrts.turn, NULL);
+  pthread_mutex_init(&vrts.lock, NULL);
+  pthread_cond_init(&vrts.turn, NULL);
   #endif
   vrts_me = 0;
   vrts.owner = 0;
@@ -181,12 +183,12 @@ void vrts_init(void)
   // Threads start blocked: the baton is with index `0`, which is this one
   for(uint32_t i = 1; i < vrts.count; i++) {
     #if defined(_WIN32) || defined(_WIN64)
-      vrts.threads[i] = CreateThread(NULL, 0, vrts_wrapper, (LPVOID)(uintptr_t)i, 0, NULL);
-      if(!vrts.threads[i]) vrts_panic("thread create failed");
+    vrts.threads[i] = CreateThread(NULL, 0, vrts_wrapper, (LPVOID)(uintptr_t)i, 0, NULL);
+    if(!vrts.threads[i]) vrts_panic("thread create failed");
     #else
-      if(pthread_create(&vrts.threads[i], NULL, vrts_wrapper, (void *)(uintptr_t)i)) {
-        vrts_panic("thread create failed");
-      }
+    if(pthread_create(&vrts.threads[i], NULL, vrts_wrapper, (void *)(uintptr_t)i)) {
+      vrts_panic("thread create failed");
+    }
     #endif
   }
   // Does not return, matching the target
@@ -231,7 +233,7 @@ uint8_t vrts_active_thread(void)
 
 bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
 {
-  (void)handler; (void)stack; (void)size;
+  unused(handler); unused(stack); unused(size);
   return false;
 }
 
@@ -283,9 +285,9 @@ void delay(uint32_t ms)
 void sleep(uint32_t ms)
 {
   #if defined(_WIN32) || defined(_WIN64)
-    Sleep(ms);
+  Sleep(ms);
   #else
-    usleep(ms * 1000);
+  usleep(ms * 1000);
   #endif
 }
 
