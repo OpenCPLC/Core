@@ -1,4 +1,4 @@
-// dvr/sht4x.h
+// dvr/temp/sht4x.h
 
 #ifndef SHT4X_H_
 #define SHT4X_H_

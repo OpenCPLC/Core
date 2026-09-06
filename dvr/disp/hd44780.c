@@ -1,4 +1,4 @@
-// dvr/hd44780.c
+// dvr/disp/hd44780.c
 
 #include "hd44780.h"
 

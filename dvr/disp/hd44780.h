@@ -1,4 +1,4 @@
-// dvr/hd44780.h
+// dvr/disp/hd44780.h
 
 #ifndef HD44780_H_
 #define HD44780_H_

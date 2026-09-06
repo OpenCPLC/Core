@@ -1,4 +1,4 @@
-// dvr/sht4x.c
+// dvr/temp/sht4x.c
 
 #include "sht4x.h"
 

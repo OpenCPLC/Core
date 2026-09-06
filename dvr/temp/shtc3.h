@@ -1,4 +1,4 @@
-// dvr/shtc3.h
+// dvr/temp/shtc3.h
 
 #ifndef SHTC3_H_
 #define SHTC3_H_

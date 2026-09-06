@@ -1,4 +1,4 @@
-// dvr/max31865.c
+// dvr/temp/max31865.c
 
 #include "max31865.h"
 

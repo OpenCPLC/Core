@@ -1,4 +1,4 @@
-// dvr/shtc3.c
+// dvr/temp/shtc3.c
 
 #include "shtc3.h"
 
