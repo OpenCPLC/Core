@@ -5,12 +5,12 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include "flash.h"
 #include "xdef.h"
 #include "crc.h"
 #include "log.h"
 #include "main.h"
-#include <string.h>
 
 //------------------------------------------------------------------------------------------ Config
 

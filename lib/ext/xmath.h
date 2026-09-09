@@ -5,8 +5,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "xdef.h"
 #include <string.h>
+#include "xdef.h"
 
 //----------------------------------------------------------------------------------------- Integer
 

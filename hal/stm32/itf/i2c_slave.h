@@ -3,11 +3,11 @@
 #ifndef I2C_SLAVE_H_
 #define I2C_SLAVE_H_
 
+#include <string.h>
 #include "irq.h"
 #include "i2c.h"
 #include "xdef.h"
 #include "main.h"
-#include <string.h>
 
 //--------------------------------------------------------------------------------------- Structure
 

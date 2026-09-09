@@ -4,8 +4,8 @@
 #define HEAP_H_
 
 #include <stddef.h>
-#include "main.h"
 #include <string.h>
+#include "main.h"
 
 //------------------------------------------------------------------------------------------ Config
 

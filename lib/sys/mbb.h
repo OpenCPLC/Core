@@ -9,8 +9,8 @@
 #include "rtc.h"
 #include "crc.h"
 #include "xdef.h"
-#include "main.h"
 #include "xstring.h"
+#include "main.h"
 
 //------------------------------------------------------------------------------------------ Config
 

@@ -3,13 +3,13 @@
 #ifndef I2C_MASTER_H_
 #define I2C_MASTER_H_
 
+#include <string.h>
 #include "irq.h"
 #include "dma.h"
 #include "pwr.h"
 #include "i2c.h"
 #include "xdef.h"
 #include "main.h"
-#include <string.h>
 
 //--------------------------------------------------------------------------------------- Constants
 
