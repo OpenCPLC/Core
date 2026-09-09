@@ -8,6 +8,7 @@
 #include "eeprom.h"
 #include "pwm.h"
 #include "main.h"
+#include "xstring.h"
 
 //------------------------------------------------------------------------------------------ Config
 

@@ -5,6 +5,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "main.h"
+#include <string.h>
 
 //------------------------------------------------------------------------------------------ Config
 

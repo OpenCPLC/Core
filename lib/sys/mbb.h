@@ -10,6 +10,7 @@
 #include "crc.h"
 #include "xdef.h"
 #include "main.h"
+#include "xstring.h"
 
 //------------------------------------------------------------------------------------------ Config
 

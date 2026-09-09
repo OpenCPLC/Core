@@ -10,6 +10,7 @@
 #include "crc.h"
 #include "log.h"
 #include "main.h"
+#include <string.h>
 
 //------------------------------------------------------------------------------------------ Config
 

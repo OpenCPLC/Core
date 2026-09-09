@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "vrts.h"
+#include "main.h"
 
 //----------------------------------------------------------------------------------- GPIF Defaults
 

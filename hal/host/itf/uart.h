@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "xdef.h"
 #include "buff.h"
+#include "main.h"
 
 //------------------------------------------------------------------------------------------ Config
 

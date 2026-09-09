@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
   #include <direct.h>

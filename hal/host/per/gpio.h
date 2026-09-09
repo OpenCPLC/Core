@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include "device.h"
 #include "irq.h"
+#include "main.h"
 
 //------------------------------------------------------------------------------------------ Config
 

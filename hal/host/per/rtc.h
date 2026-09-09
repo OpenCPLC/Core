@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "xdef.h"
+#include "main.h"
 
 //------------------------------------------------------------------------------------------ Config
 

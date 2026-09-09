@@ -7,6 +7,7 @@
 #include "i2c.h"
 #include "xdef.h"
 #include "main.h"
+#include <string.h>
 
 //--------------------------------------------------------------------------------------- Structure
 

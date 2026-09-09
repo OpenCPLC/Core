@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "xdef.h"
+#include "main.h"
 
 //------------------------------------------------------------------------------------------ Config
 

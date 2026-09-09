@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "xdef.h"
+#include <string.h>
 #if defined(STM32G0)
   #include "stm32g0xx.h"
 #elif defined(STM32WB)
