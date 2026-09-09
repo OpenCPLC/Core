@@ -3,31 +3,33 @@
 #ifndef I2C_SLAVE_H_
 #define I2C_SLAVE_H_
 
-#include <string.h>
 #include "irq.h"
 #include "i2c.h"
+#include "xdef.h"
 #include "main.h"
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------- Structure
 
 /**
- * @brief I2C slave control structure with register map interface.
- * @param[in] reg Pointer to I2C peripheral registers
- * @param[in] scl SCL pin mapping enum value
- * @param[in] sda SDA pin mapping enum value
+ * @brief I2C slave exposing a byte register map.
+ *   Every transaction starts at register `0`: the master writes or reads bytes upward,
+ *   `write_mask` guards each register and `update_flag` marks the ones a write changed.
+ * @param[in] reg I2C peripheral registers
+ * @param[in] scl SCL pin mapping
+ * @param[in] sda SDA pin mapping
  * @param[in] addr 7-bit slave address
- * @param[in,out] regmap Pointer to register map buffer
- * @param[in] write_mask Pointer to write permission mask (`true` = writable)
- * @param[out] update_flag Pointer to per-register update flags
- * @param[in] regmap_size Size of register map in bytes
- * @param[in] sequence Enable sequence mode (multi-byte with auto-increment)
+ * @param[in,out] regmap Register map
+ * @param[in] write_mask Per-register write permission, `true` = writable
+ * @param[out] update_flag Per-register flag set when the master changed the value
+ * @param[in] regmap_size Map size [B]
+ * @param[in] sequence Sequence mode with a register pointer, not implemented
  * @param[in] pull_up Enable internal pull-up resistors
  * @param[in] irq_priority Interrupt priority
- * @param[in] timing I2C `TIMINGR` register value
- * @param[in] filter Digital noise filter coefficient (0-15)
+ * @param[in] timing `TIMINGR` value, see the `I2C_TIMING_...` presets
+ * @param[in] filter Digital noise filter coefficient, `0..15`
  * Internal:
- * @param _updated Global update flag
- * @param _idx Current register index
+ * @param _updated Any register changed since `I2C_Slave_IsUpdate`
+ * @param _idx Register of the byte in flight
  */
 typedef struct {
   I2C_TypeDef *reg;
@@ -48,21 +50,20 @@ typedef struct {
   volatile uint16_t _idx;
 } I2C_Slave_t;
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Initialize I2C slave peripheral.
+ * @brief Initialize the peripheral, pins and interrupt.
  * @param[in,out] i2c Pointer to I2C slave structure
  */
 void I2C_Slave_Init(I2C_Slave_t *i2c);
 
 /**
- * @brief Check if register map was updated by master. Clears flag after reading.
+ * @brief Check if the master changed a register, the flag clears on read.
  * @param[in,out] i2c Pointer to I2C slave structure
  * @return `true` if any register was updated
  */
 bool I2C_Slave_IsUpdate(I2C_Slave_t *i2c);
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

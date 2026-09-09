@@ -2,7 +2,9 @@
 
 #include "pdb.h"
 
-//------------------------------------------------------------------------------------ Internal
+#include <string.h>
+
+//---------------------------------------------------------------------------------------- Internal
 
 static void _page_bounds(PDB_t *pdb, uint16_t page, uint32_t *start, uint32_t *end)
 {
@@ -19,7 +21,7 @@ static void _calc_bounds(PDB_t *pdb)
 static bool _slot_erased(uint32_t addr, uint16_t size)
 {
   for(uint16_t i = 0; i < size; i += 4) {
-    if(*(volatile uint32_t *)(addr + i) != 0xFFFFFFFF) return false;
+    if(*(volatile uint32_t *)(addr + i) != 0xFFFFFFFFu) return false;
   }
   return true;
 }
@@ -28,18 +30,19 @@ static bool _record_valid(PDB_t *pdb, uint32_t addr)
 {
   if(!pdb->crc) return true;
   uint16_t len = pdb->payload_size + pdb->crc->width / 8;
-  return CRC_Error(pdb->crc, (uint8_t *)addr, len) == OK;
+  return CRC_Error(pdb->crc, (const uint8_t *)addr, len) == OK;
 }
 
-// Scan page, locate slot after the last non-erased record. Bad-CRC slots are
-// silently skipped for torn-write recovery. They remain as garbage and get
-// filtered on read. Holes from failed writes are tolerated so the next insert
-// never lands in the middle of the log.
+// Scan page, locate slot after the last non-erased record.
+// Bad-CRC slots are silently skipped for torn-write recovery.
+// They remain as garbage and get filtered on read.
+// Holes from failed writes are tolerated,
+// so the next insert never lands in the middle of the log.
 static PDB_Status_t _scan_page(PDB_t *pdb, uint16_t page, uint32_t *cursor)
 {
   uint32_t start, end;
   _page_bounds(pdb, page, &start, &end);
-  uint32_t last_used = start; // Slot after last non-erased record.
+  uint32_t last_used = start; // slot after the last non-erased record
   uint16_t valid_count = 0;
   bool any_used = false;
   for(uint32_t addr = start; addr < end; addr += pdb->_record_size) {
@@ -60,8 +63,9 @@ static PDB_Status_t _scan_page(PDB_t *pdb, uint16_t page, uint32_t *cursor)
   return valid_count ? PDB_Status_Filled : PDB_Status_Empty;
 }
 
-// Erase next page first, update state on success. Power loss between erase and
-// state update is recoverable. Reboot scan sees `(old active = Full, next = Empty)`
+// Erase next page first, update state on success.
+// Power loss between erase and state update is recoverable.
+// Reboot scan sees `(old active = Full, next = Empty)`
 // and Pass 2 picks `next` via Empty-after-Full detection.
 static status_t _advance_page(PDB_t *pdb)
 {
@@ -75,7 +79,28 @@ static status_t _advance_page(PDB_t *pdb)
   return OK;
 }
 
-//---------------------------------------------------------------------------------------- Init
+// Page holding the maximum sort key (the newest). Its successor is the oldest,
+// hence the page to recycle when recovering an all-Full ring. Assumes monotonic keys.
+static bool _find_newest_page(PDB_t *pdb, uint16_t *out_page)
+{
+  bool have = false;
+  uint32_t best = 0;
+  uint16_t best_page = pdb->page_start;
+  for(uint16_t p = pdb->page_start; p < pdb->_page_stop; p++) {
+    uint32_t start, end;
+    _page_bounds(pdb, p, &start, &end);
+    for(uint32_t addr = start; addr < end; addr += pdb->_record_size) {
+      if(_slot_erased(addr, pdb->_record_size)) continue;
+      if(!_record_valid(pdb, addr)) continue;
+      uint32_t key = *(volatile uint32_t *)addr;
+      if(!have || key > best) { best = key; best_page = p; have = true; }
+    }
+  }
+  if(have) *out_page = best_page;
+  return have;
+}
+
+//-------------------------------------------------------------------------------------------- Init
 
 status_t PDB_Init(PDB_t *pdb)
 {
@@ -115,18 +140,36 @@ status_t PDB_Init(PDB_t *pdb)
       }
     }
   }
-  // Fallback: fresh flash or anomaly. Start at `page_start`.
+  // Pass 3: every page Full -> advance interrupted
+  // (active filled, next not yet erased).
+  // Resume from the newest page and run the deferred advance.
+  if(active == UINT16_MAX) {
+    bool all_full = true;
+    for(uint16_t p = pdb->page_start; p < pdb->_page_stop; p++) {
+      uint32_t c;
+      if(_scan_page(pdb, p, &c) != PDB_Status_Full) { all_full = false; break; }
+    }
+    uint16_t newest;
+    if(all_full && _find_newest_page(pdb, &newest)) {
+      pdb->_page_active = newest;
+      if(!_advance_page(pdb)) active = pdb->_page_active;
+    }
+  }
+  // Fallback: fresh flash or anomaly. Anchor on `page_start`, but honour any used
+  // slots so the next write never lands in an occupied (non-erased) slot.
   if(active == UINT16_MAX) {
     pdb->_page_active = pdb->page_start;
     _calc_bounds(pdb);
-    pdb->_pointer = pdb->_pointer_start;
+    uint32_t cursor;
+    _scan_page(pdb, pdb->page_start, &cursor);
+    pdb->_pointer = cursor;
   }
   PDB_LOG("Init page:%d ptr:0x%08X rec:%dB",
     pdb->_page_active, pdb->_pointer, pdb->_record_size);
   return OK;
 }
 
-//------------------------------------------------------------------------------- Insert/Delete
+//----------------------------------------------------------------------------------- Insert/Delete
 
 // On `FLASH_Write` fail mid-record, advance `_pointer` past the corrupted slot
 // to the next slot boundary, then retry the whole record on the clean slot.
@@ -134,7 +177,12 @@ status_t PDB_Init(PDB_t *pdb)
 // it as opaque without CRC. Returns ERR only after the retry also fails.
 status_t PDB_Insert(PDB_t *pdb, const void *record)
 {
-  uint64_t buf[PDB_RECORD_LIMIT / 8]; // 8B-aligned, satisfies doubleword write.
+  // Resolve a deferred advance (a prior insert filled the page but its erase failed)
+  // so the first write never targets a full slot at `_pointer_end`.
+  if(pdb->_pointer >= pdb->_pointer_end) {
+    if(_advance_page(pdb)) return ERR;
+  }
+  uint64_t buf[PDB_RECORD_LIMIT / 8]; // 8-byte aligned for the doubleword writes
   uint8_t *bytes = (uint8_t *)buf;
   memcpy(bytes, record, pdb->payload_size);
   uint16_t used = pdb->payload_size;
@@ -152,12 +200,16 @@ status_t PDB_Insert(PDB_t *pdb, const void *record)
       }
       pdb->_pointer += 8;
     }
-    if(pdb->_pointer >= pdb->_pointer_end) {
-      if(_advance_page(pdb)) return ERR;
-    }
     if(!fail) {
       PDB_LOG("Insert page:%d ptr:0x%08X", pdb->_page_active, pdb->_pointer);
+      // Durable: never report ERR now. If the page filled, advance eagerly; a failed
+      // erase is retried on the next insert (leaving `_pointer` at `_pointer_end`).
+      if(pdb->_pointer >= pdb->_pointer_end) _advance_page(pdb);
       return OK;
+    }
+    // Skipped a bad slot. If that ran us off the page, advance before retrying.
+    if(pdb->_pointer >= pdb->_pointer_end) {
+      if(_advance_page(pdb)) return ERR;
     }
     PDB_LOG("Insert page:%d ptr:0x%08X retry%d",
       pdb->_page_active, pdb->_pointer, (int)(attempt + 1));
@@ -177,7 +229,7 @@ status_t PDB_Delete(PDB_t *pdb)
   return OK;
 }
 
-//------------------------------------------------------------------------------------ Iterator
+//---------------------------------------------------------------------------------------- Iterator
 
 static void _iter_set_page(PDB_Iter_t *iter, uint16_t page)
 {
@@ -214,9 +266,11 @@ static bool _iter_inc(PDB_Iter_t *iter)
 }
 
 // For Desc: start at cursor, first dec lands on newest record.
-// For Asc: start at active-page last slot, first inc wraps to `(active+1) % N`
-// slot 0. That is the oldest page (post-wrap has data, pre-wrap is erased and
-// skipped until scan wraps back to `page_start`). Origin is cursor in both cases.
+// For Asc: start at active-page last slot,
+// first inc wraps to slot 0 of `(active+1) % N`.
+// That is the oldest page: post-wrap has data,
+// pre-wrap is erased and skipped until the scan wraps back to `page_start`.
+// Origin is cursor in both cases.
 status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query)
 {
   iter->_pdb = pdb;
@@ -226,6 +280,10 @@ status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query)
   iter->_done = false;
   _iter_set_page(iter, pdb->_page_active);
   iter->_origin = pdb->_pointer;
+  // The cursor sits past the last slot while a page-advance is still pending, and the
+  // stepper only ever lands on slots. Bounding the walk ends it even then.
+  iter->_steps_left = (uint32_t)pdb->page_count *
+    ((iter->_pointer_end - iter->_pointer_start) / pdb->_record_size);
   if(query->dir == PDB_Desc) {
     iter->_pointer = pdb->_pointer;
   }
@@ -241,6 +299,8 @@ status_t PDB_IterNext(PDB_Iter_t *iter, void *out)
   PDB_t *pdb = iter->_pdb;
   bool (*step)(PDB_Iter_t *) = iter->_query.dir == PDB_Desc ? _iter_dec : _iter_inc;
   while(1) {
+    if(!iter->_steps_left) { iter->_done = true; return ERR; }
+    iter->_steps_left--;
     if(step(iter)) { iter->_done = true; return ERR; }
     if(_slot_erased(iter->_pointer, pdb->_record_size)) continue;
     if(!_record_valid(pdb, iter->_pointer)) continue;
@@ -265,7 +325,7 @@ const void *PDB_IterRef(PDB_Iter_t *iter)
   return (const void *)iter->_pointer;
 }
 
-//-------------------------------------------------------------------------------- Select/Count
+//------------------------------------------------------------------------------------ Select/Count
 
 uint32_t PDB_Select(PDB_t *pdb, const PDB_Query_t *query, void *out, uint32_t max)
 {
@@ -289,4 +349,4 @@ uint32_t PDB_Count(PDB_t *pdb, const PDB_Query_t *query)
   return iter.count;
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------

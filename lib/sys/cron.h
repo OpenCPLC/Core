@@ -9,6 +9,8 @@
 #include "log.h"
 #include "main.h"
 
+//------------------------------------------------------------------------------------------ Config
+
 #ifndef CRON_MAX_TASKS
   // Maximum number of cron tasks
   #define CRON_MAX_TASKS 16
@@ -21,28 +23,28 @@
 
 #ifndef CRON_LOG
   // Log function for cron messages
-  #define CRON_LOG(fmt, ...) LOG_LIB_DBG("cron", fmt, ##__VA_ARGS__)
+  #define CRON_LOG(fmt, ...) LOG_TAG_DBG("cron", fmt, ##__VA_ARGS__)
 #endif
 
-//------------------------------------------------------------------------------------- Wildcards
+//--------------------------------------------------------------------------------------- Wildcards
 
 #define cron_bit(n) ((uint64_t)1 << (n))
 // Match all values for a field
 #define cron_any (~(uint64_t)0)
-// Match a single value `x` (e.g. `cron_at(8)` = 8)
+// Match a single value `x`, `cron_at(8)` = 8
 #define cron_at(x) cron_bit(x)
-// Match inclusive range `[a..b]` (e.g. `cron_range(1,5)` = 1..5)
+// Match the inclusive range `[a..b]`, `cron_range(1, 5)` = 1..5
 #define cron_range(a, b) ((cron_bit((b) - (a) + 1) - 1) << (a))
 
-//----------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
 /**
  * @brief Cron task definition.
  * Time fields are bitmasks: bit `n` set = match value `n`. Use `cron_any`,
  * `cron_at(x)`, `cron_range(a,b)` or bit-or combinations.
  * `month_day` and `week_day` follow POSIX cron rule: if both restricted,
- * task fires when either matches (OR); if either is `cron_any`, only the
- * other is checked (AND).
+ * task fires when either matches (OR).
+ * If either is `cron_any`, only the other is checked (AND).
  * @param[in] Handler Called when task matches current time
  * @param[in] arg Passed to `Handler`
  * @param[in] minute Bit `n` = minute `n` (`0`-`59`)
@@ -67,7 +69,7 @@ typedef struct {
   bool _used;
 } CRON_t;
 
-//------------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 // Initialize cron. Call after `RTC_Init`
 void CRON_Init(void);
@@ -103,6 +105,5 @@ bool CRON_Disable(uint16_t handle);
 // Process pending cron tick. Call from main loop
 void CRON_Step(void);
 
-//---------------------------------------------------------------------------------------------
-
+//-------------------------------------------------------------------------------------------------
 #endif

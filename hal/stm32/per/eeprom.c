@@ -2,23 +2,28 @@
 
 #include "eeprom.h"
 
+#include <stdarg.h>
+#include <string.h>
+
+//--------------------------------------------------------------------------------------- Constants
+
 #define EEPROM_ERASED_KEY 0xFFFFFFFFu
-#define EEPROM_ERASED_WORD 0xFFFFFFFFFFFFFFFFULL
+#define EEPROM_ERASED_WORD 0xFFFFFFFFFFFFFFFFull
 #define EEPROM_MARKER_KEY 0xFFFFFFFEu
-#define EEPROM_BEGIN_KEY 0xFFFFFFFDu // First slot of rewrite-target. Power-loss recovery tag.
-#define EEPROM_MARKER_MAGIC 0x5A5Au // Low 16b of marker value. Detects partial marker write.
+#define EEPROM_BEGIN_KEY 0xFFFFFFFDu  // first slot of a rewrite target, the recovery tag
+#define EEPROM_MARKER_MAGIC 0x5A5Au   // low half of the marker value, a torn marker lacks it
 
-//---------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------- Internal
 
+// The last slot of a half is the marker
 static inline uint32_t _marker_addr(EEPROM_t *e, EEPROM_Storage_t s)
 {
-  return e->_addr_end[s] - 8; // Last 8B slot is reserved for the marker.
+  return e->_addr_end[s] - 8;
 }
 
-// Returns state. If `Complete`, writes generation (16b) to `*gen_out` (may be NULL).
-// Priority: Complete, InProgress, Full, Filled, Empty.
-// `InProgress` (BEGIN tag at slot[0], no valid marker) identifies a rewrite-target.
-// This eliminates the `Full/Full` data-loss path on recovery.
+// State of a half, generation of a `Complete` one in `*gen_out` (`NULL` = skip).
+// Priority: Complete, InProgress, Full, Filled, Empty. The BEGIN tag names the rewrite
+// target no matter how far the copy got, which closes the `Full/Full` data-loss path
 static EEPROM_State_t _storage_status(EEPROM_t *e, EEPROM_Storage_t s, uint16_t *gen_out)
 {
   uint32_t start = e->_addr_start[s];
@@ -29,8 +34,6 @@ static EEPROM_State_t _storage_status(EEPROM_t *e, EEPROM_Storage_t s, uint16_t 
     if(gen_out) *gen_out = (uint16_t)(marker_val >> 16);
     return EEPROM_State_Complete;
   }
-  // BEGIN tag overrides Full/Filled/Empty. Storage is a rewrite-target regardless
-  // of how much got copied or whether marker write was torn.
   uint32_t slot0_key = *(volatile uint32_t *)start;
   if(slot0_key == EEPROM_BEGIN_KEY) return EEPROM_State_InProgress;
   uint64_t marker_word = *(volatile uint64_t *)marker;
@@ -43,8 +46,8 @@ static EEPROM_State_t _storage_status(EEPROM_t *e, EEPROM_Storage_t s, uint16_t 
   return EEPROM_State_Empty;
 }
 
-// Cursor points to the slot after the last non-erased entry. Holes from failed
-// writes are tolerated, so we never write into the middle of the log.
+// Slot after the last non-erased one: holes from failed writes stay holes,
+// a write never lands in the middle of the log
 static uint32_t _find_cursor(EEPROM_t *e)
 {
   uint32_t start = e->_addr_start[e->_active];
@@ -56,13 +59,12 @@ static uint32_t _find_cursor(EEPROM_t *e)
   return cursor;
 }
 
-// Reverse scan with early exit. Physical order equals write order, so the first
-// match from the end is the newest. Erased, marker, and begin slots are skipped.
+// Newest entry of a key: physical order is write order, so the scan runs from the end
 static status_t _read_key(EEPROM_t *e, uint32_t key, uint32_t *out)
 {
   uint32_t start = e->_addr_start[e->_active];
   uint32_t marker = _marker_addr(e, e->_active);
-  for(uint32_t addr = marker; addr > start; ) {
+  for(uint32_t addr = marker; addr > start;) {
     addr -= 8;
     uint32_t k = *(volatile uint32_t *)addr;
     if(k == EEPROM_ERASED_KEY) continue;
@@ -79,8 +81,8 @@ static status_t _read_key(EEPROM_t *e, uint32_t key, uint32_t *out)
 static status_t _clear_storage(EEPROM_t *e, EEPROM_Storage_t s)
 {
   uint16_t base = e->page_start + (s == EEPROM_Storage_B ? e->_storage_pages : 0);
-  // Erase last page first. `_storage_status` checks the last slot first,
-  // so partial erase looks Full (not Empty) on next boot.
+  // Last page first: `_storage_status` reads the last slot first, so a torn clear
+  // looks Full on the next boot, never Empty
   for(int32_t i = (int32_t)e->_storage_pages - 1; i >= 0; i--) {
     if(FLASH_Erase(base + (uint16_t)i)) return ERR;
   }
@@ -93,13 +95,12 @@ static status_t _write_marker(EEPROM_t *e, EEPROM_Storage_t s, uint16_t gen)
   return FLASH_Write(_marker_addr(e, s), EEPROM_MARKER_KEY, value);
 }
 
-// In-place dedup. Iterates src newest-first, skips if key already present in dst.
-// BEGIN tag is written to dst slot[0] before any data. This identifies dst as a
-// rewrite-target on next boot if power loss occurs before marker write.
-// Reserved last slot (marker) guarantees dst never becomes Full, so no data loss.
-// If unique keys exceed dst capacity, the oldest are dropped.
-// Marker is written with `_generation + 1`. Power loss between marker write and
-// src clear leaves `Complete/Complete` resolvable by generation comparison.
+// Copy the newest value of every key from `src_s` into the other half, newest first,
+// then mark it with `_generation + 1` and clear the source. The BEGIN tag lands before
+// any data, so a power loss before the marker leaves a recognizable target; one between
+// the marker and the clear leaves `Complete/Complete`, resolved by generation.
+// Keys past the capacity are dropped by physical position, the store is meant for
+// key sets smaller than a half
 static status_t _rewrite(EEPROM_t *e, EEPROM_Storage_t src_s)
 {
   EEPROM_Storage_t dst_s = !src_s;
@@ -108,7 +109,6 @@ static status_t _rewrite(EEPROM_t *e, EEPROM_Storage_t src_s)
   uint32_t dst_start = e->_addr_start[dst_s];
   uint32_t dst_marker = _marker_addr(e, dst_s);
   uint16_t new_gen = (uint16_t)(e->_generation + 1);
-  // BEGIN tag on slot[0] before any data. Recovery anchor.
   if(FLASH_Write(dst_start, EEPROM_BEGIN_KEY, (uint32_t)new_gen)) return ERR;
   uint32_t dst_cursor = dst_start + 8;
   uint32_t src = src_end;
@@ -123,7 +123,8 @@ static status_t _rewrite(EEPROM_t *e, EEPROM_Storage_t src_s)
       if(*(volatile uint32_t *)d == key) { dup = true; break; }
     }
     if(dup) continue;
-    if(dst_cursor >= dst_marker) break; // dst full, drop oldest remaining
+    // One data slot stays free for the write that triggered the rewrite
+    if(dst_cursor + 8 >= dst_marker) break;
     uint32_t value = *(volatile uint32_t *)(src + 4);
     if(FLASH_Write(dst_cursor, key, value)) return ERR;
     dst_cursor += 8;
@@ -136,7 +137,7 @@ static status_t _rewrite(EEPROM_t *e, EEPROM_Storage_t src_s)
   return OK;
 }
 
-//---------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- API
 
 status_t EEPROM_Clear(EEPROM_t *e)
 {
@@ -150,11 +151,10 @@ status_t EEPROM_Clear(EEPROM_t *e)
   return OK;
 }
 
-// Recovery decision tree, ordered by signal strength.
-// Complete (marker+gen), then InProgress (BEGIN tag), then Full, Filled, Empty.
+// Recovery decision tree, strongest signal first: Complete, InProgress, Full, Filled, Empty
 status_t EEPROM_Init(EEPROM_t *e)
 {
-  if(e->_initialized) return OK;
+  if(e->_init) return OK;
   if(e->page_count < 2 || (e->page_count & 1)) return ERR;
   e->_storage_pages = e->page_count / 2;
   if((uint32_t)e->page_start + 2u * (uint32_t)e->_storage_pages > FLASH_PAGES) return ERR;
@@ -166,12 +166,12 @@ status_t EEPROM_Init(EEPROM_t *e)
   uint16_t gen_a = 0, gen_b = 0;
   EEPROM_State_t sa = _storage_status(e, EEPROM_Storage_A, &gen_a);
   EEPROM_State_t sb = _storage_status(e, EEPROM_Storage_B, &gen_b);
-  // Both Complete means power loss between marker write and old-storage clear.
-  // Higher generation wins. The compare wraps safely for 16-bit counters.
+  // Both Complete: power loss between the marker write and the source clear.
+  // The higher generation wins, the compare wraps with the 16-bit counter
   if(sa == EEPROM_State_Complete && sb == EEPROM_State_Complete) {
     int16_t diff = (int16_t)((uint16_t)(gen_a - gen_b));
     if(diff == 0) {
-      if(EEPROM_Clear(e)) return ERR; // True anomaly.
+      if(EEPROM_Clear(e)) return ERR; // equal generations: an anomaly
     }
     else if(diff > 0) {
       e->_active = EEPROM_Storage_A;
@@ -186,7 +186,7 @@ status_t EEPROM_Init(EEPROM_t *e)
       if(_clear_storage(e, EEPROM_Storage_A)) return ERR;
     }
   }
-  // One Complete. Use it, clean up the other.
+  // One Complete: use it, clean up the other
   else if(sa == EEPROM_State_Complete) {
     e->_active = EEPROM_Storage_A;
     e->_generation = gen_a;
@@ -203,12 +203,12 @@ status_t EEPROM_Init(EEPROM_t *e)
       if(_clear_storage(e, EEPROM_Storage_A)) return ERR;
     }
   }
-  // InProgress on both is impossible in normal flow. Rewrite is not chained.
+  // InProgress on both cannot happen, a rewrite is never chained
   else if(sa == EEPROM_State_InProgress && sb == EEPROM_State_InProgress) {
     if(EEPROM_Clear(e)) return ERR;
   }
-  // InProgress on one means that storage is the rewrite-target.
-  // Recover: clear it, then replay the rewrite if src is Full.
+  // InProgress on one: that half is the rewrite target, clear it and replay the
+  // rewrite when the source is Full
   else if(sa == EEPROM_State_InProgress) {
     if(_clear_storage(e, EEPROM_Storage_A)) return ERR;
     if(sb == EEPROM_State_Full) {
@@ -219,7 +219,7 @@ status_t EEPROM_Init(EEPROM_t *e)
       e->_active = EEPROM_Storage_B;
       e->_cursor = _find_cursor(e);
     }
-    else { // Empty. Anomaly, src vanished.
+    else { // Empty: the source vanished, an anomaly
       e->_active = EEPROM_Storage_A;
       e->_cursor = e->_addr_start[EEPROM_Storage_A];
     }
@@ -239,11 +239,11 @@ status_t EEPROM_Init(EEPROM_t *e)
       e->_cursor = e->_addr_start[EEPROM_Storage_A];
     }
   }
-  // Full/Full without BEGIN on either is a genuine anomaly (flash corruption).
+  // Full/Full without a BEGIN tag is flash corruption
   else if(sa == EEPROM_State_Full && sb == EEPROM_State_Full) {
     if(EEPROM_Clear(e)) return ERR;
   }
-  // One Full. Rewrite it, clean up scratch on the other side.
+  // One Full: rewrite it, the other side is scratch
   else if(sa == EEPROM_State_Full) {
     if(sb == EEPROM_State_Filled) {
       if(_clear_storage(e, EEPROM_Storage_B)) return ERR;
@@ -258,11 +258,11 @@ status_t EEPROM_Init(EEPROM_t *e)
     e->_active = EEPROM_Storage_B;
     if(_rewrite(e, EEPROM_Storage_B)) return ERR;
   }
-  // Filled/Filled. Both mid-write without marker, no BEGIN. Anomaly.
+  // Filled/Filled: both mid-write, no marker, no BEGIN, an anomaly
   else if(sa == EEPROM_State_Filled && sb == EEPROM_State_Filled) {
     if(EEPROM_Clear(e)) return ERR;
   }
-  // Filled/Empty. Normal active storage, mid-write.
+  // Filled/Empty: the active half mid-write
   else if(sa == EEPROM_State_Filled) {
     e->_active = EEPROM_Storage_A;
     e->_cursor = _find_cursor(e);
@@ -271,35 +271,29 @@ status_t EEPROM_Init(EEPROM_t *e)
     e->_active = EEPROM_Storage_B;
     e->_cursor = _find_cursor(e);
   }
-  // Empty/Empty. Fresh.
+  // Empty/Empty: fresh flash
   else {
     e->_active = EEPROM_Storage_A;
     e->_cursor = e->_addr_start[EEPROM_Storage_A];
   }
-  e->_initialized = true;
+  e->_init = true;
   return OK;
 }
 
-//-------------------------------------------------------------------------------------------
-
-// On `FLASH_Write` fail, skip the slot and retry. Holes (erased slots in middle of the log)
-// are tolerated by `_read_key` and `_find_cursor`.
-// Partial-garbage slots are treated as opaque records.
-// See header for limitations.
-// On retry fail, the cursor is advanced past the broken slot before returning ERR,
-// so the next call does not loop on the same broken slot.
+// A failed `FLASH_Write` skips the slot and retries once on the next; the cursor moves
+// past a broken slot either way, so the next call never lands on it again
 static status_t _store_kv(EEPROM_t *e, uint32_t key, uint32_t value)
 {
   if(e->_cursor >= _marker_addr(e, e->_active)) {
     if(_rewrite(e, e->_active)) return ERR;
   }
   if(FLASH_Write(e->_cursor, key, value)) {
-    e->_cursor += 8; // skip corrupted slot
+    e->_cursor += 8;
     if(e->_cursor >= _marker_addr(e, e->_active)) {
       if(_rewrite(e, e->_active)) return ERR;
     }
     if(FLASH_Write(e->_cursor, key, value)) {
-      e->_cursor += 8; // advance past second broken slot too
+      e->_cursor += 8;
       return ERR;
     }
   }
@@ -328,6 +322,7 @@ uint32_t EEPROM_Read(EEPROM_t *e, uint32_t key, uint32_t default_value)
   return value;
 }
 
+// A RAM address is never a reserved key, so the guard of `EEPROM_Write` is not needed
 status_t EEPROM_Save(EEPROM_t *e, uint32_t *var)
 {
   return _store_kv(e, (uint32_t)var, *var);
@@ -384,20 +379,20 @@ status_t EEPROM_Load64(EEPROM_t *e, uint64_t *var)
 status_t EEPROM_WriteF32(EEPROM_t *e, uint32_t key, float value)
 {
   uint32_t raw;
-  (void)memcpy(&raw, &value, sizeof(float));
+  memcpy(&raw, &value, sizeof(raw));
   return EEPROM_Write(e, key, raw);
 }
 
 float EEPROM_ReadF32(EEPROM_t *e, uint32_t key, float default_value)
 {
   uint32_t raw, def;
-  (void)memcpy(&def, &default_value, sizeof(float));
+  memcpy(&def, &default_value, sizeof(def));
   raw = EEPROM_Read(e, key, def);
-  (void)memcpy(&default_value, &raw, sizeof(float));
+  memcpy(&default_value, &raw, sizeof(raw));
   return default_value;
 }
 
-//--------------------------------------------------------------------------------------- Cache
+//------------------------------------------------------------------------------------------- Cache
 
 static EEPROM_t *eeprom_cache;
 
@@ -477,17 +472,17 @@ status_t CACHE_Load64(uint64_t *var)
 status_t CACHE_WriteF32(uint32_t key, float value)
 {
   uint32_t raw;
-  (void)memcpy(&raw, &value, sizeof(float));
+  memcpy(&raw, &value, sizeof(raw));
   return CACHE_Write(key, raw);
 }
 
 float CACHE_ReadF32(uint32_t key, float default_value)
 {
   uint32_t raw, def;
-  (void)memcpy(&def, &default_value, sizeof(float));
+  memcpy(&def, &default_value, sizeof(def));
   raw = CACHE_Read(key, def);
-  (void)memcpy(&default_value, &raw, sizeof(float));
+  memcpy(&default_value, &raw, sizeof(raw));
   return default_value;
 }
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------

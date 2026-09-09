@@ -5,349 +5,252 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <stdarg.h>
 #include "xdef.h"
 
-//-------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------- Integer
 
 #ifndef M_PI
   #define M_PI 3.14159265358979323846
 #endif
 
+/**
+ * @brief Division rounded half away from zero.
+ * @param[in] num Dividend, may be negative
+ * @param[in] den Divisor, sign normalized to positive
+ * @return Nearest integer quotient, `0` when `den` is `0`
+ */
 int64_t div_round(int64_t num, int64_t den);
 
+// Integer square root, rounded to nearest
+uint32_t sqrt_u64(uint64_t value);
+
+// Raw IEEE 754 bits of a `float` and back
 uint32_t ieee754_pack(float nbr);
 float ieee754_unpack(uint32_t value);
 
+//------------------------------------------------------------------------------------------- Float
+
+/**
+ * @brief Greatest of `count` floats, `NaN` inputs skipped.
+ * @param[in] count Number of arguments that follow
+ * @param[in] ... Float values, promoted to `double`
+ * @return Greatest valid value, `NaN` when every input is `NaN`
+ */
 float max_f32_NaN(uint16_t count, ...);
+
+/**
+ * @brief Smallest of `count` floats, `NaN` inputs skipped.
+ * @param[in] count Number of arguments that follow
+ * @param[in] ... Float values, promoted to `double`
+ * @return Smallest valid value, `NaN` when every input is `NaN`
+ */
 float min_f32_NaN(uint16_t count, ...);
 
-//-------------------------------------------------------------------------------------- Median
+//-------------------------------------------------------------------------------------------- Sort
 
-/**
- * @brief Sorts `uint16_t` array in ascending order (in-place).
- * @param array Pointer to array to sort.
- * @param len Number of elements in `array`.
- */
+// Insertion sort in place, `len` elements
 void sort_asc_u16(uint16_t *array, uint16_t len);
-
-/**
- * @brief Sorts `int16_t` array in ascending order (in-place).
- * @param array Pointer to array to sort.
- * @param len Number of elements in `array`.
- */
 void sort_asc_i16(int16_t *array, uint16_t len);
-
-/**
- * @brief Sorts `uint16_t` array in descending order (in-place).
- * @param array Pointer to array to sort.
- * @param len Number of elements in `array`.
- */
 void sort_desc_u16(uint16_t *array, uint16_t len);
-
-/**
- * @brief Sorts `int16_t` array in descending order (in-place).
- * @param array Pointer to array to sort.
- * @param len Number of elements in `array`.
- */
 void sort_desc_i16(int16_t *array, uint16_t len);
-
-/**
- * @brief Sorts `uint32_t` array in ascending order (in-place).
- * @param array Pointer to array to sort.
- * @param len Number of elements in `array`.
- */
 void sort_asc_u32(uint32_t *array, uint16_t len);
-
-/**
- * @brief Sorts `int32_t` array in ascending order (in-place).
- * @param array Pointer to array to sort.
- * @param len Number of elements in `array`.
- */
 void sort_asc_i32(int32_t *array, uint16_t len);
-
-/**
- * @brief Sorts `uint32_t` array in descending order (in-place).
- * @param array Pointer to array to sort.
- * @param len Number of elements in `array`.
- */
 void sort_desc_u32(uint32_t *array, uint16_t len);
-
-/**
- * @brief Sorts `int32_t` array in descending order (in-place).
- * @param array Pointer to array to sort.
- * @param len Number of elements in `array`.
- */
 void sort_desc_i32(int32_t *array, uint16_t len);
 
-//-------------------------------------------------------------------------------------- median
+//----------------------------------------------------------------------------------------- Average
 
-float avg_u16(const uint16_t *array, uint16_t len);
-float avg_i16(const int16_t *array, uint16_t len);
-float avg_u32(const uint32_t *array, uint16_t len);
-float avg_i32(const int32_t *array, uint16_t len);
-
-bool stats_u16(const uint16_t *data, uint16_t count, uint16_t *min, uint16_t *max, uint32_t *sum, float *avg);
-bool stats_i16(const int16_t *data, uint16_t count, int16_t *min, int16_t *max, int32_t *sum, float *avg);
-bool stats_u32(const uint32_t *data, uint16_t count, uint32_t *min, uint32_t *max, uint64_t *sum, float *avg);
-bool stats_i32(const int32_t *data, uint16_t count, int32_t *min, int32_t *max, int64_t *sum, float *avg);
-
+// Rounded `mean × mul`, all-integer: scaling happens before the division,
+// so the fraction of the mean is not lost.
+// `mul = 1` plain mean, `mul = 65536` Q16 result.
+// `mean × mul` must fit the return type; `0` when `len` is `0`
+uint32_t avg_u16(const uint16_t *array, uint16_t len, uint32_t mul);
+int32_t avg_i16(const int16_t *array, uint16_t len, uint32_t mul);
+uint32_t avg_u32(const uint32_t *array, uint16_t len, uint32_t mul);
+int32_t avg_i32(const int32_t *array, uint16_t len, uint32_t mul);
 
 /**
- * @brief Copies a `uint16_t` array into an `int32_t` array (zero-extended).
- * @note Often measurements are stored as `uint16_t`, while processing
- *   and filtering are done on `int32_t`.
- * @param[in] u16 Pointer to source array.
- * @param[out] i32 Pointer to destination array.
- * @param[in] len Number of elements to copy.
+ * @brief Rounded `mean × mul` of the middle third: the lowest and the highest third
+ *   are dropped, so single outliers never reach the mean. Reorders `buff` in place.
+ *   Up to 2 samples give a plain mean.
+ * @param[in,out] buff Samples, partitioned in place
+ * @param[in] len Number of samples
+ * @param[in] mul Result scale factor, see `avg_u16`
+ * @return Rounded `mean × mul`
  */
+uint32_t mid_mean_u16(uint16_t *buff, uint16_t len, uint32_t mul);
+int32_t mid_mean_i16(int16_t *buff, uint16_t len, uint32_t mul);
+
+/**
+ * @brief Rounded `mean × mul` of the inter-quartile core: sorts in place, drops outliers
+ *   beyond `1.5 × IQR`, averages the rest. Under 4 samples a plain mean.
+ * @param[in,out] data Values, sorted in place
+ * @param[in] count Number of values
+ * @param[in] mul Result scale factor, see `avg_u16`
+ * @return Rounded `mean × mul`, `0` when `count` is `0`
+ */
+uint32_t iqr_mean_u32(uint32_t *data, uint16_t count, uint32_t mul);
+
+/**
+ * @brief RMS of `int32_t` samples as `rms × mul`, all-integer.
+ *   64-bit sum of squares; the mean square is lifted to Q16 before the root,
+ *   so it must fit 48 bits.
+ * @param[in] array Samples
+ * @param[in] len Number of samples
+ * @param[in] mul Result scale factor, see `avg_u16`
+ * @return Rounded `rms × mul`, `0` when `len` is `0`
+ */
+uint32_t rms_i32(const int32_t *array, uint16_t len, uint32_t mul);
+
+//------------------------------------------------------------------------------------------- Stats
+
+/**
+ * @brief Min, max and optionally sum with rounded `mean × mul`, one integer pass.
+ * @param[in] data Samples
+ * @param[in] count Number of samples
+ * @param[out] min Smallest sample, required
+ * @param[out] max Greatest sample, required
+ * @param[out] sum Exact sum, `NULL` = skip
+ * @param[out] avg Rounded `mean × mul`, `NULL` = skip
+ * @param[in] mul Average scale factor, see `avg_u16`
+ * @return `true` on success, `false` on empty data or a `NULL` required pointer
+ */
+bool stats_u16(const uint16_t *data, uint16_t count,
+  uint16_t *min, uint16_t *max, uint32_t *sum, uint32_t *avg, uint32_t mul);
+bool stats_i16(const int16_t *data, uint16_t count,
+  int16_t *min, int16_t *max, int32_t *sum, int32_t *avg, uint32_t mul);
+bool stats_u32(const uint32_t *data, uint16_t count,
+  uint32_t *min, uint32_t *max, uint64_t *sum, uint32_t *avg, uint32_t mul);
+bool stats_i32(const int32_t *data, uint16_t count,
+  int32_t *min, int32_t *max, int64_t *sum, int32_t *avg, uint32_t mul);
+
+// Sample standard deviation as `stddev × mul`, all-integer loops; the mean is carried
+// in Q8, so its fraction does not bias the squared differences and the scaled result
+// keeps sub-unit precision. Rounded `mean × mul` lands in `avg` (`NULL` = skip).
+// `0` when `count` is below 2
+uint32_t stddev_u16(const uint16_t *data, uint16_t count, uint32_t *avg, uint32_t mul);
+uint32_t stddev_i16(const int16_t *data, uint16_t count, int32_t *avg, uint32_t mul);
+uint32_t stddev_u32(const uint32_t *data, uint16_t count, uint32_t *avg, uint32_t mul);
+uint32_t stddev_i32(const int32_t *data, uint16_t count, int32_t *avg, uint32_t mul);
+
+//------------------------------------------------------------------------------------------ Arrays
+
+// Keep only values inside `[min_val, max_val]`, compacting in place.
+// Returns the kept count. Plausibility gate for interval/period measurements
+uint16_t filter_range_u32(uint32_t *data, uint16_t count, uint32_t min_val, uint32_t max_val);
+
+// Copy `uint16_t` samples into an `int32_t` array, zero-extended
 void convert_u16_to_i32(const uint16_t *u16, int32_t *i32, uint16_t len);
 
-/**
- * @brief Calculates trimmed mean from middle third of `uint16_t` samples.
- * @note Reorders input buffer in-place. For `len <= 2`, returns simple average.
- *   For longer buffers, discards lowest third and highest third,
- *   then averages middle third only.
- * @param[in,out] buff Pointer to input sample buffer.
- * @param[in] len Number of elements in `buff`.
- * @return Mean value of middle third as `float`.
- */
-float mid_mean_u16(uint16_t *buff, uint16_t len);
-
-/**
- * @brief Signed counterpart of `mid_mean_u16` for `int16_t` samples.
- * @note Reorders input buffer in-place. For `len <= 2`, returns simple average.
- * @param[in,out] buff Pointer to input sample buffer.
- * @param[in] len Number of elements in `buff`.
- * @return Mean value of middle third as `float`.
- */
-float mid_mean_i16(int16_t *buff, uint16_t len);
-
-/**
- * @brief Calculates RMS value of an `int32_t` sample array.
- * @note Uses 64-bit accumulator for sum of squares. If len is 0, returns 0.0f.
- * @param[in] serie Pointer to input samples array.
- * @param[in] len Number of samples in the array.
- * @return RMS value of the samples as a float (in ADC units).
- */
-float rms_i32(int32_t *array, uint16_t len);
-
-//--------------------------------------------------------------------------------------- shift
-
-/**
- * @brief Shifts each element of a uint16_t array (in-place, with saturation on left shift).
- * Positive shift: left shift (<<), with saturation to 0xFFFF.
- * Negative shift: right shift (>>), bits shifted out are discarded.
- * @param array Pointer to array to modify.
- * @param len Number of elements in the array.
- * @param shift Shift amount in bits: >0 = left, <0 = right, 0 = no change.
- */
+// Shift every element in place: `shift > 0` left with saturation at the type maximum,
+// `shift < 0` right, bits shifted out are lost
 void shift_u16(uint16_t *array, uint16_t len, int16_t shift);
-
-/**
- * @brief Shifts each element of a uint32_t array (in-place, with saturation on left shift).
- * Positive shift: left shift (<<), with saturation to 0xFFFFFFFF.
- * Negative shift: right shift (>>), bits shifted out are discarded.
- * @param array Pointer to array to modify.
- * @param len   Number of elements in the array.
- * @param shift Shift amount in bits: >0 = left, <0 = right, 0 = no change.
- */
 void shift_u32(uint32_t *array, uint16_t len, int16_t shift);
 
-//-------------------------------------------------------------------------------------- scalar
-
+// Add `value` to every element in place, saturating at the type bounds
 void add_scalar_u16(uint16_t *array, uint16_t len, int32_t value);
-
-/**
- * @brief Adds a constant scalar to each element of an `int16_t` array
- *   (in-place, with saturation).
- * @param array Pointer to array to modify.
- * @param len Number of elements in the array.
- * @param value Scalar value to add to each element (can be negative).
- */
 void add_scalar_i16(int16_t *array, uint16_t len, int32_t value);
-
-/**
- * @brief Adds a constant scalar to each element of a `uint32_t` array
- *   (in-place, with saturation).
- * @param array Pointer to array to modify.
- * @param len Number of elements in the array.
- * @param value Scalar value to add to each element (can be negative).
- */
 void add_scalar_u32(uint32_t *array, uint16_t len, int64_t value);
-
-/**
- * @brief Adds a constant scalar to each element of an `int32_t` array
- *   (in-place, with saturation).
- * @param array Pointer to array to modify.
- * @param len Number of elements in the array.
- * @param value Scalar value to add to each element (can be negative).
- */
 void add_scalar_i32(int32_t *array, uint16_t len, int64_t value);
-
-/**
- * @brief Adds a constant scalar to each element of a `float` array (in-place).
- * @param array Pointer to array to modify.
- * @param len Number of elements in the array.
- * @param value Scalar value to add to each element (can be negative).
- */
 void add_scalar_f32(float *array, uint16_t len, float value);
 
-//--------------------------------------------------------------------------------------
-
-float stddev_u16(const uint16_t *data, uint16_t count, float *avg);
-float stddev_i16(const int16_t *data, uint16_t count, float *avg);
-float stddev_u32(const uint32_t *data, uint16_t count, float *avg);
-float stddev_i32(const int32_t *data, uint16_t count, float *avg);
-
+// `true` when `value` occurs in the array
 bool contains_u8(const uint8_t *array, uint16_t len, uint8_t value);
 bool contains_u16(const uint16_t *array, uint16_t len, uint16_t value);
 bool contains_u32(const uint32_t *array, uint16_t len, uint32_t value);
 
-//-------------------------------------------------------------------------------------- Median
+//------------------------------------------------------------------------------------------ Median
 
-int16_t median3_i16(int16_t a, int16_t b, int16_t c); // Median of three int16_t values. 
-uint16_t median3_u16(uint16_t a, uint16_t b, uint16_t c); // Median of three uint16_t values.
-int32_t median3_i32(int32_t a, int32_t b, int32_t c); // Median of three int32_t values.
-uint32_t median3_u32(uint32_t a, uint32_t b, uint32_t c); // Median of three uint32_t values.
-float median3_f32(float a, float b, float c); // Median of three float values.
-// Median of five int16_t values
+// Median of three values
+int16_t median3_i16(int16_t a, int16_t b, int16_t c);
+uint16_t median3_u16(uint16_t a, uint16_t b, uint16_t c);
+int32_t median3_i32(int32_t a, int32_t b, int32_t c);
+uint32_t median3_u32(uint32_t a, uint32_t b, uint32_t c);
+float median3_f32(float a, float b, float c);
+
+// Median of five values
 int16_t median5_i16(int16_t a, int16_t b, int16_t c, int16_t d, int16_t e);
-// Median of five uint16_t values
 uint16_t median5_u16(uint16_t a, uint16_t b, uint16_t c, uint16_t d, uint16_t e);
-// Median of five int32_t values
 int32_t median5_i32(int32_t a, int32_t b, int32_t c, int32_t d, int32_t e);
-// Median of five uint32_t values
 uint32_t median5_u32(uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e);
-// Median of five float values
 float median5_f32(float a, float b, float c, float d, float e);
 
-//------------------------------------------------------------------------ Filter: Step Limiter
+//----------------------------------------------------------------------------------------- Filters
 
 /**
- * @brief Limits max change between samples for `int16_t` (-32768..32767).
- * @param input New sample.
- * @param prev Previous sample.
- * @param max_delta Maximum allowed step.
- * @return Limited output.
+ * @brief Step limiter: the output moves toward `input` by at most `max_delta`.
+ * @param[in] input New sample
+ * @param[in] prev Previous output
+ * @param[in] max_delta Largest allowed step
+ * @return Limited output
  */
 int16_t step_limiter_i16(int16_t input, int16_t prev, uint16_t max_delta);
-
-/**
- * @brief Limits max change between samples for `uint16_t` (0..65535).
- * @param input New sample.
- * @param prev Previous sample.
- * @param max_delta Maximum allowed step.
- * @return Limited output.
- */
 uint16_t step_limiter_u16(uint16_t input, uint16_t prev, uint16_t max_delta);
-
-/**
- * @brief Limits maximum step change between `float` values.
- * @param input New input sample.
- * @param prev Previous value.
- * @param max_delta Maximum allowed change.
- * @return Limited output value.
- */
 float step_limiter_f32(float input, float prev, float max_delta);
 
-//--------------------------------------------------------------------------------- Filter: EMA
-
 /**
- * @brief Exponential moving average filter for `int16_t` (-32768..32767).
- * @param input New input sample.
- * @param prev Previous sample.
- * @param alpha_shift Filter strength (higher = smoother), e.g. 3 → alpha = 1/8.
- * @return Smoothed value.
+ * @brief Exponential moving average with a power-of-two factor.
+ *   A step that rounds to zero still moves by one when the difference is over 4,
+ *   so the output converges instead of stalling short of the input.
+ * @param[in] input New sample
+ * @param[in] prev Previous output
+ * @param[in] alpha_shift Smoothing as a shift, `3` = `1/8`; larger is smoother
+ * @return Smoothed output
  */
 int16_t ema_filter_i16(int16_t input, int16_t prev, uint8_t alpha_shift);
-
-/**
- * @brief Exponential moving average filter for `uint16_t` (0..65535).
- * @param input New input sample.
- * @param prev Previous sample.
- * @param alpha_shift Filter strength (higher = smoother), e.g. 3 → alpha = 1/8.
- * @return Smoothed value.
- */
 uint16_t ema_filter_u16(uint16_t input, uint16_t prev, uint8_t alpha_shift);
+int32_t ema_filter_i32(int32_t input, int32_t prev, uint8_t alpha_shift);
+uint32_t ema_filter_u32(uint32_t input, uint32_t prev, uint8_t alpha_shift);
 
 /**
- * @brief Exponential moving average filter for `float` values.
- * @param input New input sample.
- * @param prev Previous filtered value.
- * @param alpha Filter factor (0.0f to 1.0f). Lower = smoother.
- * @return Smoothed output value.
+ * @brief Exponential moving average with a float factor.
+ * @param[in] input New sample
+ * @param[in] prev Previous output
+ * @param[in] alpha Smoothing factor `0.0..1.0`, smaller is smoother
+ * @return Smoothed output
  */
 float ema_filter_f32(float input, float prev, float alpha);
 
-//------------------------------------------------------------------------------ Filter: Hampel
-
 /**
- * @brief Hampel outlier filter for int16_t (window = 3).
- * Uses 1.5 approximation for 1.4826 consistency constant.
- * @param[in] input Current sample.
- * @param[in] z1 Previous sample.
- * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2–3, 0 disables).
- * @return Cleaned value.
+ * @brief Hampel outlier filter over a window of three: the sample is replaced by the
+ *   median when it deviates by more than `k` scaled MADs. Integer variants scale the
+ *   MAD by `1.5`, the float one by the exact `1.4826`.
+ * @param[in] input Current sample
+ * @param[in] z1 Previous sample
+ * @param[in] z2 Sample before previous
+ * @param[in] k Threshold multiplier, typically `2..3`, `0` disables
+ * @return Cleaned sample
  */
 int16_t hampel_i16(int16_t input, int16_t z1, int16_t z2, uint8_t k);
-
-/**
- * @brief Hampel outlier filter for uint16_t (window = 3).
- * @param[in] input Current sample.
- * @param[in] z1 Previous sample.
- * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2–3, 0 disables).
- * @return Cleaned value.
- */
 uint16_t hampel_u16(uint16_t input, uint16_t z1, uint16_t z2, uint8_t k);
-
-/**
- * @brief Hampel outlier filter for int32_t (window = 3).
- * @param[in] input Current sample.
- * @param[in] z1 Previous sample.
- * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2–3, 0 disables).
- * @return Cleaned value.
- */
 int32_t hampel_i32(int32_t input, int32_t z1, int32_t z2, uint8_t k);
-
-/**
- * @brief Hampel outlier filter for uint32_t (window = 3).
- * @param[in] input Current sample.
- * @param[in] z1 Previous sample.
- * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2–3, 0 disables).
- * @return Cleaned value.
- */
 uint32_t hampel_u32(uint32_t input, uint32_t z1, uint32_t z2, uint8_t k);
-
-/**
- * @brief Hampel outlier filter for float (window = 3).
- * @param[in] input Current sample.
- * @param[in] z1 Previous sample.
- * @param[in] z2 Sample before previous.
- * @param[in] k Threshold multiplier (typical 2.0–3.0, ≤0 disables).
- * @return Cleaned value.
- */
 float hampel_f32(float input, float z1, float z2, float k);
 
-//------------------------------------------------------------------------------------------------- Scale
+//----------------------------------------------------------------------------------- Interpolation
 
 /**
- * @brief Generates a log-lin scale between `start` and `end`
- *   (if `start > end`, the scale is generated in reverse order)
- * @param[in] start Start value `> 0`
- * @param[in] end End value `> 0`
- * @param[in] n Number of points `>= 2`
- * @param[in] blend Blend factor: 0 = full logarithmic, 1 = full linear
- * @param[out] scale_array Pointer to output array
- * @return `true` if scale was generated, `false` on invalid input
+ * @brief Piecewise-linear interpolation over `(x, y)` points sorted by `x`,
+ *   ascending or descending. Outside the range the end value holds, no extrapolation.
+ * @param[in] x Input coordinate
+ * @param[in] xs X coordinates, strictly monotonic
+ * @param[in] ys Y values, one per `xs` entry
+ * @param[in] count Number of points, `1` returns `ys[0]`
+ * @return Interpolated value, `NaN` for a `NaN` input or an empty table
+ */
+float interp_f32(float x, const float *xs, const float *ys, uint16_t count);
+
+/**
+ * @brief Fill a log-lin blended scale from `start` to `end`,
+ *   reversed when `start > end`.
+ * @param[in] start Start value, `> 0`
+ * @param[in] end End value, `> 0`
+ * @param[in] n Number of points, `>= 2`
+ * @param[in] blend `0` = logarithmic, `1` = linear, in between a mix
+ * @param[out] scale_array Output, `n` entries
+ * @return `true` when filled, `false` on invalid input
  */
 bool scale_fill(float start, float end, int n, float blend, float *scale_array);
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

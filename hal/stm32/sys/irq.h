@@ -7,27 +7,40 @@
 #include <stdbool.h>
 #include "dma.h"
 
+//---------------------------------------------------------------------------------- Family include
+
 #if defined(STM32G0)
   #include "irq_g0.h"
 #elif defined(STM32WB)
   #include "irq_wb.h"
 #endif
 
-//------------------------------------------------------------------------------------------------- Types
+//------------------------------------------------------------------------------------------- Types
 
+// Handler called from the vector with the object registered next to it
 typedef void (*IRQ_Handler_t)(void *);
 
-//------------------------------------------------------------------------------------------------- Enable
+//------------------------------------------------------------------------------------------ Enable
+
+// Route a peripheral interrupt to `handler(object)` at `priority`; the I2C error vector
+// takes its own handler where the family has one
 
 void IRQ_EnableTIM(void *tim, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
+void IRQ_EnableTIMCC(void *tim, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
 void IRQ_EnableUART(void *uart, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
-void IRQ_EnableI2C(void *i2c, IRQ_Priority_t priority, IRQ_Handler_t event, IRQ_Handler_t error, void *object);
+void IRQ_EnableI2C(void *i2c, IRQ_Priority_t priority, IRQ_Handler_t event,
+  IRQ_Handler_t error, void *object);
 void IRQ_EnableSPI(void *spi, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
 void IRQ_EnableADC(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
-void IRQ_EnableDMA(DMA_CHx_t channel, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
-void IRQ_EnableEXTI(uint8_t line, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
+void IRQ_EnableDMA(DMA_CHx_t channel, IRQ_Priority_t priority, IRQ_Handler_t handler,
+  void *object);
+void IRQ_EnableEXTI(uint8_t line, IRQ_Priority_t priority, IRQ_Handler_t handler,
+  void *object);
+void IRQ_EnableUSB(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object);
+void IRQ_EnableIPCC(IRQ_Priority_t priority, IRQ_Handler_t rx, IRQ_Handler_t tx,
+  void *object);
 
-//------------------------------------------------------------------------------------------------- Disable
+//----------------------------------------------------------------------------------------- Disable
 
 void IRQ_DisableTIM(void *tim);
 void IRQ_DisableUART(void *uart);
@@ -36,8 +49,12 @@ void IRQ_DisableSPI(void *spi);
 void IRQ_DisableADC(void);
 void IRQ_DisableDMA(DMA_CHx_t channel);
 void IRQ_DisableEXTI(uint8_t line);
+void IRQ_DisableUSB(void);
+void IRQ_DisableIPCC(void);
 
-//------------------------------------------------------------------------------------------------- Clear pending
+//----------------------------------------------------------------------------------- Clear pending
+
+// Drop an edge latched while the interrupt was masked
 
 void IRQ_ClearPendingTIM(void *tim);
 void IRQ_ClearPendingUART(void *uart);
@@ -46,6 +63,8 @@ void IRQ_ClearPendingSPI(void *spi);
 void IRQ_ClearPendingADC(void);
 void IRQ_ClearPendingDMA(DMA_CHx_t channel);
 void IRQ_ClearPendingEXTI(uint8_t line);
+void IRQ_ClearPendingUSB(void);
+void IRQ_ClearPendingIPCC(void);
 
 //-------------------------------------------------------------------------------------------------
 #endif

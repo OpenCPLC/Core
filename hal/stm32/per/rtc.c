@@ -1,9 +1,10 @@
 // hal/stm32/per/rtc.c
 
 #include "rtc.h"
+
 #include "pwr.h"
 
-//------------------------------------------------------------------------------ Compatibility Layer
+//------------------------------------------------------------------------------- Family registers
 
 #if defined(STM32G0)
   // G0: status in `ICSR`, clear via `SCR` (write-to-clear)
@@ -74,7 +75,7 @@ static const uint8_t RTC_DAYS_IN_MONTH[2][12] = {
 bool RtcReady;
 bool RtcInit;
 
-//----------------------------------------------------------------------------------- Static Helpers
+//---------------------------------------------------------------------------------------- Internal
 
 static inline void rtc_unlock(void)
 {
@@ -102,26 +103,19 @@ static inline uint32_t rtc_alarm_wf_mask(RTC_Alarm_t alarm)
   return (alarm == RTC_Alarm_A) ? RTC_ALRAWF : RTC_ALRBWF;
 }
 
-/**
- * @brief Clear RTC status flag. Handles G0/WB register layout difference.
- * @param[in] flag Flag mask (`RTC_SCR_*` on G0, `RTC_ISR_*` on WB)
- */
+// Clear a status flag: `RTC_SCR_*` on G0, `RTC_ISR_*` on WB
 static inline void rtc_clear_flag(uint32_t flag)
 {
   #if RTC_HAS_SCR
-    RTC->SCR = flag;
+  RTC->SCR = flag;
   #else
-    rtc_unlock();
-    RTC->ISR &= ~flag;
-    rtc_lock();
+  rtc_unlock();
+  RTC->ISR &= ~flag;
+  rtc_lock();
   #endif
 }
 
-/**
- * @brief Decode RTC `TR` register into hour/minute/second.
- * @param[in] tr Raw `RTC->TR` value
- * @param[out] dt Datetime struct to fill
- */
+// BCD time register into hour, minute and second
 static inline void rtc_decode_tr(uint32_t tr, RTC_Datetime_t *dt)
 {
   dt->hour   = ((tr >> RTC_TR_HT_Pos)  & 0x03) * 10 + ((tr >> RTC_TR_HU_Pos)  & 0x0F);
@@ -129,11 +123,7 @@ static inline void rtc_decode_tr(uint32_t tr, RTC_Datetime_t *dt)
   dt->second = ((tr >> RTC_TR_ST_Pos)  & 0x07) * 10 + ((tr >> RTC_TR_SU_Pos)  & 0x0F);
 }
 
-/**
- * @brief Decode RTC `DR` register into year/month/day/weekday.
- * @param[in] dr Raw `RTC->DR` value
- * @param[out] dt Datetime struct to fill
- */
+// BCD date register into year, month, day and weekday
 static inline void rtc_decode_dr(uint32_t dr, RTC_Datetime_t *dt)
 {
   dt->year      = ((dr >> RTC_DR_YT_Pos) & 0x0F) * 10 + ((dr >> RTC_DR_YU_Pos) & 0x0F);
@@ -142,7 +132,7 @@ static inline void rtc_decode_dr(uint32_t dr, RTC_Datetime_t *dt)
   dt->week_day  = (dr >> RTC_DR_WDU_Pos) & 0x07;
 }
 
-// Compute weekday from datetime, store in `datetime->week_day`, return value
+// Weekday of a date, stored in `datetime->week_day` too
 static uint8_t rtc_weekday_calc(RTC_Datetime_t *datetime)
 {
   uint64_t timestamp = RTC_DatetimeToUnix(datetime);
@@ -150,37 +140,30 @@ static uint8_t rtc_weekday_calc(RTC_Datetime_t *datetime)
   return datetime->week_day;
 }
 
-// Encode datetime to `RTC->DR` register layout (BCD)
+// BCD date register
 static uint32_t rtc_date_register(const RTC_Datetime_t *date)
 {
-  return ((date->year / 10)      << RTC_DR_YT_Pos)  |
-         ((date->year % 10)      << RTC_DR_YU_Pos)  |
-         ((date->week_day)       << RTC_DR_WDU_Pos) |
-         ((date->month / 10)     << RTC_DR_MT_Pos)  |
-         ((date->month % 10)     << RTC_DR_MU_Pos)  |
-         ((date->month_day / 10) << RTC_DR_DT_Pos)  |
-         ((date->month_day % 10) << RTC_DR_DU_Pos);
+  return ((date->year / 10) << RTC_DR_YT_Pos) |
+    ((date->year % 10) << RTC_DR_YU_Pos) |
+    ((date->week_day) << RTC_DR_WDU_Pos) |
+    ((date->month / 10) << RTC_DR_MT_Pos) |
+    ((date->month % 10) << RTC_DR_MU_Pos) |
+    ((date->month_day / 10) << RTC_DR_DT_Pos) |
+    ((date->month_day % 10) << RTC_DR_DU_Pos);
 }
 
-// Encode datetime to `RTC->TR` register layout (BCD)
+// BCD time register
 static uint32_t rtc_time_register(const RTC_Datetime_t *date)
 {
-  return ((date->hour / 10)   << RTC_TR_HT_Pos)  |
-         ((date->hour % 10)   << RTC_TR_HU_Pos)  |
-         ((date->minute / 10) << RTC_TR_MNT_Pos) |
-         ((date->minute % 10) << RTC_TR_MNU_Pos) |
-         ((date->second / 10) << RTC_TR_ST_Pos)  |
-         ((date->second % 10) << RTC_TR_SU_Pos);
+  return ((date->hour / 10) << RTC_TR_HT_Pos) |
+    ((date->hour % 10) << RTC_TR_HU_Pos) |
+    ((date->minute / 10) << RTC_TR_MNT_Pos) |
+    ((date->minute % 10) << RTC_TR_MNU_Pos) |
+    ((date->second / 10) << RTC_TR_ST_Pos) |
+    ((date->second % 10) << RTC_TR_SU_Pos);
 }
 
-/**
- * @brief Check if `stamp_alarm` falls in `[stamp_min, stamp_max]` window with wrap.
- * @param[in] stamp_min Window start (may be negative → wraps from end)
- * @param[in] stamp_max Window end (may exceed reload → wraps from start)
- * @param[in] stamp_alarm Alarm timestamp to test
- * @param[in] stamp_reload Period length (day or week in seconds)
- * @return `true` if alarm in window
- */
+// `stamp_alarm` inside `[stamp_min, stamp_max]`, a window that may wrap at `stamp_reload`
 static bool rtc_check_base(int32_t stamp_min, int32_t stamp_max,
   int32_t stamp_alarm, uint32_t stamp_reload)
 {
@@ -195,9 +178,19 @@ static bool rtc_check_base(int32_t stamp_min, int32_t stamp_max,
   return (stamp_alarm > stamp_min && stamp_alarm < stamp_max);
 }
 
-//--------------------------------------------------------------------------------------------- Init
+//-------------------------------------------------------------------------------------------- Init
 
-// RTC is running when LSE is its clock source, it is enabled, and `LSCO` is off.
+// Bounded wait on an RTCCLK-driven flag: a stopped clock must not park the caller
+static status_t rtc_wait(volatile uint32_t *reg, uint32_t mask, uint32_t retry)
+{
+  while(retry--) {
+    if((*reg & mask) == mask) return OK;
+    __NOP();
+  }
+  return ERR;
+}
+
+// Running: clocked from `LSE`, enabled, and `LSCO` off
 static bool rtc_running(void)
 {
   uint32_t want = RCC_BDCR_LSEON | RCC_BDCR_LSERDY | RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
@@ -205,43 +198,61 @@ static bool rtc_running(void)
   return ((RCC->BDCR & mask) == want) && (RTC_SR & RTC_INITS);
 }
 
-void RTC_Init(void)
+// The crystal load decides the drive level, so it is measured rather than configured:
+// the weakest level that oscillates wins, and too weak a one never raises `LSERDY`.
+// `LSEDRV` takes a write only with the oscillator stopped, so every step restarts it.
+// A cold start pays for the search once, later resets find the crystal already running.
+status_t RTC_StartLSE(void)
 {
-  // Enable clocks
+  if(RCC->BDCR & RCC_BDCR_LSERDY) return OK;
+  for(uint32_t drive = 0; drive <= 3; drive++) {
+    RCC->BDCR &= ~RCC_BDCR_LSEON;
+    for(uint32_t i = RTC_LSE_RETRY; i && (RCC->BDCR & RCC_BDCR_LSERDY); i--) __NOP();
+    RCC->BDCR = (RCC->BDCR & ~RCC_BDCR_LSEDRV) | (drive << RCC_BDCR_LSEDRV_Pos);
+    RCC->BDCR |= RCC_BDCR_LSEON;
+    if(!rtc_wait(&RCC->BDCR, RCC_BDCR_LSERDY, RTC_LSE_RETRY)) return OK;
+  }
+  return ERR;
+}
+
+status_t RTC_Init(void)
+{
   #if defined(STM32G0)
-    RCC->APBENR1 |= RCC_APBENR1_PWREN | RCC_APBENR1_RTCAPBEN;
+  RCC->APBENR1 |= RCC_APBENR1_PWREN | RCC_APBENR1_RTCAPBEN;
   #elif defined(STM32WB)
-    RCC->APB1ENR1 |= RCC_APB1ENR1_RTCAPBEN;
+  RCC->APB1ENR1 |= RCC_APB1ENR1_RTCAPBEN;
   #endif
   PWR->CR1 |= PWR_CR1_DBP;
-  // valid RTC survives resets; reset and rebuild only a stopped or corrupt domain.
+  // A valid RTC survives resets, only a stopped or corrupt domain is rebuilt
   if(!rtc_running()) {
     BKP_DomainReset();
-    RCC->BDCR |= RCC_BDCR_LSEON;
-    while(!(RCC->BDCR & RCC_BDCR_LSERDY)) __NOP();
+    if(RTC_StartLSE()) {
+      RtcInit = false;
+      RtcReady = false;
+      return ERR;
+    }
     RCC->BDCR |= RCC_BDCR_RTCSEL_0 | RCC_BDCR_RTCEN;
   }
-  // Enable interrupts
   rtc_unlock();
   RTC->CR |= RTC_CR_TSIE | RTC_CR_WUTIE | RTC_CR_ALRBIE | RTC_CR_ALRAIE;
   rtc_lock();
-  // NVIC
   #if defined(STM32G0)
-    NVIC_ClearPendingIRQ(RTC_TAMP_IRQn);
-    NVIC_EnableIRQ(RTC_TAMP_IRQn);
-    NVIC_SetPriority(RTC_TAMP_IRQn, RTC_IRQ_PRIORITY);
+  NVIC_ClearPendingIRQ(RTC_TAMP_IRQn);
+  NVIC_EnableIRQ(RTC_TAMP_IRQn);
+  NVIC_SetPriority(RTC_TAMP_IRQn, RTC_IRQ_PRIORITY);
   #elif defined(STM32WB)
-    NVIC_ClearPendingIRQ(RTC_WKUP_IRQn);
-    NVIC_EnableIRQ(RTC_WKUP_IRQn);
-    NVIC_SetPriority(RTC_WKUP_IRQn, RTC_IRQ_PRIORITY);
-    NVIC_ClearPendingIRQ(RTC_Alarm_IRQn);
-    NVIC_EnableIRQ(RTC_Alarm_IRQn);
-    NVIC_SetPriority(RTC_Alarm_IRQn, RTC_IRQ_PRIORITY);
+  NVIC_ClearPendingIRQ(RTC_WKUP_IRQn);
+  NVIC_EnableIRQ(RTC_WKUP_IRQn);
+  NVIC_SetPriority(RTC_WKUP_IRQn, RTC_IRQ_PRIORITY);
+  NVIC_ClearPendingIRQ(RTC_Alarm_IRQn);
+  NVIC_EnableIRQ(RTC_Alarm_IRQn);
+  NVIC_SetPriority(RTC_Alarm_IRQn, RTC_IRQ_PRIORITY);
   #endif
   RtcInit = true;
+  return OK;
 }
 
-//------------------------------------------------------------------------------------------ Convert
+//----------------------------------------------------------------------------------------- Convert
 
 RTC_Datetime_t RTC_UnixToDatetime(uint64_t timestamp)
 {
@@ -282,9 +293,9 @@ uint64_t RTC_DatetimeToUnix(const RTC_Datetime_t *date)
   }
   days += date->month_day - 1;
   return (uint64_t)days * RTC_SECONDS_IN_DAY +
-         date->hour * RTC_SECONDS_IN_HOUR +
-         date->minute * RTC_SECONDS_IN_MIN +
-         date->second;
+    date->hour * RTC_SECONDS_IN_HOUR +
+    date->minute * RTC_SECONDS_IN_MIN +
+    date->second;
 }
 
 const char *RTC_WeekDayString(void)
@@ -301,13 +312,14 @@ bool RTC_DatetimeIsCorrect(const RTC_Datetime_t *date, int8_t time_zone)
     if(diff > 3600) return false;
   }
   return RTC_YEAR_VALID(date->year) &&
-         date->second < 60 &&
-         date->hour <= 23 &&
-         date->month > 0 && date->month <= 12 &&
-         date->month_day > 0 && date->month_day <= 31;
+    date->second < 60 &&
+    date->minute < 60 &&
+    date->hour <= 23 &&
+    date->month > 0 && date->month <= 12 &&
+    date->month_day > 0 && date->month_day <= 31;
 }
 
-//------------------------------------------------------------------------------------ Convert Alarm
+//----------------------------------------------------------------------------------- Convert Alarm
 
 RTC_AlarmCfg_t RTC_DaystampToAlarm(uint32_t stamp)
 {
@@ -332,8 +344,8 @@ RTC_AlarmCfg_t RTC_WeekstampToAlarm(uint32_t stamp)
 uint32_t RTC_AlarmToDaystamp(const RTC_AlarmCfg_t *alarm)
 {
   return alarm->hour * RTC_SECONDS_IN_HOUR +
-         alarm->minute * RTC_SECONDS_IN_MIN +
-         alarm->second;
+    alarm->minute * RTC_SECONDS_IN_MIN +
+    alarm->second;
 }
 
 uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm)
@@ -341,14 +353,19 @@ uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm)
   return (alarm->day - 1) * RTC_SECONDS_IN_DAY + RTC_AlarmToDaystamp(alarm);
 }
 
-//---------------------------------------------------------------------------------------------- Set
+//--------------------------------------------------------------------------------------------- Set
 
 void RTC_SetDatetime(RTC_Datetime_t *datetime)
 {
   rtc_weekday_calc(datetime);
   rtc_unlock();
   RTC_SR |= RTC_INIT;
-  while(!(RTC_SR & RTC_INITF)) __NOP();
+  // Calendar writes are dropped without `INITF`, so `RtcReady` stays down
+  if(rtc_wait(&RTC_SR, RTC_INITF, RTC_SYNC_RETRY)) {
+    RTC_SR &= ~RTC_INIT;
+    rtc_lock();
+    return;
+  }
   RTC->PRER = (RTC_PREDIV_ASYNC << RTC_PRER_PREDIV_A_Pos) | RTC_PREDIV_SYNC;
   RTC->TR = rtc_time_register(datetime);
   RTC->DR = rtc_date_register(datetime);
@@ -373,11 +390,11 @@ void RTC_Reset(void)
   RtcReady = false;
 }
 
-//---------------------------------------------------------------------------------------------- Get
+//--------------------------------------------------------------------------------------------- Get
 
 RTC_Datetime_t RTC_Datetime(void)
 {
-  // Read SSR first, then TR, then DR. Order required by RM to unlock shadow regs
+  // `SSR`, `TR`, `DR` in this order: the shadow registers unlock on the `DR` read
   uint32_t ssr = RTC->SSR;
   uint32_t tr = RTC->TR;
   uint32_t dr = RTC->DR;
@@ -410,12 +427,12 @@ uint32_t RTC_Weekstamp(void)
 {
   RTC_Datetime_t dt = RTC_Datetime();
   return (dt.week_day - 1) * RTC_SECONDS_IN_DAY +
-         dt.hour * RTC_SECONDS_IN_HOUR +
-         dt.minute * RTC_SECONDS_IN_MIN +
-         dt.second;
+    dt.hour * RTC_SECONDS_IN_HOUR +
+    dt.minute * RTC_SECONDS_IN_MIN +
+    dt.second;
 }
 
-//---------------------------------------------------------------------------------------- Alarm Get
+//--------------------------------------------------------------------------------------- Alarm Get
 
 RTC_AlarmCfg_t RTC_Alarm(RTC_Alarm_t alarm)
 {
@@ -439,7 +456,7 @@ uint32_t RTC_AlarmDaystamp(RTC_Alarm_t alarm)
   return RTC_AlarmToDaystamp(&cfg);
 }
 
-//------------------------------------------------------------------------------------ Alarm Control
+//----------------------------------------------------------------------------------- Alarm Control
 
 bool RTC_AlarmIsEnabled(RTC_Alarm_t alarm)
 {
@@ -451,7 +468,11 @@ void RTC_AlarmEnable(RTC_Alarm_t alarm, const RTC_AlarmCfg_t *cfg)
   uint32_t mask = rtc_alarm_mask(alarm);
   rtc_unlock();
   RTC->CR &= ~mask;
-  while(!(RTC_SR & rtc_alarm_wf_mask(alarm))) __NOP();
+  // The alarm register is write-protected until its own write flag stands.
+  if(rtc_wait(&RTC_SR, rtc_alarm_wf_mask(alarm), RTC_SYNC_RETRY)) {
+    rtc_lock();
+    return;
+  }
   *rtc_alarm_reg(alarm) =
     (cfg->week         << RTC_ALRMAR_WDSEL_Pos) |
     (cfg->day_mask     << RTC_ALRMAR_MSK4_Pos)  |
@@ -495,14 +516,18 @@ void RTC_AlarmDisable(RTC_Alarm_t alarm)
   rtc_lock();
 }
 
-//-------------------------------------------------------------------------------------- Wakeup Timer
+//------------------------------------------------------------------------------------ Wakeup Timer
 
 void RTC_WakeupTimerEnable(uint32_t sec)
 {
   rtc_wakeup_flag = false;
   rtc_unlock();
   RTC->CR &= ~RTC_CR_WUTE;
-  while(!(RTC_SR & RTC_WUTWF)) __NOP();
+  // `WUTR` and `WUCKSEL` accept writes only while the timer reports itself idle
+  if(rtc_wait(&RTC_SR, RTC_WUTWF, RTC_SYNC_RETRY)) {
+    rtc_lock();
+    return;
+  }
   RTC->CR = (RTC->CR & ~RTC_CR_WUCKSEL_1) | RTC_CR_WUCKSEL_2;
   RTC->WUTR = sec - 1;
   RTC->CR |= RTC_CR_WUTE;
@@ -516,7 +541,7 @@ void RTC_WakeupTimerDisable(void)
   rtc_lock();
 }
 
-//-------------------------------------------------------------------------------------- Alarm Check
+//------------------------------------------------------------------------------------- Alarm Check
 
 bool RTC_CheckDaystamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec)
 {
@@ -542,7 +567,7 @@ bool RTC_AlarmCheck(RTC_Alarm_t alarm, uint32_t offset_min_sec, uint32_t offset_
   return RTC_CheckWeekstamp(RTC_AlarmToWeekstamp(&cfg), offset_min_sec, offset_max_sec);
 }
 
-//-------------------------------------------------------------------------------------------- Event
+//------------------------------------------------------------------------------------------- Event
 
 bool RTC_Event(RTC_Alarm_t alarm)
 {
@@ -568,7 +593,7 @@ void RTC_ForceWakeupTimer(void)
   rtc_wakeup_flag = true;
 }
 
-//------------------------------------------------------------------------------------- IRQ Handlers
+//------------------------------------------------------------------------------------ IRQ Handlers
 
 #if defined(STM32G0)
 // G0: single handler for all RTC interrupts
@@ -616,4 +641,4 @@ void RTC_WKUP_IRQHandler(void)
 }
 #endif
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------

@@ -2,23 +2,32 @@
 
 #include "pwr.h"
 
-#define IWDG_KEY_REFRESH 0xAAAA
-#define IWDG_KEY_ACCESS  0x5555
-#define IWDG_KEY_START   0xCCCC
+#include "hsem_wb.h"
 
-// WB clock source selection (SW/SWS bits)
-#define RCC_SW_MSI  0u
-#define RCC_SW_HSI  1u
-#define RCC_SW_HSE  2u
-#define RCC_SW_PLL  3u
+//--------------------------------------------------------------------------------------- Constants
 
-// WB PLL source selection
+#define IWDG_KEY_REFRESH 0xAAAAu
+#define IWDG_KEY_ACCESS  0x5555u
+#define IWDG_KEY_START   0xCCCCu
+
+#define FLASH_KEY1    0x45670123u
+#define FLASH_KEY2    0xCDEF89ABu
+#define FLASH_OPTKEY1 0x08192A3Bu
+#define FLASH_OPTKEY2 0x4C5D6E7Fu
+
+// System clock source, the `SW` and `SWS` fields
+#define RCC_SW_MSI 0u
+#define RCC_SW_HSI 1u
+#define RCC_SW_HSE 2u
+#define RCC_SW_PLL 3u
+
+// PLL source, the `PLLSRC` field
 #define RCC_PLLSRC_NONE 0u
 #define RCC_PLLSRC_MSI  1u
 #define RCC_PLLSRC_HSI  2u
 #define RCC_PLLSRC_HSE  3u
 
-//------------------------------------------------------------------------------------------------- RCC: Clock Enable
+//------------------------------------------------------------------------------- RCC: Clock Enable
 
 void RCC_EnableTIM(void *tim)
 {
@@ -93,11 +102,29 @@ void RCC_EnableDMA(void *dma)
   RCC->AHB1ENR |= RCC_AHB1ENR_DMAMUX1EN;
 }
 
-//------------------------------------------------------------------------------------------------- RCC: System Clock
+void RCC_EnableCRC(void) { RCC->AHB1ENR |= RCC_AHB1ENR_CRCEN; }
+void RCC_EnableRNG(void) { RCC->AHB3ENR |= RCC_AHB3ENR_RNGEN; }
+
+void RCC_EnableUSB(void)
+{
+  // The CPU2 stack stops HSI48 once its RNG runs dry; holding the CLK48 semaphore
+  // for the whole USB lifetime keeps the clock in CPU1 hands
+  HSEM_Wait(HSEM_CLK48);
+  // `CRS_CFGR` reset selects USB SOF with the `48 MHz` reload
+  RCC->CRRCR |= RCC_CRRCR_HSI48ON;
+  while(!(RCC->CRRCR & RCC_CRRCR_HSI48RDY));
+  RCC->CCIPR &= ~RCC_CCIPR_CLK48SEL; // `00` = `HSI48`
+  RCC->APB1ENR1 |= RCC_APB1ENR1_CRSEN | RCC_APB1ENR1_USBEN;
+  CRS->CR |= CRS_CR_AUTOTRIMEN | CRS_CR_CEN;
+  PWR->CR2 |= PWR_CR2_USV; // `VDDUSB` valid, isolation off
+}
+
+//------------------------------------------------------------------------------- RCC: System Clock
 
 uint32_t RCC_GetClock(void) { return SystemCoreClock; }
 
-static void RCC_SetFlashLatency(uint32_t freq_Hz)
+// Wait states are raised before the clock and lowered after it
+static void set_flash_latency(uint32_t freq_Hz)
 {
   uint32_t latency;
   if(freq_Hz > 48000000) latency = FLASH_ACR_LATENCY_3WS;
@@ -105,17 +132,18 @@ static void RCC_SetFlashLatency(uint32_t freq_Hz)
   else if(freq_Hz > 16000000) latency = FLASH_ACR_LATENCY_1WS;
   else latency = FLASH_ACR_LATENCY_0WS;
   FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY) | latency;
+  // Field must read back before the clock rises
+  while((FLASH->ACR & FLASH_ACR_LATENCY) != latency);
 }
 
-static void RCC_SetVoltageScale(uint32_t freq_Hz)
+static void set_voltage_scale(uint32_t freq_Hz)
 {
-  // WB: PWR is always accessible (no enable bit)
   uint32_t vos = (freq_Hz > 16000000) ? PWR_CR1_VOS_0 : PWR_CR1_VOS_1;
   PWR->CR1 = (PWR->CR1 & ~PWR_CR1_VOS) | vos;
   while(PWR->SR2 & PWR_SR2_VOSF);
 }
 
-static uint32_t RCC_SetHSI16(void)
+static uint32_t set_hsi16(void)
 {
   RCC->CR |= RCC_CR_HSION;
   while(!(RCC->CR & RCC_CR_HSIRDY));
@@ -126,7 +154,7 @@ static uint32_t RCC_SetHSI16(void)
   return SystemCoreClock;
 }
 
-static uint32_t RCC_SetMSI(uint32_t range, uint32_t freq_Hz)
+static uint32_t set_msi(uint32_t range, uint32_t freq_Hz)
 {
   RCC->CR |= RCC_CR_MSION;
   RCC->CR = (RCC->CR & ~RCC_CR_MSIRANGE) | range;
@@ -161,17 +189,17 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
   }
   else {
     freq_Hz = (16000000 / m) * n / r;
-    RCC_SetHSI16();
+    set_hsi16();
   }
-  RCC_SetVoltageScale(freq_Hz);
-  RCC_SetFlashLatency(freq_Hz);
+  set_voltage_scale(freq_Hz);
+  set_flash_latency(freq_Hz);
   RCC->CR &= ~RCC_CR_PLLON;
   while(RCC->CR & RCC_CR_PLLRDY);
   RCC->PLLCFGR = ((m - 1) << RCC_PLLCFGR_PLLM_Pos) |
-                 (n << RCC_PLLCFGR_PLLN_Pos) |
-                 ((r - 1) << RCC_PLLCFGR_PLLR_Pos) |
-                 RCC_PLLCFGR_PLLREN |
-                 ((hse_Hz ? RCC_PLLSRC_HSE : RCC_PLLSRC_HSI) << RCC_PLLCFGR_PLLSRC_Pos);
+    (n << RCC_PLLCFGR_PLLN_Pos) |
+    ((r - 1) << RCC_PLLCFGR_PLLR_Pos) |
+    RCC_PLLCFGR_PLLREN |
+    ((hse_Hz ? RCC_PLLSRC_HSE : RCC_PLLSRC_HSI) << RCC_PLLCFGR_PLLSRC_Pos);
   RCC->CR |= RCC_CR_PLLON;
   while(!(RCC->CR & RCC_CR_PLLRDY));
   RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | (RCC_SW_PLL << RCC_CFGR_SW_Pos);
@@ -182,57 +210,104 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
 
 uint32_t RCC_2MHz(void)
 {
-  RCC_SetVoltageScale(2000000);
-  RCC_SetFlashLatency(2000000);
-  return RCC_SetMSI(RCC_CR_MSIRANGE_5, 2000000);
+  uint32_t freq_Hz = set_msi(RCC_CR_MSIRANGE_5, 2000000);
+  set_flash_latency(2000000);
+  // Voltage scale last, a lower range caps the frequency
+  set_voltage_scale(2000000);
+  return freq_Hz;
 }
 
 uint32_t RCC_16MHz(void)
 {
-  RCC_SetVoltageScale(16000000);
-  RCC_SetFlashLatency(16000000);
-  return RCC_SetHSI16();
+  uint32_t freq_Hz = set_hsi16();
+  set_flash_latency(16000000);
+  set_voltage_scale(16000000);
+  return freq_Hz;
 }
 
 uint32_t RCC_48MHz(void) { return RCC_SetPLL(0, 2, 12, 2); }
 uint32_t RCC_64MHz(void) { return RCC_SetPLL(0, 2, 16, 2); }
 
-//------------------------------------------------------------------------------------------------- PWR
+//--------------------------------------------------------------------------------------------- PWR
+
+// `PWR` needs no clock enable on this family
 
 void PWR_Reset(void) { NVIC_SystemReset(); }
 
 void PWR_Sleep(PWR_SleepMode_t mode)
 {
-  // WB: PWR is always accessible (no enable bit)
-  // WB: Stop0=000, Stop1=001, Stop2=010, Standby=011, Shutdown=100
+  // `LPMS`: Stop0 `000`, Stop1 `001`, Stop2 `010`, Standby `011`, Shutdown `100`
   static const uint8_t mode_bits[] = { 0b000, 0b001, 0b010, 0b011, 0b011, 0b100 };
+  // `PWR_SleepMode_Error` names a wakeup cause, not a mode, and sits past the table
+  if(mode >= PWR_SleepMode_Error) return;
   if((PWR->SR2 & PWR_SR2_REGLPF) && (mode == PWR_SleepMode_Stop0)) return;
   PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | mode_bits[mode];
   if(mode == PWR_SleepMode_StandbySRAM) PWR->CR3 |= PWR_CR3_RRS;
   else PWR->CR3 &= ~PWR_CR3_RRS;
   SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
-  PWR->SCR = 0x001F; // Clear wakeup flags (CWUF1-5)
+  PWR->SCR = 0x001Fu; // clear `CWUF1..5`
   __SEV(); __WFE(); __WFE();
+  // `SLEEPDEEP` must not outlive the call: a later `__WFI` would enter Stop
+  SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
 }
 
 void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
 {
-  // WB: PWR is always accessible (no enable bit)
   PWR->CR3 |= PWR_CR3_EIWUL | (1u << pin);
   if(edge == PWR_Edge_Falling) PWR->CR4 |= (1u << pin);
   else PWR->CR4 &= ~(1u << pin);
 }
 
-//------------------------------------------------------------------------------------------------- BKPR
+status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
+{
+  // AN5289 gives ownership of C2CR1 to CPU2 once C2BOOT is set. HCI reset only stops
+  // radio activity; it does not stop CPU2, whose Stop mode would keep LSI/IWDG alive.
+  // The caller must reset first and arrive here while CPU2 is still held.
+  if(PWR->CR4 & PWR_CR4_C2BOOT) return ERR;
+  // nRST_SHDW=0 deliberately converts Shutdown entry into a low-power security
+  // reset. Refuse it here so the boot hand-off cannot become a reset loop.
+  if(!(FLASH->OPTR & FLASH_OPTR_nRST_SHDW)) return ERR;
+  __disable_irq();
+  SysTick->CTRL = 0;
+  for(uint8_t i = 0; i < 2; i++) {
+    NVIC->ICER[i] = 0xFFFFFFFFu;
+    NVIC->ICPR[i] = 0xFFFFFFFFu;
+  }
+  // The thread switch and the tick are system handlers, out of reach of the controller:
+  // either one left pending turns `WFI` into a plain instruction
+  SCB->ICSR = SCB_ICSR_PENDSVCLR_Msk | SCB_ICSR_PENDSTCLR_Msk;
+  // Configure CPU2's reset-state selection before it is ever booted. Otherwise its
+  // Stop0 reset value caps the system at Stop0 even though CPU1 asks for Shutdown.
+  PWR->C2CR1 = (PWR->C2CR1 & ~PWR_C2CR1_LPMS) | PWR_C2CR1_LPMS_2;
+  // Disable first and clear on both sides of the polarity/enable update. This avoids
+  // carrying a wake flag raised while the pin configuration was changing.
+  PWR->CR3 &= ~PWR_CR3_EWUP;
+  PWR->SCR = PWR_SCR_CWUF;
+  PWR->CR4 = (PWR->CR4 & ~0x1Fu) | (falling_mask & 0x1Fu);
+  PWR->CR3 = (PWR->CR3 & ~PWR_CR3_EWUP) | (wakeup_mask & 0x1Fu);
+  PWR->SCR = PWR_SCR_CWUF;
+  // A probe may have left low-power debug enabled. On STM32WB that keeps enough of
+  // the domain alive for IWDG to run, producing the misleading "Shutdown then reset".
+  DBGMCU->CR &= ~(DBGMCU_CR_DBG_SLEEP | DBGMCU_CR_DBG_STOP | DBGMCU_CR_DBG_STANDBY);
+  PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | PWR_CR1_LPMS_2;
+  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+  // WFI is allowed to act as a NOP on a simultaneous debug/wakeup request. Shutdown
+  // is terminal, so never fall through into half-torn-down application code.
+  while(1) {
+    __DSB();
+    __WFI();
+  }
+}
+
+//-------------------------------------------------------------------------------------------- BKPR
 
 void BKPR_Write(BKPR_t reg, uint32_t value)
 {
-  // WB: PWR is always accessible (no enable bit)
   RCC->APB1ENR1 |= RCC_APB1ENR1_RTCAPBEN;
   RCC->BDCR |= RCC_BDCR_RTCEN;
   PWR->CR1 |= PWR_CR1_DBP;
   while(!(PWR->CR1 & PWR_CR1_DBP));
-  // WB: backup registers in RTC peripheral
+  // The backup registers live in `RTC` on this family
   (&RTC->BKP0R)[reg] = value;
   PWR->CR1 &= ~PWR_CR1_DBP;
 }
@@ -245,21 +320,21 @@ uint32_t BKPR_Read(BKPR_t reg)
 
 void BKP_DomainReset(void)
 {
-  if(!BOR_WasReset()) return; // domain can only be corrupted by a power-on.
-  // WB: PWR is always accessible (no enable bit)
+  if(!BOR_WasReset()) return; // only a power-on can corrupt the domain
   PWR->CR1 |= PWR_CR1_DBP;
   while(!(PWR->CR1 & PWR_CR1_DBP));
-  RCC->BDCR = RCC_BDCR_BDRST; // set `BDRST`, clear `LSCO`/`LSE`/`RTCSEL`
-  (void)RCC->BDCR; // read back lengthens reset pulse
-  RCC->BDCR = 0; // release reset
+  RCC->BDCR = RCC_BDCR_BDRST; // `BDRST` on, `LSCO`, `LSE` and `RTCSEL` cleared
+  unused(RCC->BDCR); // the read back lengthens the reset pulse
+  RCC->BDCR = 0;
 }
 
-//------------------------------------------------------------------------------------------------- IWDG
+//-------------------------------------------------------------------------------------------- IWDG
 
 void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 {
-  if(reload > 0x0FFF) reload = 0x0FFF;
-  // WB uses LSI1 (not LSI like G0)
+  if(reload > 0x0FFFu) reload = 0x0FFFu;
+  // A halted core would starve the dog: pause it whenever the debugger holds the CPU
+  DBGMCU->APB1FZR1 |= DBGMCU_APB1FZR1_DBG_IWDG_STOP;
   RCC->CSR |= RCC_CSR_LSI1ON;
   while(!(RCC->CSR & RCC_CSR_LSI1RDY));
   IWDG->KR = IWDG_KEY_START;
@@ -272,8 +347,18 @@ void IWDG_Init(IWDG_Time_t prescaler, uint16_t reload)
 
 void IWDG_Refresh(void) { IWDG->KR = IWDG_KEY_REFRESH; }
 
-// `RMVF` clears all reset flags at once: latch on first read so `IWDG_WasReset`
-// and `BOR_WasReset` do not clobber each other.
+// The smallest tick that covers the timeout, so the resolution stays the finest possible
+void IWDG_Init_ms(uint32_t timeout_ms)
+{
+  uint8_t time = IWDG_Time_125us;
+  uint32_t reload;
+  while((reload = (timeout_ms * 8) >> time) > 0x0FFFu && time < IWDG_Time_8ms) time++;
+  if(!reload) reload = 1;
+  IWDG_Init((IWDG_Time_t)time, (uint16_t)reload);
+}
+
+// `RMVF` clears every reset flag at once: latched on the first read, so `IWDG_WasReset`
+// and `BOR_WasReset` do not clobber each other
 static uint32_t rst_csr;
 static bool rst_latched;
 
@@ -289,32 +374,25 @@ static uint32_t rst_flags(void)
 
 bool IWDG_WasReset(void) { return (rst_flags() & RCC_CSR_IWDGRSTF) != 0; }
 
-//------------------------------------------------------------------------------------------------- BOR
-
-#define FLASH_KEY1    0x45670123u
-#define FLASH_KEY2    0xCDEF89ABu
-#define FLASH_OPTKEY1 0x08192A3Bu
-#define FLASH_OPTKEY2 0x4C5D6E7Fu
+//--------------------------------------------------------------------------------------------- BOR
 
 BOR_Level_t BOR_GetLevel(void)
 {
-  // WB: `BOR_LEV` field maps 1:1 to `BOR_Level_t`.
+  // `BOR_LEV` maps 1:1 to `BOR_Level_t`
   return (BOR_Level_t)((FLASH->OPTR & FLASH_OPTR_BOR_LEV) >> FLASH_OPTR_BOR_LEV_Pos);
 }
 
 status_t BOR_SetLevel(BOR_Level_t level)
 {
   if(level > BOR_Level_2V8) level = BOR_Level_2V8;
-  if(BOR_GetLevel() == level) return OK; // already set: no flash wear, no reset
+  if(BOR_GetLevel() == level) return OK; // no flash wear, no reset
   while(FLASH->SR & (FLASH_SR_BSY | FLASH_SR_CFGBSY)) __DSB();
-  if(FLASH->SR & FLASH_SR_PESD) return ERR; // `CPU2` (M0+) holds flash for prog/erase.
-  // Unlock flash control register
+  if(FLASH->SR & FLASH_SR_PESD) return ERR; // CPU2 holds the flash
   if(FLASH->CR & FLASH_CR_LOCK) {
     FLASH->KEYR = FLASH_KEY1;
     FLASH->KEYR = FLASH_KEY2;
     if(FLASH->CR & FLASH_CR_LOCK) return ERR;
   }
-  // Unlock option bytes
   if(FLASH->CR & FLASH_CR_OPTLOCK) {
     FLASH->OPTKEYR = FLASH_OPTKEY1;
     FLASH->OPTKEYR = FLASH_OPTKEY2;
@@ -325,7 +403,7 @@ status_t BOR_SetLevel(BOR_Level_t level)
   FLASH->OPTR = optr;
   FLASH->CR |= FLASH_CR_OPTSTRT;
   while(FLASH->SR & FLASH_SR_BSY) __DSB();
-  FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads option bytes, resets MCU (no return).
+  FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads the option bytes, a system reset
   while(1) __DSB();
 }
 

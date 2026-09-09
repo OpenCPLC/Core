@@ -6,93 +6,95 @@
 #include "queue.h"
 #include "vrts.h"
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef TASK_LIMIT
   // Maximum tasks in queue
   #define TASK_LIMIT 16
 #endif
 
-// Cast helper for handler functions
+// Cast a handler taking a typed pointer to the `void *` signature
 #define TASK_ (void (*)(void *))
+
+//--------------------------------------------------------------------------------------- Structure
 
 /**
  * @brief Task descriptor.
- * @param[in] Handler Function to call.
- * @param[in] arg User data.
- * @param[in] key Unique key (`0` = unused).
+ * @param[in] Handler Function to call
+ * @param[in] arg User data
+ * @param[in] key Unique key, `0` = none
  * Internal:
- * @param _tick Execution time.
+ * @param _tick Deadline
  */
 typedef struct {
   void (*Handler)(void *);
   void *arg;
   int32_t key;
+  // internal
   uint64_t _tick;
 } TASK_t;
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Schedule task after delay.
- * @param[in] Handler Function to call.
- * @param[in] arg User data.
- * @param[in] delay_ms Delay (`0` = immediate execution).
+ * @brief Schedule a task after a delay.
+ * @param[in] Handler Function to call
+ * @param[in] arg User data
+ * @param[in] delay_ms Delay, `0` runs the handler at once
  */
 void TASK_Add(void (*Handler)(void *), void *arg, uint32_t delay_ms);
 
 /**
- * @brief Schedule task with unique key.
- * @param[in] Handler Function to call.
- * @param[in] arg User data.
- * @param[in] delay_ms Delay.
- * @param[in] key Unique key for cancel/reschedule.
+ * @brief Schedule a task under a key, refused while that key waits in the queue.
+ * @param[in] Handler Function to call
+ * @param[in] arg User data
+ * @param[in] delay_ms Delay
+ * @param[in] key Unique key for cancel and reschedule
  */
 void TASK_AddKey(void (*Handler)(void *), void *arg, uint32_t delay_ms, int32_t key);
 
 /**
- * @brief Cancel task by key.
- * @param[in] key Task key.
- * @return `true` if found and removed.
+ * @brief Cancel the task under `key`.
+ * @param[in] key Task key
+ * @return `true` if found and removed
  */
 bool TASK_Cancel(int32_t key);
 
 /**
- * @brief Cancel all tasks with given handler.
- * @param[in] Handler Function pointer.
- * @return Number cancelled.
+ * @brief Cancel every task calling `Handler`.
+ * @param[in] Handler Function pointer
+ * @return Number cancelled
  */
 uint16_t TASK_CancelHandler(void (*Handler)(void *));
 
 /**
- * @brief Check if task with key exists.
- * @param[in] key Task key.
- * @return `true` if exists.
+ * @brief Check if a task waits under `key`.
+ * @param[in] key Task key
+ * @return `true` if queued
  */
 bool TASK_Exists(int32_t key);
 
 /**
- * @brief Reschedule existing task.
- * @param[in] key Task key.
- * @param[in] delay_ms New delay from now.
- * @return `true` if rescheduled.
+ * @brief Move the task under `key` to a new deadline.
+ * @param[in] key Task key
+ * @param[in] delay_ms New delay from now
+ * @return `true` if rescheduled
  */
 bool TASK_Reschedule(int32_t key, uint32_t delay_ms);
 
-/**
- * @brief Get pending task count.
- * @return Number of pending tasks.
- */
+// Tasks waiting
 uint16_t TASK_Pending(void);
 
-/**
- * @brief Clear all tasks.
- */
+// Drop every task
 void TASK_ClearAll(void);
 
 /**
- * @brief Main scheduler loop (never returns).
+ * @brief Run the earliest due task, if any: one pass of the queue.
+ * @return `true` when a handler ran, `false` when nothing was due
  */
+bool TASK_Step(void);
+
+// Scheduler thread: `TASK_Step` in a loop, never returns
 void TASK_Main(void);
 
 //-------------------------------------------------------------------------------------------------

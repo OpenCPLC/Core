@@ -2,21 +2,23 @@
 
 #include "buff.h"
 
-//------------------------------------------------------------------------------------------------- State
+#include "heap.h"
 
-uint16_t BUFF_Size(BUFF_t *buff)
+//------------------------------------------------------------------------------------------- State
+
+uint16_t BUFF_Size(const BUFF_t *buff)
 {
   if(buff->_msg_head != buff->_msg_tail) return buff->_msg_size[buff->_msg_tail];
   return 0;
 }
 
-uint16_t BUFF_MessageCount(BUFF_t *buff)
+uint16_t BUFF_MessageCount(const BUFF_t *buff)
 {
   if(buff->_msg_head >= buff->_msg_tail) return buff->_msg_head - buff->_msg_tail;
   return BUFF_MSG_LIMIT - buff->_msg_tail + buff->_msg_head;
 }
 
-//------------------------------------------------------------------------------------------------- Byte ops
+//---------------------------------------------------------------------------------------- Byte ops
 
 bool BUFF_Append(BUFF_t *buff, uint8_t value)
 {
@@ -59,15 +61,18 @@ bool BUFF_Echo(BUFF_t *buff, char *value)
   return true;
 }
 
-//------------------------------------------------------------------------------------------------- Message break
+//----------------------------------------------------------------------------------- Message break
 
 bool BUFF_Break(BUFF_t *buff)
 {
   if(!buff->_break_allow) return false;
   uint16_t next = buff->_msg_head + 1;
   if(next >= BUFF_MSG_LIMIT) next = 0;
-  // Drop-newest: message lost, pending queue intact
+  // Drop-newest: message lost, pending queue intact.
+  // Its bytes have to leave the ring too. `_tail` only ever advances by a recorded
+  // `_msg_size`, so bytes left behind would be read as the head of the next message.
   if(next == buff->_msg_tail) {
+    while(BUFF_Pop(buff, NULL));
     if(buff->Overflow) buff->Overflow();
     return false;
   }
@@ -78,7 +83,7 @@ bool BUFF_Break(BUFF_t *buff)
   return true;
 }
 
-//------------------------------------------------------------------------------------------------- Push (console-aware)
+//---------------------------------------------------------------------------- Push (console-aware)
 
 bool BUFF_Push(BUFF_t *buff, uint8_t value)
 {
@@ -121,7 +126,7 @@ bool BUFF_Push(BUFF_t *buff, uint8_t value)
   return BUFF_Append(buff, value);
 }
 
-//------------------------------------------------------------------------------------------------- Read
+//-------------------------------------------------------------------------------------------- Read
 
 uint16_t BUFF_Read(BUFF_t *buff, uint8_t *dst)
 {
@@ -139,12 +144,12 @@ uint16_t BUFF_Read(BUFF_t *buff, uint8_t *dst)
   return size;
 }
 
-uint16_t BUFF_Peek(BUFF_t *buff, uint8_t *dst)
+uint16_t BUFF_Peek(const BUFF_t *buff, uint8_t *dst)
 {
   uint16_t size = BUFF_Size(buff);
   if(!size) return 0;
   uint16_t n = size;
-  uint8_t *ptr = (uint8_t*)buff->_tail;
+  const uint8_t *ptr = (const uint8_t *)buff->_tail;
   while(n) {
     if(dst) *dst++ = *ptr;
     ptr++;
@@ -156,7 +161,7 @@ uint16_t BUFF_Peek(BUFF_t *buff, uint8_t *dst)
 
 bool BUFF_Skip(BUFF_t *buff)
 {
-  return BUFF_Read(buff, NULL) ? true : false;
+  return BUFF_Read(buff, NULL) != 0;
 }
 
 char *BUFF_ReadString(BUFF_t *buff)
@@ -165,12 +170,12 @@ char *BUFF_ReadString(BUFF_t *buff)
   if(!size) return NULL;
   char *str = heap_new(size + 1);
   if(!str) return NULL;
-  BUFF_Read(buff, (uint8_t*)str);
+  BUFF_Read(buff, (uint8_t *)str);
   str[size] = '\0';
   return str;
 }
 
-//------------------------------------------------------------------------------------------------- Clear
+//------------------------------------------------------------------------------------------- Clear
 
 void BUFF_Clear(BUFF_t *buff)
 {

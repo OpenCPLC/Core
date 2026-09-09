@@ -8,13 +8,18 @@
 #include "sys.h"
 #include "main.h"
 
-//------------------------------------------------------------------------------------------------- Timing Presets
+// `TIMINGR` presets for the supported system clocks, standard, fast and fast-plus mode
+//---------------------------------------------------------------------------------- Timing presets
 
 #if(SYS_CLOCK_FREQ == 2000000)
   #define I2C_TIMING_100kHz  timing = 0x00000509, .filter = 0
 #elif(SYS_CLOCK_FREQ == 16000000)
   #define I2C_TIMING_100kHz  timing = 0x00503D5A, .filter = 0
   #define I2C_TIMING_400kHz  timing = 0x0010061A, .filter = 0
+#elif(SYS_CLOCK_FREQ == 32000000)
+  #define I2C_TIMING_100kHz  timing = 0x00707CBB, .filter = 0
+  #define I2C_TIMING_400kHz  timing = 0x00300F38, .filter = 0
+  #define I2C_TIMING_1MHz    timing = 0x00100413, .filter = 0
 #elif(SYS_CLOCK_FREQ == 48000000)
   #define I2C_TIMING_100kHz  timing = 0x00C0D6FF, .filter = 0
   #define I2C_TIMING_400kHz  timing = 0x00501855, .filter = 0
@@ -32,7 +37,7 @@
   #define I2C_TIMING_1MHz    timing = 0x0030060D, .filter = 0
 #endif
 
-//------------------------------------------------------------------------------------------------- Family Include
+//---------------------------------------------------------------------------------- Family include
 
 #if defined(STM32G0)
   #include "i2c_g0.h"
@@ -40,13 +45,14 @@
   #include "i2c_wb.h"
 #endif
 
-//------------------------------------------------------------------------------------------------- Pin Maps
+//---------------------------------------------------------------------------------------- Pin maps
 
 extern const GPIO_Map_t I2C_SCL_MAP[];
 extern const GPIO_Map_t I2C_SDA_MAP[];
 
-//------------------------------------------------------------------------------------------------- Internal API
+//---------------------------------------------------------------------------------------- Internal
 
+// Family glue: peripheral reset and the DMAMUX request of each direction
 void I2C_Reset(I2C_TypeDef *reg);
 void I2C_DmaSetTxRequest(I2C_TypeDef *reg, DMA_t *dma);
 void I2C_DmaSetRxRequest(I2C_TypeDef *reg, DMA_t *dma);

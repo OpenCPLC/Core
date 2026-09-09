@@ -1,7 +1,7 @@
 // lib/ext/xdef.h
 
 #define ON  1 // Enabled
-#define OFF 0 // Disables
+#define OFF 0 // Disabled
 
 #ifndef XDEF_H_
 #define XDEF_H_
@@ -9,55 +9,60 @@
 #include <limits.h>
 #include <math.h>
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------ Status
 
+// `OK`, `FREE` and `IDLE` share value `0`: a function reports the one that fits
 typedef enum {
-  OK   = 0, // Normal execution
-  FREE = 0, // Resource free
-  IDLE = 0, // Nothing active
+  OK   = 0, // Operation finished
+  FREE = 0, // Resource available
+  IDLE = 0, // Nothing to do
   ERR  = 1, // Error occurred
-  BUSY = 2, // Resource busy
+  BUSY = 2  // Resource busy
 } status_t;
+
+//------------------------------------------------------------------------------------------- Float
 
 #define NaN         NAN
 #define Inf         INFINITY
 #define isNaN(nbr)  isnan(nbr)
 #define isInf(nbr)  isinf(nbr)
 
+//-------------------------------------------------------------------------------------------- Bits
+
 /**
- * @brief Set bit at position `bit` in register `reg`.
- * @param reg Register or variable to modify.
- * @param bit Bit index to set (0 = LSB).
+ * @brief Set bit `bit` of `reg`, width follows `__typeof__(reg)`.
+ * @param reg Register or variable to modify
+ * @param bit Bit index, `0` = LSB
  */
 #define bit_set(reg, bit)  ((reg) |= ((__typeof__(reg))1 << (bit)))
 
 /**
- * @brief Clear bit at position `bit` in register `reg`.
- * @param reg Register or variable to modify.
- * @param bit Bit index to clear (0 = LSB).
+ * @brief Clear bit `bit` of `reg`, width follows `__typeof__(reg)`.
+ * @param reg Register or variable to modify
+ * @param bit Bit index, `0` = LSB
  */
 #define bit_rst(reg, bit)  ((reg) &= ~((__typeof__(reg))1 << (bit)))
 
 /**
- * @brief Toggle bit at position `bit` in register `reg`.
- * @param reg Register or variable to modify.
- * @param bit Bit index to toggle (0 = LSB).
+ * @brief Toggle bit `bit` of `reg`, width follows `__typeof__(reg)`.
+ * @param reg Register or variable to modify
+ * @param bit Bit index, `0` = LSB
  */
 #define bit_tgl(reg, bit)  ((reg) ^= ((__typeof__(reg))1 << (bit)))
 
 /**
- * @brief Read bit at position `bit` in register `reg`.
- * @param reg Register or value to read.
- * @param bit Bit index to check (0 = LSB).
- * @return `1` if bit is set, `0` if cleared.
+ * @brief Read bit `bit` of `reg`.
+ * @param reg Register or value to read
+ * @param bit Bit index, `0` = LSB
+ * @return `1` if set, `0` if cleared
  */
-#define bit_get(reg, bit)  (((reg) >> (bit)) & 1U)
+#define bit_get(reg, bit)  (((reg) >> (bit)) & 1u)
 
-//------------------------------------------------------------------------------------------------- ANSI
+//-------------------------------------------------------------------------------------------- ANSI
 
 #ifndef ANSI_MODE
-  // Terminal color mode: `0`:disabled, `1`:basic 16-color, `2`:256-color
-  #define ANSI_MODE 2  
+  // Terminal color mode: `0` disabled, `1` basic 16-color, `2` 256-color
+  #define ANSI_MODE 2
 #endif
 
 #if(ANSI_MODE == 0)
@@ -133,13 +138,16 @@ typedef enum {
 
 #define ANSI_OK " " ANSI_GREEN "OK" ANSI_END
 
-//------------------------------------------------------------------------------------------------- macros
+//---------------------------------------------------------------------------------------- Dispatch
 
+// Argument-count dispatch: pick the implementation named after the count
 #define _args6(a,b,c,d,e,f,name,...) name
 #define _args5(a,b,c,d,e,name,...) name
 #define _args4(a,b,c,d,name,...) name
 #define _args3(a,b,c,name,...) name
 #define _args2(a,b,name,...) name
+
+//-------------------------------------------------------------------------------------------- Math
 
 #define _min2(a,b) ({ \
   __auto_type _a = (a); \
@@ -150,11 +158,8 @@ typedef enum {
 #define _min4(a,b,c,d)   _min2(_min3(a,b,c), (d))
 #define _min5(a,b,c,d,e) _min2(_min4(a,b,c,d), (e))
 #define _min6(a,b,c,d,e,f) _min2(_min5(a,b,c,d,e), (f))
-/**
- * @brief Return minimum of provided values.
- * @note Supports 2–6 arguments. Single evaluation per argument.
- * @return Smallest of given arguments.
- */
+
+// Smallest of 2 to 6 arguments, each evaluated once
 #define minv(...) (_args6(__VA_ARGS__, _min6, _min5, _min4, _min3, _min2)(__VA_ARGS__))
 
 #define _max2(a,b) ({ \
@@ -166,84 +171,86 @@ typedef enum {
 #define _max4(a,b,c,d)   _max2(_max3(a,b,c), (d))
 #define _max5(a,b,c,d,e) _max2(_max4(a,b,c,d), (e))
 #define _max6(a,b,c,d,e,f) _max2(_max5(a,b,c,d,e), (f))
-/**
- * @brief Return maximum of provided values.
- * @note Supports 2–6 arguments. Single evaluation per argument.
- * @return Greatest of given arguments.
- */
+
+// Greatest of 2 to 6 arguments, each evaluated once
 #define maxv(...) (_args6(__VA_ARGS__, _max6, _max5, _max4, _max3, _max2)(__VA_ARGS__))
 
-/**
- * @brief Return sign of number.
- * @param value Input value.
- * @return `-1` if negative, `0` if zero, `1` if positive.
- */
+// Sign of `value`: `-1`, `0` or `1`
 #define sign_of(value) ({ \
   __typeof__(value) _v = (value); \
   (_v > 0) - (_v < 0); \
 })
 
-/**
- * @brief Safe ABS for integer and floating-point types.
- *   Signed integers: |x| with saturation (MIN → MAX to avoid UB).
- *   Unsigned integers: returns x unchanged.
- *   Floating point: uses fabsf/fabs/fabsl.
- */
+// Absolute value for any arithmetic type. Signed integers saturate at the type minimum
+// (`INT_MIN` gives `INT_MAX`), so the negation never overflows.
+// Typed helpers behind the dispatch: the compiler checks the unselected branches too
+static inline signed char _absv_sc(signed char v)
+{
+  return v == SCHAR_MIN ? SCHAR_MAX : (v < 0 ? -v : v);
+}
+static inline short _absv_s(short v) { return v == SHRT_MIN ? SHRT_MAX : (v < 0 ? -v : v); }
+static inline int _absv_i(int v) { return v == INT_MIN ? INT_MAX : (v < 0 ? -v : v); }
+static inline long _absv_l(long v) { return v == LONG_MIN ? LONG_MAX : (v < 0 ? -v : v); }
+static inline long long _absv_ll(long long v)
+{
+  return v == LLONG_MIN ? LLONG_MAX : (v < 0 ? -v : v);
+}
+static inline unsigned char _absv_uc(unsigned char v) { return v; }
+static inline unsigned short _absv_us(unsigned short v) { return v; }
+static inline unsigned int _absv_u(unsigned int v) { return v; }
+static inline unsigned long _absv_ul(unsigned long v) { return v; }
+static inline unsigned long long _absv_ull(unsigned long long v) { return v; }
 #define absv(value) ({ \
   __auto_type _v = (value); \
   _Generic((_v), \
-    signed char: (signed char)(_v == SCHAR_MIN ? SCHAR_MAX : (_v < 0 ? -_v : _v)), \
-    short: (short)(_v == SHRT_MIN ? SHRT_MAX : (_v < 0 ? -_v : _v)), \
-    int: (int)(_v == INT_MIN ? INT_MAX : (_v < 0 ? -_v : _v)), \
-    long: (long)(_v == LONG_MIN ? LONG_MAX : (_v < 0 ? -_v : _v)), \
-    long long: (long long)(_v == LLONG_MIN ? LLONG_MAX : (_v < 0 ? -_v : _v)), \
-    unsigned char: _v, \
-    unsigned short: _v, \
-    unsigned int: _v, \
-    unsigned long: _v, \
-    unsigned long long: _v, \
-    float: fabsf(_v), \
-    double: fabs(_v), \
-    long double: fabsl(_v), \
-    default: (_v < 0 ? -_v : _v) \
-  ); \
+    signed char: _absv_sc, \
+    short: _absv_s, \
+    int: _absv_i, \
+    long: _absv_l, \
+    long long: _absv_ll, \
+    unsigned char: _absv_uc, \
+    unsigned short: _absv_us, \
+    unsigned int: _absv_u, \
+    unsigned long: _absv_ul, \
+    unsigned long long: _absv_ull, \
+    float: fabsf, \
+    double: fabs, \
+    long double: fabsl \
+  )(_v); \
 })
 
-#ifndef __ZEPHYR__
 /**
- * @brief Clamp value to `[min, max]` range.
- * @param value Value to clamp.
- * @param min Minimum allowed value.
- * @param max Maximum allowed value.
- * @return Clamped value in range `[min, max]`.
+ * @brief Clamp value to `[min, max]`.
+ * @param value Value to clamp
+ * @param min Lower bound
+ * @param max Upper bound
+ * @return Value inside `[min, max]`
  */
-
 #define clamp(value, min, max) ({ \
-  __typeof__(value) _v   = (value); \
+  __typeof__(value) _v = (value); \
   __typeof__(value) _min = (min); \
   __typeof__(value) _max = (max); \
   _v < _min ? _min : (_v > _max ? _max : _v); \
 })
-#endif
 
 /**
- * @brief Check if value is inside `[min, max]` range (inclusive).
- * @param value Value to check.
- * @param min Minimum allowed value.
- * @param max Maximum allowed value.
- * @return `true` if value ∈ [min, max], else `false`.
+ * @brief Check if value lies inside `[min, max]`, bounds included.
+ * @param value Value to check
+ * @param min Lower bound
+ * @param max Upper bound
+ * @return `true` when inside
  */
 #define in_range(value, min, max) ({ \
-  __typeof__(value) _v  = (value); \
+  __typeof__(value) _v = (value); \
   __typeof__(value) _min = (min); \
   __typeof__(value) _max = (max); \
   (_v >= _min) && (_v <= _max); \
 })
 
 /**
- * @brief Swap two variables of the same type.
- * @param a First variable.
- * @param b Second variable.
+ * @brief Swap two variables of one type.
+ * @param a First variable
+ * @param b Second variable
  */
 #define swap(a, b) do { \
   __typeof__(a) _tmp = (a); \
@@ -251,46 +258,33 @@ typedef enum {
   (b) = _tmp; \
 } while(0)
 
-/**
- * @brief Get number of elements in static array.
- * @param x Static array (not a pointer).
- * @return Element count (e.g. 4 for `int x[4]`).
- */
-#define array_len(x) (sizeof(x) / sizeof((x)[0]) + \
-  0 * sizeof(struct { _Static_assert(!__builtin_types_compatible_p(__typeof__(x), __typeof__(&(x)[0])), "not array"); }))
+//----------------------------------------------------------------------------------------- Helpers
 
-/**
- * @brief Suppress unused variable/parameter warning.
- * @param x Variable or parameter to mark as intentionally unused.
- */
+// Element count of a static array, a decayed pointer fails to compile
+#define array_len(x) (sizeof(x) / sizeof((x)[0]) + \
+  0 * sizeof(struct { _Static_assert(!__builtin_types_compatible_p( \
+    __typeof__(x), __typeof__(&(x)[0])), "not array"); }))
+
+// Silence an unused variable or parameter warning
 #define unused(x) ((void)(x))
 
-/**
- * @brief Mark intentional switch-case fallthrough.
- * @note Use as standalone statement: `fallthrough;` right before next `case`.
- *   Silences `-Wimplicit-fallthrough` on GCC/Clang.
- *   On other compilers becomes no-op.
- */
+// Intentional `switch` fallthrough, written as a statement right before the next `case`
 #if defined(__GNUC__) || defined(__clang__)
   #define fallthrough __attribute__((fallthrough))
 #else
   #define fallthrough ((void)0)
 #endif
 
-//------------------------------------------------------------------------------------------------- TRY
+//------------------------------------------------------------------------------------------- Chain
 
 #define _try2(err, fn) { (err) = (fn); if(err) break; }
 #define _try3(err, fn, code) { (err) = (fn); if(err) { (err) = (code); break; } }
-#define _try5(err, fn, code, log_fn, msg) { (err) = (fn); if(err) { log_fn(msg); (err) = (code); break; } }
+#define _try5(err, fn, code, log_fn, msg) \
+  { (err) = (fn); if(err) { log_fn(msg); (err) = (code); break; } }
 
-/**
- * @brief Break on error (variadic macro).
- * @example try_break(err, fn): Break on error
- * @example try_break(err, fn, code): Break on error, override with code
- * @example try_break(err, fn, code, log_fn, msg): Break on error, override with code and log
- */
+// Break out of a `do { } while(0)` chain on failure: `(err, fn)` keeps the status,
+// `(err, fn, code)` overrides it with `code`, `(err, fn, code, log_fn, msg)` logs first
 #define try_break(...) _args5(__VA_ARGS__, _try5, _try3, _try3, _try2)(__VA_ARGS__)
-
 
 //-------------------------------------------------------------------------------------------------
 #endif

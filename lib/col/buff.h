@@ -5,17 +5,15 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
-#include "heap.h"
 
-//------------------------------------------------------------------------------------------------- Config
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef BUFF_MSG_LIMIT
   // Max pending messages in queue
   #define BUFF_MSG_LIMIT 32
 #endif
 
-//------------------------------------------------------------------------------------------------- Structure
+//--------------------------------------------------------------------------------------- Structure
 
 /**
  * @brief Message-oriented circular buffer.
@@ -47,13 +45,13 @@ typedef struct {
   volatile uint8_t *_head;
   volatile uint8_t *_echo;
   volatile uint16_t _msg_counter;
-  uint16_t _msg_size[BUFF_MSG_LIMIT];
+  volatile uint16_t _msg_size[BUFF_MSG_LIMIT];
   volatile uint16_t _msg_head;
   volatile uint16_t _msg_tail;
   bool _break_allow;
 } BUFF_t;
 
-//------------------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 /**
  * @brief Initialize circular buffer state.
@@ -84,14 +82,14 @@ bool BUFF_Break(BUFF_t *buff);
  * @param[in] buff Pointer to buffer structure
  * @return Size in bytes, `0` if no pending message
  */
-uint16_t BUFF_Size(BUFF_t *buff);
+uint16_t BUFF_Size(const BUFF_t *buff);
 
 /**
  * @brief Get number of pending messages in the queue.
  * @param[in] buff Pointer to buffer structure
  * @return Number of messages waiting to be read
  */
-uint16_t BUFF_MessageCount(BUFF_t *buff);
+uint16_t BUFF_MessageCount(const BUFF_t *buff);
 
 /**
  * @brief Append single byte. Drop-newest on buffer overflow.
@@ -140,7 +138,7 @@ uint16_t BUFF_Read(BUFF_t *buff, uint8_t *dst);
  * @param[out] dst Destination buffer or `NULL`
  * @return Message size
  */
-uint16_t BUFF_Peek(BUFF_t *buff, uint8_t *dst);
+uint16_t BUFF_Peek(const BUFF_t *buff, uint8_t *dst);
 
 /**
  * @brief Skip current message.
@@ -156,10 +154,10 @@ bool BUFF_Skip(BUFF_t *buff);
 void BUFF_Clear(BUFF_t *buff);
 
 /**
- * @brief Read current message as heap-allocated null-terminated string.
- *   Caller must free the returned pointer.
+ * @brief Read current message as a terminated string from `heap_new`,
+ *   owned by the garbage collector of the calling thread.
  * @param[in,out] buff Pointer to buffer structure
- * @return Heap pointer or `NULL` if empty or alloc failed
+ * @return String, `NULL` if empty or the heap is full
  */
 char *BUFF_ReadString(BUFF_t *buff);
 

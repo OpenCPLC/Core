@@ -8,8 +8,10 @@
 #include "vrts.h"
 #include "main.h"
 
+//------------------------------------------------------------------------------------------ Config
+
 #ifndef LOG_ARYSPACE_MAXLEN
-  // Max length of inline separator text between array elements (`%a` formatter)
+  // Longest separator text between array elements of the `%a` formatter [B]
   #define LOG_ARYSPACE_MAXLEN 32
 #endif
 
@@ -22,9 +24,11 @@
 #define LOG_LEVEL_NIL 6
 
 #ifndef LOG_LEVEL
-  // Compile-time log threshold. Messages below this level are stripped at compile.
+  // Compile-time threshold, messages below it are stripped from the build
   #define LOG_LEVEL LOG_LEVEL_INF
 #endif
+
+//------------------------------------------------------------------------------------------- Types
 
 typedef enum {
   LOG_Level_Debug = LOG_LEVEL_DBG,
@@ -36,14 +40,16 @@ typedef enum {
   LOG_Level_None = LOG_LEVEL_NIL
 } LOG_Level_t;
 
+// Levels below critical stay silent while clear, the console drops it while a line is typed
 extern bool LogPrintFlag;
 
+//------------------------------------------------------------------------------------------- Print
+
 /**
- * @brief Print formatted string to debug output.
+ * @brief Print formatted text to the debug output.
  * Format: `%[flags][width][.precision][length]conversion`
  * Flags:
  *   `0`: Zero-pad numeric output (default: space-pad)
- *   `-`: Left-align (parsed, not yet honored)
  * Standard conversions (printf-compatible):
  *   `%d` `%i` `%u` Integer (use `l`/`ll` for 64-bit)
  *   `%x` `%X`      Hexadecimal
@@ -66,60 +72,63 @@ extern bool LogPrintFlag;
  * Width/precision (printf semantics):
  *   `%5d`          5-char field, space-padded   (e.g. `"   42"`)
  *   `%05d`         5-char field, zero-padded    (e.g. `"00042"`)
- *   `%.3d`        Minimum 3 digits, zero-pad   (e.g. `"042"`)
- * Logs do NOT include automatic timestamp prefix. Use `%t` or `%T` explicitly
- * when timing is needed. When RTC is not initialized, `%t`/`%T` fall back to
- * the current tick value.
+ *   `%.3d`         Minimum 3 digits, zero-pad   (e.g. `"042"`)
+ * Logs do NOT include an automatic timestamp prefix.
+ * Use `%t` or `%T` explicitly when timing is needed.
+ * When RTC is not initialized, `%t`/`%T` fall back to the current tick value.
  * Unknown specifiers are echoed raw (e.g. `%q` -> `%q`) so typos are visible.
  * @param[in] template Format string
  * @param[in] ... Format arguments
  */
 void print(const char *template, ...);
 
-void LOG_Nope(const char *message, ...);     // No-op log (for disabled levels)
-void LOG_Bash(const char *message, ...);     // Bash response (always visible)
-void LOG_Debug(const char *message, ...);    // Log debug message (DBG)
-void LOG_Info(const char *message, ...);     // Log info message (INF)
-void LOG_Warning(const char *message, ...);  // Log warning message (WRN)
-void LOG_Error(const char *message, ...);    // Log error message (ERR)
-void LOG_Critical(const char *message, ...); // Log critical message and flush (CRT)
-void LOG_Panic(const char *message);         // Log panic message and flush blocking (PNC)
+//--------------------------------------------------------------------------------------------- Log
+
+// One line per call: colored level tag, formatted message, line break.
+// Levels under `LOG_LEVEL` compile to nothing
+void LOG_Nope(const char *message, ...);     // no-op, for a disabled level
+void LOG_Bash(const char *message, ...);     // shell response, always printed
+void LOG_Debug(const char *message, ...);
+void LOG_Info(const char *message, ...);
+void LOG_Warning(const char *message, ...);
+void LOG_Error(const char *message, ...);
+void LOG_Critical(const char *message, ...); // flushed to the port before returning
+void LOG_Panic(const char *message);         // plain text, flushed blocking
 
 /**
- * @brief Log message with specified level.
+ * @brief Log with the level chosen at runtime.
  * @param[in] lvl Log level
  * @param[in] message Format string
  * @param[in] ... Format arguments
  */
-void LOG_Message(LOG_Level_t lvl, char *message, ...);
+void LOG_Message(LOG_Level_t lvl, const char *message, ...);
 
-#define LOG_NOP LOG_Nope      // No-op log (for disabled levels)
-#define LOG_DBG LOG_Debug     // Log debug message
-#define LOG_INF LOG_Info      // Log info message
-#define LOG_WRN LOG_Warning   // Log warning message
-#define LOG_ERR LOG_Error     // Log error message
-#define LOG_CRT LOG_Critical  // Log critical message and flush
-#define LOG_PNC LOG_Panic     // Log panic message and flush blocking
-#define LOG_MSG LOG_Message   // Log message with specified level
+#define LOG_NOP LOG_Nope
+#define LOG_DBG LOG_Debug
+#define LOG_INF LOG_Info
+#define LOG_WRN LOG_Warning
+#define LOG_ERR LOG_Error
+#define LOG_CRT LOG_Critical
+#define LOG_PNC LOG_Panic
+#define LOG_MSG LOG_Message
 
-// Library name tag (cream brackets, append at end of message)
-#define LOG_LIB(name) " " ANSI_GREY "[" ANSI_CREAM name ANSI_GREY "]" ANSI_END
-// Debug log with library tag
-#define LOG_LIB_DBG(name, fmt, ...) LOG_DBG(fmt LOG_LIB(name), ##__VA_ARGS__)
-// Info log with library tag
-#define LOG_LIB_INF(name, fmt, ...) LOG_INF(fmt LOG_LIB(name), ##__VA_ARGS__)
-// Warning log with library tag
-#define LOG_LIB_WRN(name, fmt, ...) LOG_WRN(fmt LOG_LIB(name), ##__VA_ARGS__)
-// Error log with library tag
-#define LOG_LIB_ERR(name, fmt, ...) LOG_ERR(fmt LOG_LIB(name), ##__VA_ARGS__)
-// Critical log with library tag
-#define LOG_LIB_CRT(name, fmt, ...) LOG_CRT(fmt LOG_LIB(name), ##__VA_ARGS__)
+// Aside in grey: format text, not a value; brings its own space, args follow the message
+#define LOG_NOTE(fmt) ANSI_GREY " (" fmt ")" ANSI_END
+// Context tag: a module, command or any short phrase. Caller adds the spacing
+#define LOG_TAG(name) ANSI_GREY "[" ANSI_CREAM name ANSI_GREY "]" ANSI_END
+// Log with the context tag appended
+#define LOG_TAG_DBG(name, fmt, ...) LOG_DBG(fmt " " LOG_TAG(name), ##__VA_ARGS__)
+#define LOG_TAG_INF(name, fmt, ...) LOG_INF(fmt " " LOG_TAG(name), ##__VA_ARGS__)
+#define LOG_TAG_WRN(name, fmt, ...) LOG_WRN(fmt " " LOG_TAG(name), ##__VA_ARGS__)
+#define LOG_TAG_ERR(name, fmt, ...) LOG_ERR(fmt " " LOG_TAG(name), ##__VA_ARGS__)
+#define LOG_TAG_CRT(name, fmt, ...) LOG_CRT(fmt " " LOG_TAG(name), ##__VA_ARGS__)
 
 /**
- * @brief Log parse error.
- * @param[in] value Value that failed to parse
+ * @brief Error line for a value that failed to parse.
+ * @param[in] value Text that failed
  * @param[in] type Expected type name
  */
 void LOG_ErrorParse(const char *value, const char *type);
 
+//-------------------------------------------------------------------------------------------------
 #endif

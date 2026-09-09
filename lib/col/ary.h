@@ -3,23 +3,22 @@
 #ifndef ARY_H_
 #define ARY_H_
 
-#include <stdint.h>
-#include <stddef.h>
 #include <stdbool.h>
-#include <string.h>
+#include <stddef.h>
+#include <stdint.h>
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------- Structure
 
 /**
- * @brief Universal array/ring buffer structure.
- * @param[in] value Pointer to element buffer.
- * @param[in] limit Maximum capacity (elements).
- * @param[in] element_size Size of single element (bytes).
- * @param[in] overwrite When `true` and full, push overwrites oldest.
- * @param[in,out] count Current number of elements.
+ * @brief Array of fixed-size elements over user memory, optionally a ring.
+ * @param[in] value Element storage
+ * @param[in] limit Capacity [elements]
+ * @param[in] element_size Size of one element [B]
+ * @param[in] overwrite When `true` a push on a full array drops the oldest element
+ * @param[out] count Elements held
  * Internal:
- * @param _head Write index (next free slot).
- * @param _tail Read index (oldest element).
+ * @param _head Write index, next free slot
+ * @param _tail Read index, oldest element
  */
 typedef struct {
   void *value;
@@ -27,17 +26,18 @@ typedef struct {
   uint16_t element_size;
   bool overwrite;
   uint16_t count;
+  // internal
   uint16_t _head;
   uint16_t _tail;
 } ary_t;
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------ Macros
 
 /**
- * @brief Declare empty array.
- * @param name Variable name.
- * @param type Element type.
- * @param capacity Maximum elements.
+ * @brief Declare an empty array with its storage.
+ * @param name Variable name
+ * @param type Element type
+ * @param capacity Maximum elements
  */
 #define ary_new(name, type, capacity) \
   type name##_data[capacity]; \
@@ -45,10 +45,10 @@ typedef struct {
     .overwrite = false, ._head = 0, ._tail = 0, .count = 0 }
 
 /**
- * @brief Declare ring buffer (overwrites oldest when full).
- * @param name Variable name.
- * @param type Element type.
- * @param capacity Maximum elements.
+ * @brief Declare a ring buffer, the oldest element is overwritten when full.
+ * @param name Variable name
+ * @param type Element type
+ * @param capacity Maximum elements
  */
 #define ary_ring(name, type, capacity) \
   type name##_data[capacity]; \
@@ -56,23 +56,25 @@ typedef struct {
     .overwrite = true, ._head = 0, ._tail = 0, .count = 0 }
 
 /**
- * @brief Declare array with initial values.
- * @param name Variable name.
- * @param type Element type.
- * @param capacity Maximum elements.
- * @param ... Initial values in braces, e.g. `{1, 2, 3}`.
+ * @brief Declare an array with initial values.
+ *   `_head` holds `(_tail + count) % limit`, so a list filling the array wraps it to `0`.
+ * @param name Variable name
+ * @param type Element type
+ * @param capacity Maximum elements
+ * @param ... Initial values in braces, `{1, 2, 3}`
  */
 #define ary_init(name, type, capacity, ...) \
   type name##_data[capacity] = __VA_ARGS__; \
   ary_t name = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type), \
-    .overwrite = false, ._head = (uint16_t)(sizeof((type[])__VA_ARGS__) / sizeof(type)), \
+    .overwrite = false, \
+    ._head = (uint16_t)((sizeof((type[])__VA_ARGS__) / sizeof(type)) % (capacity)), \
     ._tail = 0, .count = (uint16_t)(sizeof((type[])__VA_ARGS__) / sizeof(type)) }
 
 /**
- * @brief Declare const array (fixed size, read-only).
- * @param name Variable name.
- * @param type Element type.
- * @param ... Initial values in braces, e.g. `{1, 2, 3}`.
+ * @brief Declare a read-only array sized by its initializer.
+ * @param name Variable name
+ * @param type Element type
+ * @param ... Initial values in braces, `{1, 2, 3}`
  */
 #define ary_const(name, type, ...) \
   const type name##_data[] = __VA_ARGS__; \
@@ -82,146 +84,125 @@ typedef struct {
     ._head = name##_limit, ._tail = 0, .count = name##_limit }
 
 /**
- * @brief Iterate over array elements by index.
- * @param idx Index variable name.
- * @param ary Pointer to `ary_t`.
+ * @brief Loop over element indices.
+ * @param idx Index variable name
+ * @param ary Pointer to `ary_t`
  */
 #define ary_for(idx, ary) \
   for(uint16_t idx = 0; idx < (ary)->count; idx++)
 
-/**
- * @brief Get element count.
- * @param ary Pointer to `ary_t`.
- */
+// Elements held
 #define ary_count(ary) ((ary)->count)
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Add element at end (head).
- * @param[in,out] ary Array.
- * @param[in] element Element to add.
- * @return `true` on success, `false` if full and `overwrite` disabled.
+ * @brief Add element at the end.
+ * @param[in,out] ary Array
+ * @param[in] element Element to add
+ * @return `true` on success, `false` if full and `overwrite` is off
  */
 bool ary_push(ary_t *ary, const void *element);
 
 /**
- * @brief Remove element from end (head).
- * @param[in,out] ary Array.
- * @param[out] out Removed element or `NULL`.
- * @return `true` on success, `false` if empty.
+ * @brief Remove the last element.
+ * @param[in,out] ary Array
+ * @param[out] out Removed element, `NULL` = discard
+ * @return `true` on success, `false` if empty
  */
 bool ary_pop(ary_t *ary, void *out);
 
 /**
- * @brief Remove element from front (tail).
- * @param[in,out] ary Array.
- * @param[out] out Removed element or `NULL`.
- * @return `true` on success, `false` if empty.
+ * @brief Remove the first element.
+ * @param[in,out] ary Array
+ * @param[out] out Removed element, `NULL` = discard
+ * @return `true` on success, `false` if empty
  */
 bool ary_shift(ary_t *ary, void *out);
 
 /**
- * @brief Add element at front (tail).
- * @param[in,out] ary Array.
- * @param[in] element Element to add.
- * @return `true` on success, `false` if full and `overwrite` disabled.
+ * @brief Add element at the front.
+ * @param[in,out] ary Array
+ * @param[in] element Element to add
+ * @return `true` on success, `false` if full and `overwrite` is off
  */
 bool ary_unshift(ary_t *ary, const void *element);
 
 /**
- * @brief Read last element without removing.
- * @param[in] ary Array.
- * @param[out] out Element copy.
- * @return `true` on success, `false` if empty.
+ * @brief Copy the last element without removing it.
+ * @param[in] ary Array
+ * @param[out] out Element copy
+ * @return `true` on success, `false` if empty
  */
 bool ary_peek(const ary_t *ary, void *out);
 
 /**
- * @brief Read first element without removing.
- * @param[in] ary Array.
- * @param[out] out Element copy.
- * @return `true` on success, `false` if empty.
+ * @brief Copy the first element without removing it.
+ * @param[in] ary Array
+ * @param[out] out Element copy
+ * @return `true` on success, `false` if empty
  */
 bool ary_peek_first(const ary_t *ary, void *out);
 
 /**
- * @brief Get pointer to element at `index`.
- * @param[in] ary Array.
- * @param[in] index Element index.
- * @return Pointer to element or `NULL` if out of range.
+ * @brief Element at `index`.
+ * @param[in] ary Array
+ * @param[in] index Element index
+ * @return Pointer to the element, `NULL` when out of range
  */
 void *ary_get(const ary_t *ary, uint16_t index);
 
 /**
- * @brief Set element at `index`.
- * @param[in,out] ary Array.
- * @param[in] index Element index.
- * @param[in] element New value.
- * @return `true` on success, `false` if out of range.
+ * @brief Overwrite element at `index`.
+ * @param[in,out] ary Array
+ * @param[in] index Element index
+ * @param[in] element New value
+ * @return `true` on success, `false` when out of range
  */
 bool ary_set(ary_t *ary, uint16_t index, const void *element);
 
 /**
- * @brief Insert element at `index`, shift others right.
- * @param[in,out] ary Array.
- * @param[in] index Insert position.
- * @param[in] element Element to insert.
- * @return `true` on success, `false` if out of range or full.
+ * @brief Insert element at `index`, the rest moves up.
+ * @param[in,out] ary Array
+ * @param[in] index Insert position
+ * @param[in] element Element to insert
+ * @return `true` on success, `false` when out of range or full
  */
 bool ary_insert(ary_t *ary, uint16_t index, const void *element);
 
 /**
- * @brief Remove element at `index`, shift others left.
- * @param[in,out] ary Array.
- * @param[in] index Remove position.
- * @param[out] out Removed element or `NULL`.
- * @return `true` on success, `false` if out of range.
+ * @brief Remove element at `index`, the rest moves down.
+ * @param[in,out] ary Array
+ * @param[in] index Remove position
+ * @param[out] out Removed element, `NULL` = discard
+ * @return `true` on success, `false` when out of range
  */
 bool ary_remove(ary_t *ary, uint16_t index, void *out);
 
 /**
- * @brief Swap elements at indices `i` and `j`.
- * @param[in,out] ary Array.
- * @param[in] i First index.
- * @param[in] j Second index.
- * @return `true` on success, `false` if out of range.
+ * @brief Swap elements `i` and `j`.
+ * @param[in,out] ary Array
+ * @param[in] i First index
+ * @param[in] j Second index
+ * @return `true` on success, `false` when out of range
  */
 bool ary_swap(ary_t *ary, uint16_t i, uint16_t j);
 
-/**
- * @brief Clear array (reset count).
- * @param[in,out] ary Array.
- */
+// Drop every element
 void ary_clear(ary_t *ary);
 
-/**
- * @brief Check if array is empty.
- * @param[in] ary Array.
- * @return `true` if empty.
- */
 bool ary_empty(const ary_t *ary);
-
-/**
- * @brief Check if array is full.
- * @param[in] ary Array.
- * @return `true` if full.
- */
 bool ary_full(const ary_t *ary);
 
-/**
- * @brief Get remaining free slots.
- * @param[in] ary Array.
- * @return Number of free elements.
- */
+// Free slots left
 uint16_t ary_free(const ary_t *ary);
 
 /**
- * @brief Copy last N elements to output buffer.
- * @param[in] ary Array.
- * @param[in] count Requested number of elements.
- * @param[out] out Output buffer (must fit `count` elements).
- * @return Actual number of elements copied (min of `count` and `ary->count`).
+ * @brief Copy the newest `count` elements, oldest of them first.
+ * @param[in] ary Array
+ * @param[in] count Elements requested
+ * @param[out] out Output, room for `count` elements
+ * @return Elements copied, `count` capped by what the array holds
  */
 uint16_t ary_copy_last(const ary_t *ary, uint16_t count, void *out);
 

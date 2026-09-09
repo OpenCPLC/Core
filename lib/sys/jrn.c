@@ -4,17 +4,17 @@
 #include "rtc.h"
 #include "vrts.h"
 
-//------------------------------------------------------------------------------------ Internal
+//---------------------------------------------------------------------------------------- Internal
 
 static PDB_t *jrn;
 
-static bool JRN_CodeFilter(const void *record, void *ctx)
+static bool code_filter(const void *record, void *ctx)
 {
   return ((const JRN_t *)record)->code == *(uint16_t *)ctx;
 }
 
 // Current time as journal sort key: RTC unix timestamp, fallback to boot tick
-static uint32_t JRN_GetTime(void)
+static uint32_t time_now(void)
 {
   if(RtcInit) {
     RTC_Datetime_t dt = RTC_Datetime();
@@ -23,7 +23,7 @@ static uint32_t JRN_GetTime(void)
   return (uint32_t)tick_keep(0);
 }
 
-//----------------------------------------------------------------------------------------- API
+//--------------------------------------------------------------------------------------------- API
 
 status_t JRN_Init(PDB_t *pdb)
 {
@@ -40,7 +40,7 @@ status_t JRN_Init(PDB_t *pdb)
 
 status_t JRN_Insert(uint16_t code)
 {
-  JRN_t record = { .time = JRN_GetTime(), .code = code };
+  JRN_t record = { .time = time_now(), .code = code };
   JRN_LOG("Insert code:%u", code);
   return PDB_Insert(jrn, &record);
 }
@@ -68,7 +68,7 @@ uint32_t JRN_SelectCode(const PDB_Query_t *query, uint16_t code, MBB_t *mbb)
   if(!mbb->limit) return 0;
   PDB_Query_t q = *query;
   uint16_t code_local = code;
-  q.filter = &JRN_CodeFilter;
+  q.filter = &code_filter;
   q.filter_ctx = &code_local;
   uint32_t max = mbb->limit / sizeof(JRN_t);
   uint32_t count = PDB_Select(jrn, &q, mbb->buffer, max);
@@ -92,3 +92,5 @@ void JRN_GetTimestamp(MBB_t *mbb)
   }
   mbb->size = count * sizeof(uint32_t);
 }
+
+//-------------------------------------------------------------------------------------------------

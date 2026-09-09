@@ -1,15 +1,19 @@
 // hal/stm32g0/sys/irq_g0.c
 
 #include "irq.h"
-#include "startup.h"
+
 #include "dma.h"
+#include "startup.h"
+#include "xdef.h"
 
-// M0+ has only 4 priority levels (2 bits), extract from unified 16-level enum
-#define IRQ_PRIO(p) ((p) >> 2)
+// M0+ holds 4 priority levels, the top bits of the unified 16-level enum
+#define irq_prio(p) ((p) >> 2)
 
-//------------------------------------------------------------------------------------------------- TIM
+// `IRQ_t` carries the CMSIS vector numbers, the cast bridges the two enum types
 
-static IRQ_t IRQ_GetTIM(void *tim)
+//--------------------------------------------------------------------------------------------- TIM
+
+static IRQ_t irq_get_tim(void *tim)
 {
   switch((uint32_t)tim) {
     case (uint32_t)TIM1:  return IRQ_TIM1;
@@ -28,7 +32,7 @@ static IRQ_t IRQ_GetTIM(void *tim)
   }
 }
 
-static void IRQ_SetCallbackTIM(void *tim, IRQ_Handler_t handler, void *object)
+static void irq_set_tim(void *tim, IRQ_Handler_t handler, void *object)
 {
   switch((uint32_t)tim) {
     case (uint32_t)TIM1:  TIM1_Cb  = handler; TIM1_CbArg  = object; break;
@@ -48,30 +52,51 @@ static void IRQ_SetCallbackTIM(void *tim, IRQ_Handler_t handler, void *object)
 
 void IRQ_EnableTIM(void *tim, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
 {
-  IRQ_t irq = IRQ_GetTIM(tim);
+  IRQ_t irq = irq_get_tim(tim);
   if(irq == IRQ_Invalid) return;
-  IRQ_SetCallbackTIM(tim, handler, object);
-  NVIC_SetPriority(irq, IRQ_PRIO(priority));
-  NVIC_EnableIRQ(irq);
+  irq_set_tim(tim, handler, object);
+  NVIC_SetPriority((IRQn_Type)irq, irq_prio(priority));
+  NVIC_EnableIRQ((IRQn_Type)irq);
+}
+
+// Capture/compare vector: one callback per vector, compare flags cleared before
+// the call so the handler stays pure logic. On this family only the advanced
+// timer has a separate capture/compare vector
+static IRQ_Handler_t TIM1CC_Cb;
+static void *TIM1CC_CbArg;
+
+void TIM1_CC_IRQHandler(void)
+{
+  TIM1->SR = ~(TIM_SR_CC1IF | TIM_SR_CC2IF | TIM_SR_CC3IF | TIM_SR_CC4IF);
+  if(TIM1CC_Cb) TIM1CC_Cb(TIM1CC_CbArg);
+}
+
+void IRQ_EnableTIMCC(void *tim, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
+{
+  if(tim != TIM1) return;
+  TIM1CC_Cb = handler;
+  TIM1CC_CbArg = object;
+  NVIC_SetPriority(TIM1_CC_IRQn, irq_prio(priority));
+  NVIC_EnableIRQ(TIM1_CC_IRQn);
 }
 
 void IRQ_DisableTIM(void *tim)
 {
-  IRQ_t irq = IRQ_GetTIM(tim);
+  IRQ_t irq = irq_get_tim(tim);
   if(irq == IRQ_Invalid) return;
-  NVIC_DisableIRQ(irq);
+  NVIC_DisableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_ClearPendingTIM(void *tim)
 {
-  IRQ_t irq = IRQ_GetTIM(tim);
+  IRQ_t irq = irq_get_tim(tim);
   if(irq == IRQ_Invalid) return;
-  NVIC_ClearPendingIRQ(irq);
+  NVIC_ClearPendingIRQ((IRQn_Type)irq);
 }
 
-//------------------------------------------------------------------------------------------------- UART
+//-------------------------------------------------------------------------------------------- UART
 
-static IRQ_t IRQ_GetUART(void *uart)
+static IRQ_t irq_get_uart(void *uart)
 {
   switch((uint32_t)uart) {
     case (uint32_t)USART1:  return IRQ_UART1;
@@ -92,7 +117,7 @@ static IRQ_t IRQ_GetUART(void *uart)
   }
 }
 
-static void IRQ_SetCallbackUART(void *uart, IRQ_Handler_t handler, void *object)
+static void irq_set_uart(void *uart, IRQ_Handler_t handler, void *object)
 {
   switch((uint32_t)uart) {
     case (uint32_t)USART1:  USART1_Cb  = handler; USART1_CbArg  = object; break;
@@ -114,30 +139,30 @@ static void IRQ_SetCallbackUART(void *uart, IRQ_Handler_t handler, void *object)
 
 void IRQ_EnableUART(void *uart, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
 {
-  IRQ_t irq = IRQ_GetUART(uart);
+  IRQ_t irq = irq_get_uart(uart);
   if(irq == IRQ_Invalid) return;
-  IRQ_SetCallbackUART(uart, handler, object);
-  NVIC_SetPriority(irq, IRQ_PRIO(priority));
-  NVIC_EnableIRQ(irq);
+  irq_set_uart(uart, handler, object);
+  NVIC_SetPriority((IRQn_Type)irq, irq_prio(priority));
+  NVIC_EnableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_DisableUART(void *uart)
 {
-  IRQ_t irq = IRQ_GetUART(uart);
+  IRQ_t irq = irq_get_uart(uart);
   if(irq == IRQ_Invalid) return;
-  NVIC_DisableIRQ(irq);
+  NVIC_DisableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_ClearPendingUART(void *uart)
 {
-  IRQ_t irq = IRQ_GetUART(uart);
+  IRQ_t irq = irq_get_uart(uart);
   if(irq == IRQ_Invalid) return;
-  NVIC_ClearPendingIRQ(irq);
+  NVIC_ClearPendingIRQ((IRQn_Type)irq);
 }
 
-//------------------------------------------------------------------------------------------------- I2C
+//--------------------------------------------------------------------------------------------- I2C
 
-static IRQ_t IRQ_GetI2C(void *i2c)
+static IRQ_t irq_get_i2c(void *i2c)
 {
   switch((uint32_t)i2c) {
     case (uint32_t)I2C1: return IRQ_I2C1;
@@ -149,7 +174,7 @@ static IRQ_t IRQ_GetI2C(void *i2c)
   }
 }
 
-static void IRQ_SetCallbackI2C(void *i2c, IRQ_Handler_t event, void *object)
+static void irq_set_i2c(void *i2c, IRQ_Handler_t event, void *object)
 {
   switch((uint32_t)i2c) {
     case (uint32_t)I2C1: I2C1_Cb = event; I2C1_CbArg = object; break;
@@ -160,33 +185,34 @@ static void IRQ_SetCallbackI2C(void *i2c, IRQ_Handler_t event, void *object)
   }
 }
 
-void IRQ_EnableI2C(void *i2c, IRQ_Priority_t priority, IRQ_Handler_t event, IRQ_Handler_t error, void *object)
+void IRQ_EnableI2C(void *i2c, IRQ_Priority_t priority, IRQ_Handler_t event,
+  IRQ_Handler_t error, void *object)
 {
-  (void)error; // G0 has single IRQ per I2C
-  IRQ_t irq = IRQ_GetI2C(i2c);
+  unused(error); // one vector per I2C on this family
+  IRQ_t irq = irq_get_i2c(i2c);
   if(irq == IRQ_Invalid) return;
-  IRQ_SetCallbackI2C(i2c, event, object);
-  NVIC_SetPriority(irq, IRQ_PRIO(priority));
-  NVIC_EnableIRQ(irq);
+  irq_set_i2c(i2c, event, object);
+  NVIC_SetPriority((IRQn_Type)irq, irq_prio(priority));
+  NVIC_EnableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_DisableI2C(void *i2c)
 {
-  IRQ_t irq = IRQ_GetI2C(i2c);
+  IRQ_t irq = irq_get_i2c(i2c);
   if(irq == IRQ_Invalid) return;
-  NVIC_DisableIRQ(irq);
+  NVIC_DisableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_ClearPendingI2C(void *i2c)
 {
-  IRQ_t irq = IRQ_GetI2C(i2c);
+  IRQ_t irq = irq_get_i2c(i2c);
   if(irq == IRQ_Invalid) return;
-  NVIC_ClearPendingIRQ(irq);
+  NVIC_ClearPendingIRQ((IRQn_Type)irq);
 }
 
-//------------------------------------------------------------------------------------------------- SPI
+//--------------------------------------------------------------------------------------------- SPI
 
-static IRQ_t IRQ_GetSPI(void *spi)
+static IRQ_t irq_get_spi(void *spi)
 {
   switch((uint32_t)spi) {
     case (uint32_t)SPI1: return IRQ_SPI1;
@@ -198,7 +224,7 @@ static IRQ_t IRQ_GetSPI(void *spi)
   }
 }
 
-static void IRQ_SetCallbackSPI(void *spi, IRQ_Handler_t handler, void *object)
+static void irq_set_spi(void *spi, IRQ_Handler_t handler, void *object)
 {
   switch((uint32_t)spi) {
     case (uint32_t)SPI1: SPI1_Cb = handler; SPI1_CbArg = object; break;
@@ -211,50 +237,50 @@ static void IRQ_SetCallbackSPI(void *spi, IRQ_Handler_t handler, void *object)
 
 void IRQ_EnableSPI(void *spi, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
 {
-  IRQ_t irq = IRQ_GetSPI(spi);
+  IRQ_t irq = irq_get_spi(spi);
   if(irq == IRQ_Invalid) return;
-  IRQ_SetCallbackSPI(spi, handler, object);
-  NVIC_SetPriority(irq, IRQ_PRIO(priority));
-  NVIC_EnableIRQ(irq);
+  irq_set_spi(spi, handler, object);
+  NVIC_SetPriority((IRQn_Type)irq, irq_prio(priority));
+  NVIC_EnableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_DisableSPI(void *spi)
 {
-  IRQ_t irq = IRQ_GetSPI(spi);
+  IRQ_t irq = irq_get_spi(spi);
   if(irq == IRQ_Invalid) return;
-  NVIC_DisableIRQ(irq);
+  NVIC_DisableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_ClearPendingSPI(void *spi)
 {
-  IRQ_t irq = IRQ_GetSPI(spi);
+  IRQ_t irq = irq_get_spi(spi);
   if(irq == IRQ_Invalid) return;
-  NVIC_ClearPendingIRQ(irq);
+  NVIC_ClearPendingIRQ((IRQn_Type)irq);
 }
 
-//------------------------------------------------------------------------------------------------- ADC
+//--------------------------------------------------------------------------------------------- ADC
 
 void IRQ_EnableADC(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
 {
   ADC_Cb = handler;
   ADC_CbArg = object;
-  NVIC_SetPriority(IRQ_ADC, IRQ_PRIO(priority));
-  NVIC_EnableIRQ(IRQ_ADC);
+  NVIC_SetPriority((IRQn_Type)IRQ_ADC, irq_prio(priority));
+  NVIC_EnableIRQ((IRQn_Type)IRQ_ADC);
 }
 
 void IRQ_DisableADC(void)
 {
-  NVIC_DisableIRQ(IRQ_ADC);
+  NVIC_DisableIRQ((IRQn_Type)IRQ_ADC);
 }
 
 void IRQ_ClearPendingADC(void)
 {
-  NVIC_ClearPendingIRQ(IRQ_ADC);
+  NVIC_ClearPendingIRQ((IRQn_Type)IRQ_ADC);
 }
 
-//------------------------------------------------------------------------------------------------- DMA
+//--------------------------------------------------------------------------------------------- DMA
 
-static IRQ_t IRQ_GetDMA(DMA_CHx_t channel)
+static IRQ_t irq_get_dma(DMA_CHx_t channel)
 {
   switch(channel) {
     case DMA_CH1: return IRQ_DMA1_CH1;
@@ -270,7 +296,7 @@ static IRQ_t IRQ_GetDMA(DMA_CHx_t channel)
   }
 }
 
-static void IRQ_SetCallbackDMA(DMA_CHx_t channel, IRQ_Handler_t handler, void *object)
+static void irq_set_dma(DMA_CHx_t channel, IRQ_Handler_t handler, void *object)
 {
   switch(channel) {
     case DMA_CH1: DMA_CH1_Cb = handler; DMA_CH1_CbArg = object; break;
@@ -291,32 +317,33 @@ static void IRQ_SetCallbackDMA(DMA_CHx_t channel, IRQ_Handler_t handler, void *o
   }
 }
 
-void IRQ_EnableDMA(DMA_CHx_t channel, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
+void IRQ_EnableDMA(DMA_CHx_t channel, IRQ_Priority_t priority,
+  IRQ_Handler_t handler, void *object)
 {
-  IRQ_t irq = IRQ_GetDMA(channel);
+  IRQ_t irq = irq_get_dma(channel);
   if(irq == IRQ_Invalid) return;
-  IRQ_SetCallbackDMA(channel, handler, object);
-  NVIC_SetPriority(irq, IRQ_PRIO(priority));
-  NVIC_EnableIRQ(irq);
+  irq_set_dma(channel, handler, object);
+  NVIC_SetPriority((IRQn_Type)irq, irq_prio(priority));
+  NVIC_EnableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_DisableDMA(DMA_CHx_t channel)
 {
-  IRQ_t irq = IRQ_GetDMA(channel);
+  IRQ_t irq = irq_get_dma(channel);
   if(irq == IRQ_Invalid) return;
-  NVIC_DisableIRQ(irq);
+  NVIC_DisableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_ClearPendingDMA(DMA_CHx_t channel)
 {
-  IRQ_t irq = IRQ_GetDMA(channel);
+  IRQ_t irq = irq_get_dma(channel);
   if(irq == IRQ_Invalid) return;
-  NVIC_ClearPendingIRQ(irq);
+  NVIC_ClearPendingIRQ((IRQn_Type)irq);
 }
 
-//------------------------------------------------------------------------------------------------- EXTI
+//-------------------------------------------------------------------------------------------- EXTI
 
-static IRQ_t IRQ_GetEXTI(uint8_t line)
+static IRQ_t irq_get_exti(uint8_t line)
 {
   if(line <= 1) return IRQ_EXTI01;
   if(line <= 3) return IRQ_EXTI23;
@@ -324,7 +351,7 @@ static IRQ_t IRQ_GetEXTI(uint8_t line)
   return IRQ_Invalid;
 }
 
-static void IRQ_SetCallbackEXTI(uint8_t line, IRQ_Handler_t handler, void *object)
+static void irq_set_exti(uint8_t line, IRQ_Handler_t handler, void *object)
 {
   switch(line) {
     case 0:  EXTI0_Cb  = handler; EXTI0_CbArg  = object; break;
@@ -348,25 +375,38 @@ static void IRQ_SetCallbackEXTI(uint8_t line, IRQ_Handler_t handler, void *objec
 
 void IRQ_EnableEXTI(uint8_t line, IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
 {
-  IRQ_t irq = IRQ_GetEXTI(line);
+  IRQ_t irq = irq_get_exti(line);
   if(irq == IRQ_Invalid) return;
-  IRQ_SetCallbackEXTI(line, handler, object);
-  NVIC_SetPriority(irq, IRQ_PRIO(priority));
-  NVIC_EnableIRQ(irq);
+  irq_set_exti(line, handler, object);
+  NVIC_SetPriority((IRQn_Type)irq, irq_prio(priority));
+  NVIC_EnableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_DisableEXTI(uint8_t line)
 {
-  IRQ_t irq = IRQ_GetEXTI(line);
+  IRQ_t irq = irq_get_exti(line);
   if(irq == IRQ_Invalid) return;
-  NVIC_DisableIRQ(irq);
+  NVIC_DisableIRQ((IRQn_Type)irq);
 }
 
 void IRQ_ClearPendingEXTI(uint8_t line)
 {
-  IRQ_t irq = IRQ_GetEXTI(line);
+  IRQ_t irq = irq_get_exti(line);
   if(irq == IRQ_Invalid) return;
-  NVIC_ClearPendingIRQ(irq);
+  NVIC_ClearPendingIRQ((IRQn_Type)irq);
 }
+
+//--------------------------------------------------------------------------------------------- USB
+
+void IRQ_EnableUSB(IRQ_Priority_t priority, IRQ_Handler_t handler, void *object)
+{
+  USB_Cb = handler;
+  USB_CbArg = object;
+  NVIC_SetPriority((IRQn_Type)IRQ_USB, irq_prio(priority));
+  NVIC_EnableIRQ((IRQn_Type)IRQ_USB);
+}
+
+void IRQ_DisableUSB(void) { NVIC_DisableIRQ((IRQn_Type)IRQ_USB); }
+void IRQ_ClearPendingUSB(void) { NVIC_ClearPendingIRQ((IRQn_Type)IRQ_USB); }
 
 //-------------------------------------------------------------------------------------------------

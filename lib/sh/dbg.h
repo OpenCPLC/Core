@@ -7,94 +7,86 @@
 #include "mbb.h"
 #include "main.h"
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------ Config
 
 #ifndef DBG_ECHO_MODE
+  // Echo typed characters back to the console
   #define DBG_ECHO_MODE ON
 #endif
 
 #ifndef DBG_RX_SIZE
+  // Console input ring [B]
   #define DBG_RX_SIZE 2048
 #endif
 
 #ifndef DBG_TX_SIZE
+  // Output batch handed to the UART per `DBG_Loop` pass [B]
   #define DBG_TX_SIZE 2048
 #endif
 
 #ifndef DBG_DATAMODE_TIMEOUT
+  // UART frame timeout while a binary transfer runs [bit times]
   #define DBG_DATAMODE_TIMEOUT 200
 #endif
 
-//-------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------- Globals
 
-extern UART_t *DbgUart;
-extern MBB_t *DbgFile;
-extern volatile bool DbgReset;
+extern UART_t *DbgUart;       // console port
+extern MBB_t *DbgFile;        // output sink every printer writes to
+extern volatile bool DbgReset; // reset requested, taken once the output drains
 extern bool DbgEcho;
+
 #ifdef HOST
+  // Host build: let the pending output out, then end the process
   #define DBG_PrintAndTerminate() (DbgReset = true)
 #endif
 
+//--------------------------------------------------------------------------------------------- API
+
 /**
- * @brief Initialize debug interface.
- * @param[in] uart UART peripheral for debug I/O
+ * @brief Attach the console to a port and start it.
+ * @param[in,out] uart Port, its `buff` is replaced by the console ring
  */
 void DBG_Init(UART_t *uart);
 
-/** @brief Main debug loop (blocking). */
+// Console thread: echo, shell, output drain; never returns
 void DBG_Loop(void);
 
-/** @brief Wait for UART transmission to complete (cooperative). */
+// Wait for the port to finish sending, yielding or blocking
 void DBG_Wait(void);
-
-/** @brief Wait for UART transmission to complete (blocking). */
 void DBG_WaitBlock(void);
 
 /**
- * @brief Send raw data over debug UART.
- * @param[in] array Data buffer
- * @param[in] length Data length
+ * @brief Send bytes straight to the port, waiting before and after.
+ * @param[in] data Bytes to send
+ * @param[in] len Number of bytes
  */
-void DBG_Send(uint8_t *array, uint16_t length);
+void DBG_Send(const uint8_t *data, uint16_t len);
 
-/**
- * @brief Send file contents over debug UART.
- * @param[in] file File to send
- */
+// Send the content of a buffer straight to the port
 void DBG_SendFile(MBB_t *file);
 
-/** @brief Reset debug file to internal buffer. */
+// Redirect the printers to another buffer, or back to the console one
+void DBG_SetFile(MBB_t *file);
 void DBG_DefaultFile(void);
 
-/**
- * @brief Set custom output file.
- * @param[in] file Output file
- */
-void DBG_SetFile(MBB_t *file);
+//-------------------------------------------------------------------------------------------- Read
 
-//-------------------------------------------------------------------------------------------------
-
-/** @brief Get available data size. */
+// Console input, one message at a time: bytes waiting, copy out, or as a heap string
 uint16_t DBG_Size(void);
-
-/**
- * @brief Read raw data from debug input.
- * @param[out] array Destination buffer
- * @return Bytes read
- */
-uint16_t DBG_Read(uint8_t *array);
-
-/** @brief Read string from debug input. */
+uint16_t DBG_Read(uint8_t *data);
 char *DBG_ReadString(void);
 
-//-------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------ Output
 
+// Printers into `DbgFile`, parameters as the `MBB_...` counterparts; every one returns
+// the bytes appended
 int32_t DBG_Char(uint8_t data);
 int32_t DBG_Char16(uint16_t data);
 int32_t DBG_Char32(uint32_t data);
 int32_t DBG_Char64(uint64_t data);
-int32_t DBG_Data(uint8_t *array, uint16_t length);
-int32_t DBG_String(char *string);
+int32_t DBG_Data(const uint8_t *data, uint16_t len);
+int32_t DBG_String(const char *str);
 int32_t DBG_Enter(void);
 int32_t DBG_DropLastLine(void);
 int32_t DBG_Bool(bool value);
@@ -109,16 +101,17 @@ int32_t DBG_Hex16(uint16_t nbr);
 int32_t DBG_Hex32(uint32_t nbr);
 int32_t DBG_Bin8(uint8_t nbr);
 
-int32_t DBG_Date(RTC_Datetime_t *datetime);
-int32_t DBG_Time(RTC_Datetime_t *datetime);
-int32_t DBG_TimeMs(RTC_Datetime_t *datetime);
-int32_t DBG_Datetime(RTC_Datetime_t *datetime);
-int32_t DBG_DatetimeMs(RTC_Datetime_t *datetime);
-int32_t DBG_AlarmTime(RTC_AlarmCfg_t *alarm);
-int32_t DBG_Alarm(RTC_AlarmCfg_t *alarm);
-int32_t MBB_Print(MBB_t *mmb);
+int32_t DBG_Date(const RTC_Datetime_t *datetime);
+int32_t DBG_Time(const RTC_Datetime_t *datetime);
+int32_t DBG_TimeMs(const RTC_Datetime_t *datetime);
+int32_t DBG_Datetime(const RTC_Datetime_t *datetime);
+int32_t DBG_DatetimeMs(const RTC_Datetime_t *datetime);
+int32_t DBG_AlarmTime(const RTC_AlarmCfg_t *alarm);
+int32_t DBG_Alarm(const RTC_AlarmCfg_t *alarm);
+
+// Buffer summary and hex dump, `%o` printers for the shell
+int32_t MBB_Print(MBB_t *mbb);
 int32_t MBB_PrintContent(MBB_t *mbb);
 
 //-------------------------------------------------------------------------------------------------
-
 #endif

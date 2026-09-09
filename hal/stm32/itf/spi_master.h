@@ -9,35 +9,39 @@
 #include "xdef.h"
 #include "main.h"
 
+//------------------------------------------------------------------------------------------ Config
+
 #ifndef SPI_SOFTWARE_ENABLE
+  // Bit-bang SPI on plain GPIO, `SPI_Software_t`
   #define SPI_SOFTWARE_ENABLE 0
 #endif
 
 #ifndef SPI_Delay
+  // Wait between chip select and the first clock, `cs_delay` argument
   #define SPI_Delay(x) delay(x)
 #endif
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------- Structure
 
 /**
- * @brief SPI master control structure with DMA.
- * @param[in] reg Pointer to SPI peripheral registers
- * @param[in] tx_dma TX DMA channel number
- * @param[in] rx_dma RX DMA channel number
+ * @brief SPI master, every transfer runs on DMA.
+ * @param[in] reg SPI peripheral registers
+ * @param[in] tx_dma TX DMA channel
+ * @param[in] rx_dma RX DMA channel
  * @param[in] irq_priority Interrupt priority for DMA
- * @param[in] sck SCK pin mapping enum value
- * @param[in] miso MISO pin mapping (`SPI_MISO_None` = TX-only)
- * @param[in] mosi MOSI pin mapping (`SPI_MOSI_None` = RX-only)
- * @param[in] cs Pointer to CS GPIO (`NULL` = hardware NSS)
- * @param[in] cs_delay CS setup delay in ticks
+ * @param[in] sck SCK pin mapping
+ * @param[in] miso MISO pin mapping, `SPI_MISO_None` = transmit only
+ * @param[in] mosi MOSI pin mapping, `SPI_MOSI_None` = receive only
+ * @param[in] cs Chip select GPIO, `NULL` = hardware NSS
+ * @param[in] cs_delay Wait after chip select, `SPI_Delay` units
  * @param[in] prescaler SPI clock prescaler
- * @param[in] lsb LSB-first mode (`false` = MSB first)
+ * @param[in] lsb LSB-first mode, `false` = MSB first
  * @param[in] cpol Clock polarity
  * @param[in] cpha Clock phase
  * Internal:
- * @param _tx_dma TX DMA registers structure
- * @param _rx_dma RX DMA registers structure
- * @param _const_byte Constant byte for read operations
+ * @param _tx_dma TX DMA register set
+ * @param _rx_dma RX DMA register set
+ * @param _const_byte Byte repeated on MOSI during a read, sink of RX during a write
  * @param _busy Transfer in progress flag
  */
 typedef struct {
@@ -61,66 +65,56 @@ typedef struct {
   volatile bool _busy;
 } SPI_Master_t;
 
-//-------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Initialize SPI master peripheral with DMA.
+ * @brief Initialize the peripheral, pins and DMA.
  * @param[in,out] spi Pointer to SPI master structure
  */
 void SPI_Master_Init(SPI_Master_t *spi);
 
-/**
- * @brief Check if SPI transfer is in progress.
- * @param[in] spi Pointer to SPI master structure
- * @return `true` if busy
- */
 bool SPI_Master_IsBusy(SPI_Master_t *spi);
-
-/**
- * @brief Check if SPI is ready for new transfer.
- * @param[in] spi Pointer to SPI master structure
- * @return `true` if free
- */
 bool SPI_Master_IsFree(SPI_Master_t *spi);
 
 /**
- * @brief Full-duplex SPI transfer.
+ * @brief Full-duplex transfer, both buffers stay valid until it ends.
  * @param[in,out] spi Pointer to SPI master structure
- * @param[out] rx_data Pointer to receive buffer
- * @param[in] tx_data Pointer to transmit buffer
- * @param[in] len Number of bytes to transfer
- * @return `FREE` if started, `BUSY` if transfer in progress
+ * @param[out] rx_data Receive buffer
+ * @param[in] tx_data Bytes to send
+ * @param[in] len Number of bytes
+ * @return `FREE` if started, `BUSY` if a transfer is in progress
  */
-status_t SPI_Master_Transfer(SPI_Master_t *spi, uint8_t *rx_data, uint8_t *tx_data, uint16_t len);
+status_t SPI_Master_Transfer(SPI_Master_t *spi, uint8_t *rx_data, uint8_t *tx_data,
+  uint16_t len);
 
 /**
- * @brief Read from SPI device (sends constant `cmd` byte).
+ * @brief Read `len` bytes while `cmd` is repeated on MOSI, a register address or a filler.
  * @param[in,out] spi Pointer to SPI master structure
- * @param[in] cmd Constant byte to send (e.g. register address)
- * @param[out] rx_data Pointer to receive buffer
- * @param[in] len Number of bytes to read
- * @return `FREE` if started, `BUSY` if transfer in progress
+ * @param[in] cmd Byte repeated for every received byte
+ * @param[out] rx_data Receive buffer
+ * @param[in] len Number of bytes
+ * @return `FREE` if started, `BUSY` if a transfer is in progress
  */
 status_t SPI_Master_Read(SPI_Master_t *spi, uint8_t cmd, uint8_t *rx_data, uint16_t len);
 
 /**
- * @brief Write to SPI device.
+ * @brief Write `len` bytes, the received ones are dropped.
  * @param[in,out] spi Pointer to SPI master structure
- * @param[in] tx_data Pointer to transmit buffer
- * @param[in] len Number of bytes to write
- * @return `FREE` if started, `BUSY` if transfer in progress
+ * @param[in] tx_data Bytes to send
+ * @param[in] len Number of bytes
+ * @return `FREE` if started, `BUSY` if a transfer is in progress
  */
 status_t SPI_Master_Write(SPI_Master_t *spi, uint8_t *tx_data, uint16_t len);
 
 /**
- * @brief Start RX-only transfer (for `RXONLY` mode without MOSI).
+ * @brief Receive-only transfer, the peripheral clocks in `RXONLY` mode without MOSI.
  * @param[in,out] spi Pointer to SPI master structure
- * @param[out] rx_data Pointer to receive buffer
- * @param[in] len Number of bytes to read
+ * @param[out] rx_data Receive buffer
+ * @param[in] len Number of bytes
  */
 void SPI_Master_OnlyRead(SPI_Master_t *spi, uint8_t *rx_data, uint16_t len);
 
-//-------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------- Software
 #if(SPI_SOFTWARE_ENABLE)
 
 #ifndef SPI_SOFTWARE_LSB
@@ -134,12 +128,12 @@ void SPI_Master_OnlyRead(SPI_Master_t *spi, uint8_t *rx_data, uint16_t len);
 #endif
 
 /**
- * @brief Software (bit-bang) SPI control structure.
- * @param[in] cs Pointer to CS GPIO
- * @param[in] sck Pointer to SCK GPIO
- * @param[in] miso Pointer to MISO GPIO
- * @param[in] mosi Pointer to MOSI GPIO
- * @param[in] delay Bit delay in NOP cycles
+ * @brief Bit-bang SPI master on four GPIO lines, blocking.
+ * @param[in] cs Chip select
+ * @param[in] sck Clock
+ * @param[in] miso Input
+ * @param[in] mosi Output
+ * @param[in] delay Wait after chip select [NOP cycles]
  */
 typedef struct {
   GPIO_t *cs;
@@ -150,19 +144,20 @@ typedef struct {
 } SPI_Software_t;
 
 /**
- * @brief Initialize software SPI.
+ * @brief Initialize the four lines and park the bus idle.
  * @param[in,out] spi Pointer to software SPI structure
  */
 void SPI_Software_Init(SPI_Software_t *spi);
 
 /**
- * @brief Full-duplex software SPI transfer.
+ * @brief Full-duplex transfer, done when the call returns.
  * @param[in,out] spi Pointer to software SPI structure
- * @param[out] rx_data Pointer to receive buffer
- * @param[in] tx_data Pointer to transmit buffer
- * @param[in] len Number of bytes to transfer
+ * @param[out] rx_data Receive buffer
+ * @param[in] tx_data Bytes to send
+ * @param[in] len Number of bytes
  */
-void SPI_Software_Transfer(SPI_Software_t *spi, uint8_t *rx_data, uint8_t *tx_data, uint16_t len);
+void SPI_Software_Transfer(SPI_Software_t *spi, uint8_t *rx_data, uint8_t *tx_data,
+  uint16_t len);
 
 #endif
 //-------------------------------------------------------------------------------------------------

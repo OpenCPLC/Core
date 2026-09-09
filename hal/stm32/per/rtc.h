@@ -5,7 +5,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
 
 #if defined(STM32G0)
   #include "stm32g0xx.h"
@@ -28,6 +27,19 @@
   #define RTC_WEEKDAYS_LONGNAMES 1
 #endif
 
+#ifndef RTC_LSE_RETRY
+  // Spin budget for LSE start-up. Counted in loop passes, not milliseconds: `RTC_Init` runs
+  // before any tick source is guaranteed, so there is nothing yet to measure time with.
+  // A healthy crystal settles well inside this; exhausting it means no crystal is present.
+  #define RTC_LSE_RETRY 4000000
+#endif
+
+#ifndef RTC_SYNC_RETRY
+  // Spin budget for the RTC synchronisation flags `INITF`, `ALRxWF` and `WUTWF`.
+  // They answer within two RTCCLK periods, so exhausting this means RTCCLK has stopped.
+  #define RTC_SYNC_RETRY 100000
+#endif
+
 //------------------------------------------------------------------------------------------- Types
 
 typedef enum {
@@ -48,15 +60,15 @@ typedef enum {
 } RTC_Alarm_t;
 
 /**
- * @brief RTC datetime structure.
- * @param[in] year Year offset from 2000 (`0`-`99` = 2000-2099)
- * @param[in] month Month `1`-`12`
- * @param[in] month_day Day of month `1`-`31`
- * @param[in] week_day Day of week `1`-`7` (Mon-Sun)
- * @param[in] hour Hour `0`-`23`
- * @param[in] minute Minute `0`-`59`
- * @param[in] second Second `0`-`59`
- * @param[in] ms Milliseconds `0`-`999`
+ * @brief Calendar date and time.
+ * @param year Years since 2000, `0..99`
+ * @param month Month `1..12`
+ * @param month_day Day of the month `1..31`
+ * @param week_day Day of the week `1..7`, Monday first
+ * @param hour Hour `0..23`
+ * @param minute Minute `0..59`
+ * @param second Second `0..59`
+ * @param ms Milliseconds `0..999`
  */
 typedef struct {
   uint8_t year;
@@ -70,16 +82,16 @@ typedef struct {
 } RTC_Datetime_t;
 
 /**
- * @brief RTC alarm configuration.
- * @param[in] week `true` = day field is weekday (1-7), `false` = month day
- * @param[in] day_mask `true` = ignore day field
- * @param[in] day Day value (weekday or month day)
- * @param[in] hour_mask `true` = ignore hour field
- * @param[in] hour Hour `0`-`23`
- * @param[in] minute_mask `true` = ignore minute field
- * @param[in] minute Minute `0`-`59`
- * @param[in] second_mask `true` = ignore second field
- * @param[in] second Second `0`-`59`
+ * @brief Alarm match, each masked field matches anything.
+ * @param week `day` is a weekday `1..7`, otherwise a day of the month
+ * @param day_mask Ignore `day`
+ * @param day Weekday or day of the month
+ * @param hour_mask Ignore `hour`
+ * @param hour Hour `0..23`
+ * @param minute_mask Ignore `minute`
+ * @param minute Minute `0..59`
+ * @param second_mask Ignore `second`
+ * @param second Second `0..59`
  */
 typedef struct {
   bool week;
@@ -95,58 +107,69 @@ typedef struct {
 
 //--------------------------------------------------------------------------------------------- API
 
-// Initialize RTC peripheral, enable LSE, configure NVIC. Call once before use
-void RTC_Init(void);
+/**
+ * @brief Start the `LSE` crystal, weakest drive first. Called by `RTC_Init`, and by
+ *   anything else that needs the crystal without the calendar.
+ *   The backup domain must be unlocked (`DBP`) before the call.
+ * @return `OK` when the crystal oscillates, `ERR` when no drive level starts it
+ */
+status_t RTC_StartLSE(void);
+
+/**
+ * @brief Clock the RTC from `LSE` and arm its interrupts, once before use.
+ *   On `ERR` both `RtcInit` and `RtcReady` stay `false` and no clock source is substituted:
+ *   a wrong time is worse than no time for anything scheduling on it. The caller decides
+ *   between a degraded mode and `panic`.
+ * @return `OK` when the RTC runs on `LSE`, `ERR` when the crystal never started
+ */
+status_t RTC_Init(void);
 
 //----------------------------------------------------------------------------------------- Convert
 
 /**
- * @brief Convert Unix timestamp to datetime structure.
+ * @brief Calendar of a Unix timestamp.
  * @param[in] timestamp Seconds since 1970-01-01 00:00:00 UTC
- * @return Decoded datetime
+ * @return Date and time
  */
 RTC_Datetime_t RTC_UnixToDatetime(uint64_t timestamp);
 
 /**
- * @brief Convert datetime to Unix timestamp.
- * @param[in] date Datetime to encode
- * @return Seconds since 1970-01-01, or `0` if year < 1970
+ * @brief Unix timestamp of a calendar.
+ * @param[in] date Date and time
+ * @return Seconds since 1970-01-01
  */
 uint64_t RTC_DatetimeToUnix(const RTC_Datetime_t *date);
 
-// Current weekday name from `RtcWeekdays` table
+// Name of the current weekday, from `RtcWeekdays`
 const char *RTC_WeekDayString(void);
 
 /**
- * @brief Sanity-check datetime against current RTC and field ranges.
- * @param[in] date Datetime to check
- * @param[in] time_zone Quarter-hour offset (e.g. `4` = UTC+1)
- * @return `true` if all fields valid and within 1h of current RTC time
+ * @brief Field ranges and agreement with the running RTC, within an hour.
+ * @param[in] date Date and time
+ * @param[in] time_zone Offset in quarter hours, `4` = UTC+1
+ * @return `true` when every field is valid and the time is near the RTC
  */
 bool RTC_DatetimeIsCorrect(const RTC_Datetime_t *date, int8_t time_zone);
 
 //----------------------------------------------------------------------------------- Convert Alarm
 
-// Convert seconds-of-day to alarm config (day masked)
+// Daystamp: seconds of the day, the day masked; weekstamp: seconds of the week
 RTC_AlarmCfg_t RTC_DaystampToAlarm(uint32_t stamp);
-// Convert seconds-of-week to alarm config (day = weekday)
 RTC_AlarmCfg_t RTC_WeekstampToAlarm(uint32_t stamp);
-// Encode alarm config to seconds-of-day (ignores day field)
 uint32_t RTC_AlarmToDaystamp(const RTC_AlarmCfg_t *alarm);
-// Encode alarm config to seconds-of-week
 uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm);
 
 //--------------------------------------------------------------------------------------------- Set
 
-// Write datetime to RTC, computes weekday automatically
+// Set the calendar, the weekday is computed into `datetime`
 void RTC_SetDatetime(RTC_Datetime_t *datetime);
-// Write Unix timestamp to RTC
 void RTC_SetTimestamp(uint64_t timestamp);
-// Reset RTC to 2000-01-01 00:00:00 and clear `RtcReady`
+// Back to 2000-01-01 00:00:00, `RtcReady` cleared
 void RTC_Reset(void);
 
 //--------------------------------------------------------------------------------------------- Get
 
+// Current calendar, Unix timestamp and its milliseconds, seconds of the day and the week
 RTC_Datetime_t RTC_Datetime(void);
 uint64_t RTC_Timestamp(void);
 uint64_t RTC_TimestampMs(void);
@@ -155,11 +178,13 @@ uint32_t RTC_Weekstamp(void);
 
 //--------------------------------------------------------------------------------------- Alarm Get
 
+// Match of an alarm slot, as configured or as seconds of the day
 RTC_AlarmCfg_t RTC_Alarm(RTC_Alarm_t alarm);
 uint32_t RTC_AlarmDaystamp(RTC_Alarm_t alarm);
 
 //----------------------------------------------------------------------------------- Alarm Control
 
+// Arm an alarm slot on a match, a daystamp, a weekstamp or an interval from now
 bool RTC_AlarmIsEnabled(RTC_Alarm_t alarm);
 void RTC_AlarmEnable(RTC_Alarm_t alarm, const RTC_AlarmCfg_t *cfg);
 void RTC_AlarmDaystampEnable(RTC_Alarm_t alarm, uint32_t stamp);
@@ -167,49 +192,40 @@ void RTC_AlarmWeekstampEnable(RTC_Alarm_t alarm, uint32_t stamp);
 void RTC_AlarmIntervalEnable(RTC_Alarm_t alarm, uint32_t interval_sec);
 void RTC_AlarmDisable(RTC_Alarm_t alarm);
 
-//------------------------------------------------------------------------------------- Wakeup Timer
+//------------------------------------------------------------------------------------ Wakeup Timer
 
+// Periodic wakeup every `sec` seconds
 void RTC_WakeupTimerEnable(uint32_t sec);
 void RTC_WakeupTimerDisable(void);
 
 //------------------------------------------------------------------------------------- Alarm Check
 
 /**
- * @brief Check if alarm daystamp is within `[now - min, now + max]` window.
- * @param[in] stamp_alarm Alarm time (seconds-of-day)
- * @param[in] offset_min_sec Window start offset before now
- * @param[in] offset_max_sec Window end offset after now
- * @return `true` if alarm is in window
+ * @brief Stamp inside the window `[now - offset_min_sec, now + offset_max_sec]`,
+ *   wrapping at the day or week end.
+ * @param[in] stamp_alarm Seconds of the day, or of the week
+ * @param[in] offset_min_sec Window start before now
+ * @param[in] offset_max_sec Window end after now
+ * @return `true` when the stamp is in the window
  */
 bool RTC_CheckDaystamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec);
-
-/**
- * @brief Check if alarm weekstamp is within `[now - min, now + max]` window.
- * @param[in] stamp_alarm Alarm time (seconds-of-week)
- * @param[in] offset_min_sec Window start offset before now
- * @param[in] offset_max_sec Window end offset after now
- * @return `true` if alarm is in window
- */
 bool RTC_CheckWeekstamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec);
 
 /**
- * @brief Check if RTC alarm config is within time window of current RTC.
- * @param[in] alarm Alarm slot to check
- * @param[in] offset_min_sec Window start offset before now
- * @param[in] offset_max_sec Window end offset after now
- * @return `true` if alarm enabled and in window
+ * @brief Alarm slot armed and inside the window around now, see `RTC_CheckDaystamp`.
+ * @param[in] alarm Alarm slot
+ * @param[in] offset_min_sec Window start before now
+ * @param[in] offset_max_sec Window end after now
+ * @return `true` when armed and in the window
  */
 bool RTC_AlarmCheck(RTC_Alarm_t alarm, uint32_t offset_min_sec, uint32_t offset_max_sec);
 
 //------------------------------------------------------------------------------------------- Event
 
-// Consume alarm event flag (one-shot)
+// Event flags, cleared on read; `Force` raises one from software
 bool RTC_Event(RTC_Alarm_t alarm);
-// Consume wakeup-timer event flag (one-shot)
 bool RTC_EventWakeupTimer(void);
-// Set alarm event flag manually (software trigger)
 void RTC_Force(RTC_Alarm_t alarm);
-// Set wakeup-timer event flag manually
 void RTC_ForceWakeupTimer(void);
 
 //----------------------------------------------------------------------------------------- Globals
@@ -218,6 +234,6 @@ extern const char *RtcWeekdays[];
 extern bool RtcReady;
 extern bool RtcInit;
 
-//---------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 #endif

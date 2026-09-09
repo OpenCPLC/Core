@@ -2,7 +2,7 @@
 
 #include "dma.h"
 
-//------------------------------------------------------------------------------------------------- DMA helpers
+//------------------------------------------------------------------------------------- DMA helpers
 
 void DMA_SetRegisters(DMA_CHx_t nbr, DMA_t *dma)
 {
@@ -24,7 +24,7 @@ void DMA_SetRegisters(DMA_CHx_t nbr, DMA_t *dma)
 
 void DMA_ClearFlags(DMA_t *dma)
 {
-  dma->reg->IFCR = 0x0F << (dma->pos * 4);
+  dma->reg->IFCR = 0x0Fu << (dma->pos * 4);
 }
 
 //-------------------------------------------------------------------------------------------------

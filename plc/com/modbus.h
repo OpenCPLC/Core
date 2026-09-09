@@ -3,6 +3,13 @@
 #ifndef MODBUS_H_
 #define MODBUS_H_
 
+// Quantity limits from the Modbus application protocol, section 6.
+// The field on the wire is `uint16_t` and carries values no legal frame holds.
+#define MODBUS_READ_BITS_MAX 2000
+#define MODBUS_READ_REGISTERS_MAX 125
+#define MODBUS_WRITE_BITS_MAX 1968
+#define MODBUS_WRITE_REGISTERS_MAX 123
+
 typedef enum {
   MODBUS_Fnc_Unknown = 0x00,
   MODBUS_Fnc_ReadBits = 0x01,
