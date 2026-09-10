@@ -22,6 +22,7 @@
 #define ACI_GATT_ADD_CHAR             0xFD04
 #define ACI_GATT_UPDATE_CHAR_VALUE    0xFD06
 #define ACI_GAP_TERMINATE             0xFC93
+#define HCI_LE_SET_SCAN_RESPONSE_DATA 0x2009
 
 // Vendor event codes of the CPU2 stack
 #define ACI_EVT_ATTRIBUTE_MODIFIED    0x0C01
@@ -37,6 +38,7 @@
 #define HCI_LE_CONNECTION_SIZE        19
 #define HCI_LE_ENHANCED_SIZE          31
 #define AD_TYPE_UUID128_COMPLETE      0x07
+#define AD_TYPE_LOCAL_NAME_SHORTENED  0x08
 #define AD_TYPE_LOCAL_NAME_COMPLETE   0x09
 #define AD_TYPE_TX_POWER              0x0A
 #define GAP_ROLE_PERIPHERAL           0x01
@@ -152,12 +154,17 @@ static uint8_t gatt_update_char_value(uint16_t service, uint16_t char_handle,
   return WPAN_BleCmd(ACI_GATT_UPDATE_CHAR_VALUE, cmd, (uint8_t)(6 + len), NULL, 0, NULL);
 }
 
-// Advertising: flags and complete name go through the GAP command, the TX power entry
-// is dropped to make room and the service UUID entry is appended when it still fits.
+// Advertising: the service UUID and as much of the name as `BLE_ADV_NAME_SIZE` allows, the
+// TX power entry dropped to make room. A client filters on the service, so the UUID is what
+// has to be in the advertisement; an active scanner can get the whole name from the
+// scan response.
 static uint8_t gap_advertise(BLE_t *ble)
 {
-  uint8_t name_len = (uint8_t)strlen(ble->name);
-  if(name_len > BLE_NAME_SIZE) name_len = BLE_NAME_SIZE;
+  ble->adv_status = (BLE_AdvStatus_t){ .start = 0xFF, .tx_power = 0xFF,
+    .uuid = 0xFF, .scan_response = 0xFF };
+  size_t full_len = strlen(ble->name);
+  uint8_t name_len = full_len > BLE_NAME_SIZE ? BLE_NAME_SIZE : (uint8_t)full_len;
+  uint8_t adv_len = name_len > BLE_ADV_NAME_SIZE ? BLE_ADV_NAME_SIZE : name_len;
   uint8_t cmd[14 + BLE_NAME_SIZE]; // 14 fixed bytes plus the advertised name
   uint8_t *dst = cmd;
   *dst++ = ADV_TYPE_CONNECTABLE;
@@ -165,25 +172,38 @@ static uint8_t gap_advertise(BLE_t *ble)
   dst = put16(dst, BLE_ADV_INTERVAL_MAX);
   *dst++ = 0; // public address
   *dst++ = 0; // no white list
-  *dst++ = (uint8_t)(name_len + 1);
-  *dst++ = AD_TYPE_LOCAL_NAME_COMPLETE;
-  memcpy(dst, ble->name, name_len);
-  dst += name_len;
-  *dst++ = 0; // no service UUID list here, appended below when it fits
+  *dst++ = (uint8_t)(adv_len + 1);
+  *dst++ = adv_len < name_len ? AD_TYPE_LOCAL_NAME_SHORTENED : AD_TYPE_LOCAL_NAME_COMPLETE;
+  memcpy(dst, ble->name, adv_len);
+  dst += adv_len;
+  *dst++ = 0; // no service UUID list here, appended below
   dst = put16(dst, 0); // no connection interval hint
   dst = put16(dst, 0);
   uint8_t status = WPAN_BleCmd(ACI_GAP_SET_DISCOVERABLE, cmd, (uint8_t)(dst - cmd),
     NULL, 0, NULL);
+  ble->adv_status.start = status;
   if(status) return status;
   uint8_t drop = AD_TYPE_TX_POWER;
-  (void)WPAN_BleCmd(ACI_GAP_DELETE_AD_TYPE, &drop, 1, NULL, 0, NULL);
+  ble->adv_status.tx_power = WPAN_BleCmd(ACI_GAP_DELETE_AD_TYPE, &drop, 1, NULL, 0, NULL);
+  if(ble->adv_status.tx_power) ble->errors++;
   uint8_t uuid_ad[19];
   uuid_ad[0] = 18;
   uuid_ad[1] = 17;
   uuid_ad[2] = AD_TYPE_UUID128_COMPLETE;
   ble_uuid(ble->uuid, 0x0000, &uuid_ad[3]);
-  // 31B of advertising is tight: a long name leaves no room and the entry is skipped.
-  (void)WPAN_BleCmd(ACI_GAP_UPDATE_ADV_DATA, uuid_ad, sizeof(uuid_ad), NULL, 0, NULL);
+  // Keep advertising after an optional update fails; preserve each reply so the
+  // application can distinguish a missing UUID from a refused TX power deletion.
+  ble->adv_status.uuid = WPAN_BleCmd(ACI_GAP_UPDATE_ADV_DATA, uuid_ad, sizeof(uuid_ad),
+    NULL, 0, NULL);
+  if(ble->adv_status.uuid) ble->errors++;
+  uint8_t rsp[32] = { 0 }; // one length byte over the 31B the response carries
+  rsp[0] = (uint8_t)(name_len + 2);
+  rsp[1] = (uint8_t)(name_len + 1);
+  rsp[2] = AD_TYPE_LOCAL_NAME_COMPLETE;
+  memcpy(&rsp[3], ble->name, name_len);
+  ble->adv_status.scan_response = WPAN_BleCmd(HCI_LE_SET_SCAN_RESPONSE_DATA, rsp,
+    sizeof(rsp), NULL, 0, NULL);
+  if(ble->adv_status.scan_response) ble->errors++;
   return 0;
 }
 
@@ -351,8 +371,8 @@ status_t BLE_Init(BLE_t *ble)
   if((status = WPAN_BleCmd(ACI_GATT_INIT, NULL, 0, NULL, 0, NULL))) {
     return ble_fault(ble, BLE_Fault_GattInit, status);
   }
-  uint8_t name_len = (uint8_t)strlen(ble->name);
-  if(name_len > BLE_NAME_SIZE) name_len = BLE_NAME_SIZE;
+  size_t full_len = strlen(ble->name);
+  uint8_t name_len = full_len > BLE_NAME_SIZE ? BLE_NAME_SIZE : (uint8_t)full_len;
   uint8_t gap[3] = { GAP_ROLE_PERIPHERAL, 0, name_len }; // no privacy
   uint8_t handles[6];
   uint8_t rsp_len = 0;

@@ -359,6 +359,11 @@ uint32_t WPAN_StackVersion(void)
   return device_info_table.WirelessFwInfoTable.Version;
 }
 
+uint32_t WPAN_StackInfo(void)
+{
+  return device_info_table.WirelessFwInfoTable.InfoStack;
+}
+
 uint16_t WPAN_Errors(void)
 {
   return wpan.errors;

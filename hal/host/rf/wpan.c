@@ -114,6 +114,11 @@ uint32_t WPAN_StackVersion(void)
   return 0x01180003; // 1.24.0.3
 }
 
+uint32_t WPAN_StackInfo(void)
+{
+  return 1; // full BLE stack, the image the model answers commands like
+}
+
 uint16_t WPAN_Errors(void)
 {
   return 0;

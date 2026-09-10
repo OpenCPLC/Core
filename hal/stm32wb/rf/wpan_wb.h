@@ -73,6 +73,12 @@ WPAN_Fw_t WPAN_Firmware(void);
 // Wireless stack version word: major.minor.sub.release, one byte each from the top
 uint32_t WPAN_StackVersion(void);
 
+// Wireless firmware information word.
+// Low byte names the image the CPU2 runs.
+// One release ships every variant under one version number,
+// so a full stack and an HCI-only one differ here and nowhere else.
+uint32_t WPAN_StackInfo(void);
+
 /**
  * @brief Start the BLE stack on CPU2.
  * @param[in] attributes GATT records of the application, its own 9 included

@@ -18,10 +18,13 @@
   #define BLE_CHUNK_SIZE 244
 #endif
 
-// Longest device name used by GAP and advertising [B], longer names are cut.
-// `ACI_GAP_SET_DISCOVERABLE` composes 31B out of the flags entry, the TX power entry it
-// inserts on its own, and the name with its length and type bytes: 31 - 3 - 3 - 2.
+// Longest device name used by GAP and the scan response [B], longer names are cut.
+// A scan response carries 31B, so the name with its length and type bytes has 29 of them.
 #define BLE_NAME_SIZE 23
+
+// What the 31B advertisement leaves for the name beside the flags entry and the 128-bit
+// service UUID: 31 - 3 - 18 - 2. Past it the advertised name is cut and marked shortened.
+#define BLE_ADV_NAME_SIZE 8
 
 #ifndef BLE_ADV_INTERVAL_MIN
   // Advertising interval [0.625ms], `0x80` = 80ms
@@ -55,6 +58,15 @@ typedef enum {
   BLE_Fault_Char = 11,      // `ACI_GATT_ADD_CHAR`
   BLE_Fault_Advertise = 12  // `ACI_GAP_SET_DISCOVERABLE`
 } BLE_Fault_t;
+
+// Stack replies from the latest advertising attempt: 0 = accepted,
+// 0xFF = no response or step not reached. Valid after advertising was attempted.
+typedef struct {
+  uint8_t start;         // `ACI_GAP_SET_DISCOVERABLE`
+  uint8_t tx_power;      // `ACI_GAP_DELETE_AD_TYPE`
+  uint8_t uuid;          // `ACI_GAP_UPDATE_ADV_DATA`
+  uint8_t scan_response; // `HCI_LE_SET_SCAN_RESPONSE_DATA`
+} BLE_AdvStatus_t;
 
 // Characteristic properties, values as in the Bluetooth declaration bitfield
 typedef enum {
@@ -107,6 +119,8 @@ typedef struct {
  * @param[out] resets Disconnects seen
  * @param[out] fault Step of `BLE_Init` that refused
  * @param[out] fault_status Stack status byte of that step, `0xFF` = no response
+ * @param[out] adv_status Replies from the latest advertising attempt, including restarts;
+ *   accepted commands do not guarantee reception by a scanner
  * Internal:
  * @param _service Service handle
  * @param _conn Connection handle
@@ -132,6 +146,7 @@ typedef struct {
   volatile uint16_t resets;
   BLE_Fault_t fault;
   uint8_t fault_status;
+  BLE_AdvStatus_t adv_status;
   // internal
   uint16_t _service;
   uint16_t _conn;
