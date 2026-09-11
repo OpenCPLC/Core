@@ -36,6 +36,13 @@ typedef struct {
 } MODBUS_Slave_t;
 
 MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus);
+
+/**
+ * @brief Check if the master updated any register and clear the flag.
+ *   Per-register flags in `update_flag` are left set, the caller clears them.
+ * @param[in,out] modbus Slave instance
+ * @return `true` when an update arrived since the previous call
+ */
 bool MODBUS_HasUpdate(MODBUS_Slave_t *modbus);
 
 //-------------------------------------------------------------------------------------------------

@@ -20,7 +20,7 @@ static int task_compare(const void *a, const void *b)
   return 0;
 }
 
-static QUEUE_New(task_queue, TASK_t, TASK_LIMIT, task_equal, task_compare);
+QUEUE_NewStatic(task_queue, TASK_t, TASK_LIMIT, task_equal, task_compare);
 
 //--------------------------------------------------------------------------------------------- API
 
@@ -31,17 +31,21 @@ static inline void task_rejected(void)
   else LOG_ERR("Task key already queued " LOG_TAG("TASK"));
 }
 
-void TASK_Add(void (*Handler)(void *), void *arg, uint32_t delay_ms)
+bool TASK_Add(void (*Handler)(void *), void *arg, uint32_t delay_ms)
 {
-  if(!delay_ms) { Handler(arg); return; }
+  if(!delay_ms) { Handler(arg); return true; }
   TASK_t task = { .Handler = Handler, .arg = arg, .key = 0, ._tick = tick_keep(delay_ms) };
-  if(!QUEUE_Push(&task_queue, &task)) task_rejected();
+  if(QUEUE_Push(&task_queue, &task)) return true;
+  task_rejected();
+  return false;
 }
 
-void TASK_AddKey(void (*Handler)(void *), void *arg, uint32_t delay_ms, int32_t key)
+bool TASK_AddKey(void (*Handler)(void *), void *arg, uint32_t delay_ms, int32_t key)
 {
   TASK_t task = { .Handler = Handler, .arg = arg, .key = key, ._tick = tick_keep(delay_ms) };
-  if(!QUEUE_Push(&task_queue, &task)) task_rejected();
+  if(QUEUE_Push(&task_queue, &task)) return true;
+  task_rejected();
+  return false;
 }
 
 bool TASK_Cancel(int32_t key)

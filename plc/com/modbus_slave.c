@@ -11,12 +11,8 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
   uint16_t size_rx = UART_Size(modbus->uart);
   if(!size_rx) return MODBUS_Status_None;
   heap_free((void *)modbus->buffer_rx);
-  // `WriteBits` slides a three-byte window that reaches two bytes past the last frame.
-  // Padding them here keeps the window free of a per-iteration bounds test.
-  modbus->buffer_rx = (uint8_t *)heap_alloc(size_rx + 2);
+  modbus->buffer_rx = (uint8_t *)heap_alloc(size_rx);
   size_rx = UART_Read(modbus->uart, modbus->buffer_rx);
-  modbus->buffer_rx[size_rx] = 0;
-  modbus->buffer_rx[size_rx + 1] = 0;
   if(size_rx <= 5) return MODBUS_Status_TooShort;
   if(CRC_Error(&crc16_modbus, modbus->buffer_rx, size_rx)) return MODBUS_Status_InvalidCRC;
   if(modbus->buffer_rx[0] != modbus->address) return MODBUS_Status_Ignored;
@@ -122,32 +118,27 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
       // Byte count and coil count describe the same payload, they agree on a legal frame
       if(!count || count > MODBUS_WRITE_BITS_MAX) return MODBUS_Status_InvalidSize;
       if(modbus->buffer_rx[6] != (count + 7) / 8) return MODBUS_Status_InvalidSize;
+      const uint8_t *coils = &modbus->buffer_rx[7];
       reg = start / 16;
       bit = start % 16;
-      uint16_t wcount = (count + bit) / 16;
-      uint16_t ibit = (count + bit) % 16;
-      if(ibit) wcount++;
-      modbus->buffer_rx[7 + modbus->buffer_rx[6]] = 0;
-      // Byte 6 seeds the first shift window with the bits this write must leave alone
-      uint16_t stored = reg < modbus->reg_count ? modbus->reg_read[reg] : 0;
-      modbus->buffer_rx[6] = (uint8_t)(stored >> 8);
-      for(uint16_t i = 0; i < wcount; i++) {
-        value = (modbus->buffer_rx[6 + (2 * i)] & (0xFF >> (8 - bit))) |
-          (modbus->buffer_rx[7 + (2 * i)] << bit) |
-          (modbus->buffer_rx[8 + (2 * i)] << (bit + 8));
-        // With `ibit` non-zero the last word is part coils, part stored bits above them.
-        // A range ending on a register boundary has nothing to preserve.
-        if(ibit && i == wcount - 1) {
-          uint16_t stored = reg + i < modbus->reg_count ? modbus->reg_read[reg + i] : 0;
-          value = (value & (0xFFFF >> (16 - ibit))) | (stored & (0xFFFF << ibit));
+      // One register per pass, the stored value carries the bits outside the coil range
+      uint16_t idx = 0;
+      while(idx < count && reg < modbus->reg_count) {
+        value = modbus->reg_read[reg];
+        while(bit < 16 && idx < count) {
+          if((coils[idx / 8] >> (idx % 8)) & 1) value |= (1 << bit);
+          else value &= ~(1 << bit);
+          bit++;
+          idx++;
         }
-        if(reg + i < modbus->reg_count &&
-          (!modbus->write_mask || modbus->write_mask[reg + i]) &&
-          modbus->reg_read[reg + i] != value) {
-          modbus->reg_write[reg + i] = value;
-          modbus->update_flag[reg + i] = true;
+        bit = 0;
+        if((!modbus->write_mask || modbus->write_mask[reg]) &&
+          modbus->reg_read[reg] != value) {
+          modbus->reg_write[reg] = value;
+          modbus->update_flag[reg] = true;
           modbus->update_any = true;
         }
+        reg++;
       }
       break;
     case MODBUS_Fnc_WriteRegisters:

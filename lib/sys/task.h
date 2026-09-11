@@ -42,8 +42,9 @@ typedef struct {
  * @param[in] Handler Function to call
  * @param[in] arg User data
  * @param[in] delay_ms Delay, `0` runs the handler at once
+ * @return `true` when the task was queued or run, `false` when the queue is full
  */
-void TASK_Add(void (*Handler)(void *), void *arg, uint32_t delay_ms);
+bool TASK_Add(void (*Handler)(void *), void *arg, uint32_t delay_ms);
 
 /**
  * @brief Schedule a task under a key, refused while that key waits in the queue.
@@ -51,8 +52,9 @@ void TASK_Add(void (*Handler)(void *), void *arg, uint32_t delay_ms);
  * @param[in] arg User data
  * @param[in] delay_ms Delay
  * @param[in] key Unique key for cancel and reschedule
+ * @return `true` when queued, `false` when the queue is full or the key waits
  */
-void TASK_AddKey(void (*Handler)(void *), void *arg, uint32_t delay_ms, int32_t key);
+bool TASK_AddKey(void (*Handler)(void *), void *arg, uint32_t delay_ms, int32_t key);
 
 /**
  * @brief Cancel the task under `key`.

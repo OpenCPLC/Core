@@ -45,6 +45,13 @@ typedef struct {
     .ary = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type) }, \
     .unique = ((equal) != NULL), .Equal = (equal), .Compare = (compare) }
 
+// `QUEUE_New` with both objects private to the translation unit
+#define QUEUE_NewStatic(name, type, capacity, equal, compare) \
+  static type name##_data[capacity]; \
+  static QUEUE_t name = { \
+    .ary = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type) }, \
+    .unique = ((equal) != NULL), .Equal = (equal), .Compare = (compare) }
+
 //--------------------------------------------------------------------------------------------- API
 
 /**
