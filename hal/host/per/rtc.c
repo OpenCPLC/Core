@@ -169,17 +169,19 @@ uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm)
 
 //--------------------------------------------------------------------------------------------- Set
 
-void RTC_SetDatetime(RTC_Datetime_t *datetime)
+status_t RTC_SetDatetime(RTC_Datetime_t *datetime)
 {
   uint64_t target = RTC_DatetimeToUnix(datetime);
   uint64_t now = rtc_get_system_ms() / 1000;
   rtc_offset_sec = (int64_t)target - (int64_t)now;
+  return OK;
 }
 
-void RTC_SetTimestamp(uint64_t timestamp)
+status_t RTC_SetTimestamp(uint64_t timestamp)
 {
   uint64_t now = rtc_get_system_ms() / 1000;
   rtc_offset_sec = (int64_t)timestamp - (int64_t)now;
+  return OK;
 }
 
 void RTC_Reset(void)

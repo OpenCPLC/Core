@@ -15,6 +15,7 @@
   #define RTC_ALRAWF    RTC_ICSR_ALRAWF
   #define RTC_ALRBWF    RTC_ICSR_ALRBWF
   #define RTC_WUTWF     RTC_ICSR_WUTWF
+  #define RTC_RSF       RTC_ICSR_RSF
   #define RTC_HAS_SCR   1
 #elif defined(STM32WB)
   // WB: status in `ISR`, clear via `ISR` (read-modify-write)
@@ -25,6 +26,7 @@
   #define RTC_ALRAWF    RTC_ISR_ALRAWF
   #define RTC_ALRBWF    RTC_ISR_ALRBWF
   #define RTC_WUTWF     RTC_ISR_WUTWF
+  #define RTC_RSF       RTC_ISR_RSF
   #define RTC_HAS_SCR   0
 #endif
 
@@ -77,8 +79,12 @@ bool RtcInit;
 
 //---------------------------------------------------------------------------------------- Internal
 
+// `DBP` guards every RTC register, not only the backup ones, and anything writing a backup
+// register may drop it again; taken here, every RTC write stands on its own
 static inline void rtc_unlock(void)
 {
+  PWR->CR1 |= PWR_CR1_DBP;
+  while(!(PWR->CR1 & PWR_CR1_DBP));
   RTC->WPR = RTC_WPR_KEY1;
   RTC->WPR = RTC_WPR_KEY2;
 }
@@ -355,29 +361,36 @@ uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm)
 
 //--------------------------------------------------------------------------------------------- Set
 
-void RTC_SetDatetime(RTC_Datetime_t *datetime)
+status_t RTC_SetDatetime(RTC_Datetime_t *datetime)
 {
   rtc_weekday_calc(datetime);
   rtc_unlock();
   RTC_SR |= RTC_INIT;
-  // Calendar writes are dropped without `INITF`, so `RtcReady` stays down
+  // `INITF` needs a running RTCCLK; without it the calendar write would be dropped
   if(rtc_wait(&RTC_SR, RTC_INITF, RTC_SYNC_RETRY)) {
     RTC_SR &= ~RTC_INIT;
     rtc_lock();
-    return;
+    return ERR;
   }
-  RTC->PRER = (RTC_PREDIV_ASYNC << RTC_PRER_PREDIV_A_Pos) | RTC_PREDIV_SYNC;
+  // The prescaler takes two accesses, synchronous part first
+  RTC->PRER = RTC_PREDIV_SYNC;
+  RTC->PRER |= RTC_PREDIV_ASYNC << RTC_PRER_PREDIV_A_Pos;
   RTC->TR = rtc_time_register(datetime);
   RTC->DR = rtc_date_register(datetime);
   RTC_SR &= ~RTC_INIT;
+  // Shadow registers reload from the new calendar once `RSF` returns;
+  // a read before that still shows the old time
+  RTC_SR &= ~RTC_RSF;
+  rtc_wait(&RTC_SR, RTC_RSF, RTC_SYNC_RETRY);
   rtc_lock();
   RtcReady = true;
+  return OK;
 }
 
-void RTC_SetTimestamp(uint64_t timestamp)
+status_t RTC_SetTimestamp(uint64_t timestamp)
 {
   RTC_Datetime_t datetime = RTC_UnixToDatetime(timestamp);
-  RTC_SetDatetime(&datetime);
+  return RTC_SetDatetime(&datetime);
 }
 
 void RTC_Reset(void)

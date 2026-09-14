@@ -320,8 +320,8 @@ static void cmd_rtc(char **argv, uint16_t argc)
       LOG_ErrorParse(argv[1], "uint64_t");
       CMD_ArgvExit(1);
     }
-    RTC_SetTimestamp(str_to_int64(argv[1]));
-    LOG_Bash("RTC preset timestamp");
+    if(RTC_SetTimestamp(str_to_int64(argv[1]))) LOG_Error("RTC refused write, timestamp dropped");
+    else LOG_Bash("RTC preset timestamp");
     return;
   }
   // rtc <YYYY-MM-DD> <hh:mm:ss>
@@ -334,8 +334,8 @@ static void cmd_rtc(char **argv, uint16_t argc)
     .year = year, .month = month, .month_day = day,
     .hour = hour, .minute = minute, .second = second
   };
-  RTC_SetDatetime(&dt);
-  LOG_Bash("RTC preset datetime");
+  if(RTC_SetDatetime(&dt)) LOG_Error("RTC refused write, datetime dropped");
+  else LOG_Bash("RTC preset datetime");
 }
 
 static void cmd_alarm(char **argv, uint16_t argc)

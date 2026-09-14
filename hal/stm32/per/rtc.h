@@ -162,8 +162,9 @@ uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm);
 //--------------------------------------------------------------------------------------------- Set
 
 // Set the calendar, the weekday is computed into `datetime`
-void RTC_SetDatetime(RTC_Datetime_t *datetime);
-void RTC_SetTimestamp(uint64_t timestamp);
+// `ERR` when the RTC never entered init mode: the write was dropped and `RtcReady` stays down
+status_t RTC_SetDatetime(RTC_Datetime_t *datetime);
+status_t RTC_SetTimestamp(uint64_t timestamp);
 // Back to 2000-01-01 00:00:00, `RtcReady` cleared
 void RTC_Reset(void);
 

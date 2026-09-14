@@ -107,8 +107,8 @@ uint32_t RTC_AlarmToDaystamp(const RTC_AlarmCfg_t *alarm);
 uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm);
 
 //--------------------------------------------------------------------------------------------- Set
-void RTC_SetDatetime(RTC_Datetime_t *datetime);
-void RTC_SetTimestamp(uint64_t timestamp);
+status_t RTC_SetDatetime(RTC_Datetime_t *datetime);
+status_t RTC_SetTimestamp(uint64_t timestamp);
 void RTC_Reset(void);
 
 //--------------------------------------------------------------------------------------------- Get
