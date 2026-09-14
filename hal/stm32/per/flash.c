@@ -55,7 +55,8 @@ __attribute__((weak)) void WPAN_FlashEraseActivity(bool active)
 }
 #endif
 
-static inline void flash_wait(void)
+// Always inline: `FLASH_WriteFast` runs from RAM and a call into flash mid-row faults
+static inline __attribute__((always_inline)) void flash_wait(void)
 {
   while(FLASH->SR & FLASH_BSY) __DSB();
 }
@@ -99,10 +100,10 @@ static status_t flash_finish(void)
 
 //------------------------------------------------------------------------------------------- Erase
 
-status_t FLASH_Erase(uint16_t page)
+// Erase, blank or not
+static status_t flash_erase(uint16_t page)
 {
   if(page >= FLASH_PAGES) return ERR;
-  if(page_is_erased(page)) return OK;
   WPAN_FlashEraseActivity(true);
   if(flash_unlock()) {
     WPAN_FlashEraseActivity(false);
@@ -126,6 +127,13 @@ status_t FLASH_Erase(uint16_t page)
   if(ret) return ERR;
   // `EOP` is gated by `EOPIE`, so success is read from the flash itself
   return page_is_erased(page) ? OK : ERR;
+}
+
+status_t FLASH_Erase(uint16_t page)
+{
+  if(page >= FLASH_PAGES) return ERR;
+  if(page_is_erased(page)) return OK; // a blank page is spared the cycle
+  return flash_erase(page);
 }
 
 //-------------------------------------------------------------------------------------------- Read
@@ -190,7 +198,9 @@ status_t FLASH_WriteFast(uint32_t addr, const uint32_t *data)
 
 status_t FLASH_WritePage(uint16_t page, const uint8_t *data)
 {
-  if(FLASH_Erase(page)) return ERR;
+  // Fast programming takes only the page erased last, so a blank page is erased again:
+  // skipping it ends the row in `PGSERR` and `PGAERR`
+  if(flash_erase(page)) return ERR;
   uint32_t addr = FLASH_GetAddress(page, 0);
   for(uint32_t i = 0; i < FLASH_PAGE_SIZE; i += 256) {
     if(FLASH_WriteFast(addr + i, (const uint32_t *)(data + i))) return ERR;
