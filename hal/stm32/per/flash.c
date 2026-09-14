@@ -202,6 +202,17 @@ status_t FLASH_WritePage(uint16_t page, const uint8_t *data)
   // skipping it ends the row in `PGSERR` and `PGAERR`
   if(flash_erase(page)) return ERR;
   uint32_t addr = FLASH_GetAddress(page, 0);
+  #if defined(STM32WB)
+  // A row program breaks on every CPU2 fetch and ends in `MISERR`: beside a running
+  // radio core the page goes in double words, the way the EEPROM writes
+  if(PWR->CR4 & PWR_CR4_C2BOOT) {
+    for(uint32_t i = 0; i < FLASH_PAGE_SIZE; i += 8) {
+      const uint32_t *d = (const uint32_t *)(data + i);
+      if(FLASH_Write(addr + i, d[0], d[1])) return ERR;
+    }
+    return OK;
+  }
+  #endif
   for(uint32_t i = 0; i < FLASH_PAGE_SIZE; i += 256) {
     if(FLASH_WriteFast(addr + i, (const uint32_t *)(data + i))) return ERR;
   }
