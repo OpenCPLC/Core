@@ -55,7 +55,7 @@ __attribute__((weak)) void WPAN_FlashEraseActivity(bool active)
 }
 #endif
 
-// Always inline: `FLASH_WriteFast` runs from RAM and a call into flash mid-row faults
+// `FLASH_WriteFast` runs from RAM, a call into flash mid-row faults
 static inline __attribute__((always_inline)) void flash_wait(void)
 {
   while(FLASH->SR & FLASH_BSY) __DSB();
@@ -198,24 +198,21 @@ status_t FLASH_WriteFast(uint32_t addr, const uint32_t *data)
 
 status_t FLASH_WritePage(uint16_t page, const uint8_t *data)
 {
-  // Fast programming takes only the page erased last, so a blank page is erased again:
-  // skipping it ends the row in `PGSERR` and `PGAERR`
+  // Fast programming takes only the page erased last, so a blank page is erased again
   if(flash_erase(page)) return ERR;
   uint32_t addr = FLASH_GetAddress(page, 0);
   #if defined(STM32WB)
-  // A row program breaks on every CPU2 fetch and ends in `MISERR`: beside a running
-  // radio core the page goes in double words, the way the EEPROM writes
-  if(PWR->CR4 & PWR_CR4_C2BOOT) {
-    for(uint32_t i = 0; i < FLASH_PAGE_SIZE; i += 8) {
-      const uint32_t *d = (const uint32_t *)(data + i);
-      if(FLASH_Write(addr + i, d[0], d[1])) return ERR;
-    }
-    return OK;
+  // A row program breaks on every CPU2 fetch and ends in `MISERR`, and the radio core
+  // outlives a CPU1 reset, so the page goes in double words, the way the EEPROM writes
+  for(uint32_t i = 0; i < FLASH_PAGE_SIZE; i += 8) {
+    const uint32_t *d = (const uint32_t *)(data + i);
+    if(FLASH_Write(addr + i, d[0], d[1])) return ERR;
   }
-  #endif
+  #else
   for(uint32_t i = 0; i < FLASH_PAGE_SIZE; i += 256) {
     if(FLASH_WriteFast(addr + i, (const uint32_t *)(data + i))) return ERR;
   }
+  #endif
   return OK;
 }
 
