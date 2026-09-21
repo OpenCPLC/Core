@@ -283,9 +283,27 @@ static void emit(LOG_Level_t lvl, const char *message, va_list args)
   va_end(args); \
 } while(0)
 
-void LOG_Nope(const char *message, ...)
+void _LOG_Debug(const char *message, ...) { LOG_EMIT(LOG_Level_Debug, message); }
+void _LOG_Info(const char *message, ...) { LOG_EMIT(LOG_Level_Info, message); }
+void _LOG_Warning(const char *message, ...) { LOG_EMIT(LOG_Level_Warning, message); }
+void _LOG_Error(const char *message, ...) { LOG_EMIT(LOG_Level_Error, message); }
+void _LOG_Critical(const char *message, ...) { LOG_EMIT(LOG_Level_Critical, message); }
+
+void _LOG_Panic(const char *message)
 {
-  unused(message);
+  DBG_String(level_tag[LOG_Level_Panic]);
+  DBG_String(message);
+  DBG_Enter();
+  DBG_WaitBlock();
+  UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
+  DBG_WaitBlock();
+  MBB_Clear(DbgFile);
+}
+
+void _LOG_Message(LOG_Level_t lvl, const char *message, ...)
+{
+  if(lvl < LOG_LEVEL || lvl >= LOG_Level_None) return;
+  LOG_EMIT(lvl, message);
 }
 
 void LOG_Bash(const char *message, ...)
@@ -298,70 +316,9 @@ void LOG_Bash(const char *message, ...)
   va_end(args);
 }
 
-void LOG_Debug(const char *message, ...)
+void LOG_Nope(const char *message, ...)
 {
-  #if(LOG_LEVEL <= LOG_LEVEL_DBG)
-  LOG_EMIT(LOG_Level_Debug, message);
-  #else
   unused(message);
-  #endif
-}
-
-void LOG_Info(const char *message, ...)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_INF)
-  LOG_EMIT(LOG_Level_Info, message);
-  #else
-  unused(message);
-  #endif
-}
-
-void LOG_Warning(const char *message, ...)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_WRN)
-  LOG_EMIT(LOG_Level_Warning, message);
-  #else
-  unused(message);
-  #endif
-}
-
-void LOG_Error(const char *message, ...)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_ERR)
-  LOG_EMIT(LOG_Level_Error, message);
-  #else
-  unused(message);
-  #endif
-}
-
-void LOG_Critical(const char *message, ...)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_CRT)
-  LOG_EMIT(LOG_Level_Critical, message);
-  #else
-  unused(message);
-  #endif
-}
-
-void LOG_Panic(const char *message)
-{
-  #if(LOG_LEVEL <= LOG_LEVEL_PNC)
-  DBG_String(level_tag[LOG_Level_Panic]);
-  DBG_String(message);
-  DBG_Enter();
-  DBG_WaitBlock();
-  UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
-  DBG_WaitBlock();
-  MBB_Clear(DbgFile);
-  #else
-  unused(message);
-  #endif
-}
-
-void LOG_Message(LOG_Level_t lvl, const char *message, ...)
-{
-  if(lvl < LOG_LEVEL || lvl >= LOG_Level_None) return;
-  LOG_EMIT(lvl, message);
 }
 
 void LOG_ErrorParse(const char *value, const char *type)

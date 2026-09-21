@@ -85,25 +85,38 @@ void print(const char *template, ...);
 //--------------------------------------------------------------------------------------------- Log
 
 // One line per call: colored level tag, formatted message, line break.
-// Levels under `LOG_LEVEL` compile to nothing
-void LOG_Nope(const char *message, ...);     // no-op, for a disabled level
-void LOG_Bash(const char *message, ...);     // shell response, always printed
-void LOG_Debug(const char *message, ...);
-void LOG_Info(const char *message, ...);
-void LOG_Warning(const char *message, ...);
-void LOG_Error(const char *message, ...);
-void LOG_Critical(const char *message, ...); // flushed to the port before returning
-void LOG_Panic(const char *message);         // plain text, flushed blocking
+// The functions sit behind the macros below, which are the API
+void _LOG_Debug(const char *message, ...);
+void _LOG_Info(const char *message, ...);
+void _LOG_Warning(const char *message, ...);
+void _LOG_Error(const char *message, ...);
+void _LOG_Critical(const char *message, ...); // flushed to the port before returning
+void _LOG_Panic(const char *message);         // plain text, flushed blocking
+void _LOG_Message(LOG_Level_t lvl, const char *message, ...);
+void LOG_Bash(const char *message, ...);      // shell response, always printed
+void LOG_Nope(const char *message, ...);      // no-op with a body, for a pointer to hold
+
+// Level gate: at or above `LOG_LEVEL` the call stands, under it the whole expression
+// folds away, message and arguments included. `LOG_NOP` is that nothing on its own,
+// for a module's debug macro to point at
+#define LOG_Gate(lvl, fn, ...) ((lvl) >= LOG_LEVEL ? fn(__VA_ARGS__) : (void)0)
+#define LOG_NOP(...) ((void)0)
+
+#define LOG_Debug(...) LOG_Gate(LOG_LEVEL_DBG, _LOG_Debug, __VA_ARGS__)
+#define LOG_Info(...) LOG_Gate(LOG_LEVEL_INF, _LOG_Info, __VA_ARGS__)
+#define LOG_Warning(...) LOG_Gate(LOG_LEVEL_WRN, _LOG_Warning, __VA_ARGS__)
+#define LOG_Error(...) LOG_Gate(LOG_LEVEL_ERR, _LOG_Error, __VA_ARGS__)
+#define LOG_Critical(...) LOG_Gate(LOG_LEVEL_CRT, _LOG_Critical, __VA_ARGS__)
+#define LOG_Panic(message) LOG_Gate(LOG_LEVEL_PNC, _LOG_Panic, message)
 
 /**
- * @brief Log with the level chosen at runtime.
+ * @brief Log with the level chosen at runtime, gated like panic at compile time.
  * @param[in] lvl Log level
  * @param[in] message Format string
  * @param[in] ... Format arguments
  */
-void LOG_Message(LOG_Level_t lvl, const char *message, ...);
+#define LOG_Message(lvl, ...) LOG_Gate(LOG_LEVEL_PNC, _LOG_Message, lvl, __VA_ARGS__)
 
-#define LOG_NOP LOG_Nope
 #define LOG_DBG LOG_Debug
 #define LOG_INF LOG_Info
 #define LOG_WRN LOG_Warning
