@@ -85,20 +85,20 @@ void print(const char *template, ...);
 //--------------------------------------------------------------------------------------------- Log
 
 // One line per call: colored level tag, formatted message, line break.
-// The functions sit behind the macros below, which are the API
+// The functions sit behind the macros below, which are the API.
 void _LOG_Debug(const char *message, ...);
 void _LOG_Info(const char *message, ...);
 void _LOG_Warning(const char *message, ...);
 void _LOG_Error(const char *message, ...);
-void _LOG_Critical(const char *message, ...); // flushed to the port before returning
-void _LOG_Panic(const char *message);         // plain text, flushed blocking
+void _LOG_Critical(const char *message, ...);  // flushed to the port before returning
+void _LOG_Panic(const char *message);          // plain text, flushed blocking
 void _LOG_Message(LOG_Level_t lvl, const char *message, ...);
-void LOG_Bash(const char *message, ...);      // shell response, always printed
-void LOG_Nope(const char *message, ...);      // no-op with a body, for a pointer to hold
+void LOG_Bash(const char *message, ...);       // shell response, always printed
+void LOG_Nope(const char *message, ...);       // no-op with a body, for a pointer to hold
 
-// Level gate: at or above `LOG_LEVEL` the call stands, under it the whole expression
-// folds away, message and arguments included. `LOG_NOP` is that nothing on its own,
-// for a module's debug macro to point at
+// Level gate: at or above `LOG_LEVEL` the call stands;
+// under it the whole expression folds away, message and arguments included.
+// `LOG_NOP` is that nothing on its own, for a module's debug macro to point at.
 #define LOG_Gate(lvl, fn, ...) ((lvl) >= LOG_LEVEL ? fn(__VA_ARGS__) : (void)0)
 #define LOG_NOP(...) ((void)0)
 

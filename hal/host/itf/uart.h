@@ -17,10 +17,17 @@
 
 //----------------------------------------------------------------------------------------- Presets
 
-#define UART_115200  baud = 115200, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
-#define UART_57600   baud = 57600,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
-#define UART_19200   baud = 19200,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
-#define UART_9600    baud = 9600,   .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_921600 baud = 921600, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_460800 baud = 460800, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_230400 baud = 230400, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_115200 baud = 115200, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_57600  baud = 57600,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_19200  baud = 19200,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_9600   baud = 9600,   .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+
+// Preset by its number, so a project constant picks it: `.UART_Preset(MODULE_BAUD)`
+#define UART_Preset(baud) _UART_Preset(baud)
+#define _UART_Preset(baud) UART_##baud
 
 //------------------------------------------------------------------------------------------- Types
 
