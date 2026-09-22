@@ -22,8 +22,14 @@
 #define UART_230400 baud = 230400, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_115200 baud = 115200, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_57600  baud = 57600,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_38400  baud = 38400,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_19200  baud = 19200,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_9600   baud = 9600,   .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_4800   baud = 4800,   .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_2400   baud = 2400,   .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_1200   baud = 1200,   .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_600    baud = 600,    .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_300    baud = 300,    .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 
 // Preset by its number, so a project constant picks it: `.UART_Preset(MODULE_BAUD)`
 #define UART_Preset(baud) _UART_Preset(baud)
