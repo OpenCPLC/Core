@@ -2,6 +2,8 @@
 
 #include "pwr.h"
 
+#include "adc.h"
+
 //--------------------------------------------------------------------------------------- Constants
 
 #define IWDG_KEY_REFRESH 0xAAAAu
@@ -227,11 +229,13 @@ void PWR_Sleep(PWR_SleepMode_t mode)
   PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | mode_bits[mode];
   if(mode == PWR_SleepMode_StandbySRAM) PWR->CR3 |= PWR_CR3_RRS;
   else PWR->CR3 &= ~PWR_CR3_RRS;
+  ADC_Suspend();
   SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
   PWR->SCR = 0x013Fu; // clear every wakeup flag
   __SEV(); __WFE(); __WFE();
   // `SLEEPDEEP` must not outlive the call: a later `__WFI` would enter Stop
   SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+  ADC_Resume();
 }
 
 void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)

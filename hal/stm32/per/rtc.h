@@ -34,6 +34,16 @@
   #define RTC_LSE_RETRY 4000000
 #endif
 
+#ifndef RTC_LSE_DRIVE
+  // Lowest `LSEDRV` tried at start-up: `0` low .. `3` high.
+  // Medium-high keeps margin for cold and aging, a bare start on the bench does not.
+  #define RTC_LSE_DRIVE 2
+#endif
+
+#if (RTC_LSE_DRIVE < 0) || (RTC_LSE_DRIVE > 3)
+  #error "RTC_LSE_DRIVE must be 0..3"
+#endif
+
 #ifndef RTC_SYNC_RETRY
   // Spin budget for the RTC synchronisation flags `INITF`, `ALRxWF` and `WUTWF`.
   // They answer within two RTCCLK periods, so exhausting this means RTCCLK has stopped.
@@ -108,12 +118,15 @@ typedef struct {
 //--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Start the `LSE` crystal, weakest drive first. Called by `RTC_Init`, and by
+ * @brief Start the `LSE` crystal, from `RTC_LSE_DRIVE` up. Called by `RTC_Init`, and by
  *   anything else that needs the crystal without the calendar.
  *   The backup domain must be unlocked (`DBP`) before the call.
  * @return `OK` when the crystal oscillates, `ERR` when no drive level starts it
  */
 status_t RTC_StartLSE(void);
+
+// `LSEDRV` the `LSE` runs at, `0` low .. `3` high
+uint8_t RTC_LseDrive(void);
 
 /**
  * @brief Clock the RTC from `LSE` and arm its interrupts, once before use.

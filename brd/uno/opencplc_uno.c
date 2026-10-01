@@ -109,9 +109,9 @@ static uint8_t ain_channels[] = {
   ADC_IN_PA0, ADC_IN_PA1, ADC_IN_PA5, ADC_IN_PB10, ADC_IN_VREFEN
 };
 
-// Sized by the scan, not the channel count: oversampling appends one conversion per scan.
-// A buffer that is not whole scans wraps mid-scan and loses the channel offsets.
-#define AIN_SCAN adc_scan_len(sizeof(ain_channels), true)
+// Sized by the longest scan the family can make of these channels:
+// the driver records whole scans of what it uses, sacrificial conversions included.
+#define AIN_SCAN adc_record_scan_max(sizeof(ain_channels))
 #define AIN_BUFFER_SIZE adc_record_buffer_size(16000000, AIN_AVERAGE_TIME_ms, \
   AIN_SAMPLING_CYCLES, adc_oversampling_samples(AIN_OVERSAMPLING_RATIO), AIN_SCAN)
 #define AIN_SAMPLES (AIN_BUFFER_SIZE / AIN_SCAN)
@@ -316,7 +316,7 @@ void PLC_Loop(void)
     // Analog inputs (AI)
     if(ADC_IsFree(&ain_adc)) {
       if(ADC_Overruns(&ain_adc)) LOG_Debug("ADC overrun");
-      else ADC_LastSamples(&ain_adc, (uint16_t *)ain_data, AIN_BUFFER_SIZE, true);
+      else ADC_LastSamples(&ain_adc, ain_data[0], AIN_SAMPLES * sizeof(ain_channels), true);
       ADC_Record(&ain_adc);
     }
     let();

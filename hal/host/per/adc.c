@@ -71,6 +71,23 @@ uint16_t ADC_RecordPosition(ADC_t *adc)
   return 0;
 }
 
+uint8_t ADC_RecordStride(ADC_t *adc)
+{
+  return adc->record.chan_count;
+}
+
+const uint16_t *ADC_RecordScan(ADC_t *adc)
+{
+  return adc->record.buff;
+}
+
+uint32_t ADC_SampleDelay_ns(ADC_t *adc, uint8_t k)
+{
+  unused(adc);
+  unused(k);
+  return 0;
+}
+
 float ADC_RecordScanTime_s(ADC_t *adc)
 {
   unused(adc);
@@ -120,6 +137,14 @@ void ADC_InitGPIO(ADC_t *adc, uint8_t *chan, uint8_t count)
   unused(adc);
   unused(chan);
   unused(count);
+}
+
+void ADC_Suspend(void) {}
+void ADC_Resume(void) {}
+
+void ADC_Delay_us(uint32_t us)
+{
+  unused(us);
 }
 
 //-------------------------------------------------------------------------------------------------

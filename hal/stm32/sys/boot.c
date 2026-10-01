@@ -6,10 +6,13 @@
 
 #include "crc.h"
 #include "pwr.h"
-#include "cmd.h"
-#include "dbg.h"
-#include "log.h"
-#include "xstring.h"
+
+#if defined(STM32)
+  #include "cmd.h"
+  #include "dbg.h"
+  #include "log.h"
+  #include "xstring.h"
+#endif
 
 //---------------------------------------------------------------------------------------- Internal
 
@@ -25,12 +28,6 @@ static struct {
 // `FLASH_WritePage` reads it as words and from RAM while a row programs.
 static uint8_t page_buffer[FLASH_PAGE_SIZE] __attribute__((aligned(4)));
 
-// Header of this image, placed at `BOOT_HEADER_OFFSET` by the linker script, which also
-// measures `size` and leaves the erased trailer bytes behind the image.
-extern uint8_t _image_size[];
-__attribute__((section(".app_header"), used))
-const BOOT_Header_t BootHeader = { .magic = BOOT_MAGIC, .size = (uint32_t)_image_size };
-
 // Program the page that ends at `end` [bytes into the image] from `page_buffer`
 static status_t flush_page(uint32_t end)
 {
@@ -45,6 +42,23 @@ static status_t mailbox_write(uint32_t page, uint32_t size, uint32_t crc)
   if(FLASH_Erase(BOOT_MAILBOX_PAGE)) return ERR;
   if(FLASH_Write(addr + 8u, page, crc)) return ERR;
   return FLASH_Write(addr, BOOT_MAILBOX_MAGIC, size);
+}
+
+// Bytes behind the ones taken so far, a page programmed as soon as it fills
+static status_t stage(const uint8_t *data, uint32_t len)
+{
+  while(len) {
+    uint32_t pos = boot.offset % FLASH_PAGE_SIZE;
+    uint32_t take = FLASH_PAGE_SIZE - pos;
+    if(take > len) take = len;
+    if(!pos) memset(page_buffer, 0xFF, FLASH_PAGE_SIZE);
+    memcpy(page_buffer + pos, data, take);
+    boot.offset += take;
+    data += take;
+    len -= take;
+    if(pos + take == FLASH_PAGE_SIZE && flush_page(boot.offset)) return ERR;
+  }
+  return OK;
 }
 
 //---------------------------------------------------------------------------------------- Transfer
@@ -65,23 +79,9 @@ status_t BOOT_Begin(uint32_t size, uint32_t crc)
 status_t BOOT_Write(uint32_t offset, const uint8_t *data, uint16_t len)
 {
   if(!boot.active) return ERR;
-  if(offset != boot.offset || len > boot.size - boot.offset) {
+  if(offset != boot.offset || len > boot.size - boot.offset || stage(data, len)) {
     boot.active = false;
     return ERR;
-  }
-  while(len) {
-    uint32_t pos = boot.offset % FLASH_PAGE_SIZE;
-    uint32_t take = FLASH_PAGE_SIZE - pos;
-    if(take > len) take = len;
-    if(!pos) memset(page_buffer, 0xFF, FLASH_PAGE_SIZE);
-    memcpy(page_buffer + pos, data, take);
-    boot.offset += take;
-    data += take;
-    len -= (uint16_t)take;
-    if(pos + take == FLASH_PAGE_SIZE && flush_page(boot.offset)) {
-      boot.active = false;
-      return ERR;
-    }
   }
   return OK;
 }
@@ -91,11 +91,12 @@ status_t BOOT_End(void)
   if(!boot.active) return ERR;
   boot.active = false;
   if(boot.offset != boot.size) return ERR;
-  uint32_t pos = boot.offset % FLASH_PAGE_SIZE;
-  if(!pos) memset(page_buffer, 0xFF, FLASH_PAGE_SIZE);
-  memcpy(page_buffer + pos, &boot.crc, BOOT_TRAILER_SIZE);
-  boot.offset += BOOT_TRAILER_SIZE;
-  if(flush_page(boot.offset)) return ERR;
+  // CRC32 first, the rest erased: the signature of a signed image goes there
+  uint8_t trailer[BOOT_TRAILER_SIZE];
+  memset(trailer, 0xFF, sizeof(trailer));
+  memcpy(trailer, &boot.crc, sizeof(boot.crc));
+  if(stage(trailer, sizeof(trailer))) return ERR;
+  if(boot.offset % FLASH_PAGE_SIZE && flush_page(boot.offset)) return ERR;
   uint32_t size, crc;
   if(!BOOT_ImageValid(BOOT_STAGING_PAGE, &size, &crc)) return ERR;
   if(size != boot.size || crc != boot.crc) return ERR;
@@ -105,18 +106,6 @@ status_t BOOT_End(void)
 void BOOT_Abort(void) { boot.active = false; }
 
 uint32_t BOOT_Offset(void) { return boot.offset; }
-
-void BOOT_Status(BOOT_Status_t *status)
-{
-  memset(status, 0, sizeof(*status));
-  status->app_addr = FLASH_GetAddress(BOOT_APP_PAGE, 0);
-  status->slot_size = BOOT_SLOT_SIZE;
-  status->boot = BOOT_SLOT_PAGES > 0;
-  status->active = boot.active;
-  uint32_t base = (uint32_t)&BootHeader - BOOT_HEADER_OFFSET;
-  status->image_size = BootHeader.size;
-  status->image_crc = FLASH_Read(base + BootHeader.size);
-}
 
 //------------------------------------------------------------------------------------------- Image
 
@@ -140,7 +129,6 @@ bool BOOT_ImageValid(uint16_t page, uint32_t *size, uint32_t *crc)
 }
 
 //-------------------------------------------------------------------------------------- Bootloader
-
 #if(BOOT_PAGES)
 
 // Copy `bytes` from the page `src` into the application slot, page by page
@@ -185,6 +173,32 @@ uint32_t BOOT_Install(void)
 uint32_t BOOT_Install(void) { return 0; }
 
 #endif
+//-------------------------------------------------------------------------------------------------
+// On the chip alone: the image header, the jump and the shell; the rest builds for a host too
+#if defined(STM32)
+
+// Header of this image, placed at `BOOT_HEADER_OFFSET` by the linker script, which also
+// measures `size` and leaves the erased trailer bytes behind the image.
+extern uint8_t _image_size[];
+__attribute__((section(".app_header"), used))
+const BOOT_Header_t BootHeader = {
+  .magic = BOOT_MAGIC,
+  .size = (uint32_t)_image_size,
+  .origin = (uint32_t)&BootHeader - BOOT_HEADER_OFFSET,
+  .chip = BOOT_CHIP,
+  .epoch = PRO_BOOT_EPOCH,
+};
+
+void BOOT_Status(BOOT_Status_t *status)
+{
+  memset(status, 0, sizeof(*status));
+  status->app_addr = FLASH_GetAddress(BOOT_APP_PAGE, 0);
+  status->slot_size = BOOT_SLOT_SIZE;
+  status->boot = BOOT_SLOT_PAGES > 0;
+  status->active = boot.active;
+  status->image_size = BootHeader.size;
+  status->image_crc = FLASH_Read(BootHeader.origin + BootHeader.size);
+}
 
 void BOOT_Jump(uint32_t addr)
 {
@@ -279,4 +293,5 @@ void BOOT_Bash(char **argv, uint16_t argc)
   }
 }
 
+#endif
 //-------------------------------------------------------------------------------------------------

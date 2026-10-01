@@ -2,6 +2,7 @@
 
 #include "pwr.h"
 
+#include "adc.h"
 #include "hsem_wb.h"
 
 //--------------------------------------------------------------------------------------- Constants
@@ -244,11 +245,13 @@ void PWR_Sleep(PWR_SleepMode_t mode)
   PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | mode_bits[mode];
   if(mode == PWR_SleepMode_StandbySRAM) PWR->CR3 |= PWR_CR3_RRS;
   else PWR->CR3 &= ~PWR_CR3_RRS;
+  ADC_Suspend();
   SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
   PWR->SCR = 0x001Fu; // clear `CWUF1..5`
   __SEV(); __WFE(); __WFE();
   // `SLEEPDEEP` must not outlive the call: a later `__WFI` would enter Stop
   SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+  ADC_Resume();
 }
 
 void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)

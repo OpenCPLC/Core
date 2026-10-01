@@ -205,13 +205,13 @@ static bool rtc_running(void)
 }
 
 // The crystal load decides the drive level, so it is measured rather than configured:
-// the weakest level that oscillates wins, and too weak a one never raises `LSERDY`.
+// the weakest level from `RTC_LSE_DRIVE` up that oscillates wins.
 // `LSEDRV` takes a write only with the oscillator stopped, so every step restarts it.
 // A cold start pays for the search once, later resets find the crystal already running.
 status_t RTC_StartLSE(void)
 {
   if(RCC->BDCR & RCC_BDCR_LSERDY) return OK;
-  for(uint32_t drive = 0; drive <= 3; drive++) {
+  for(uint32_t drive = RTC_LSE_DRIVE; drive <= 3; drive++) {
     RCC->BDCR &= ~RCC_BDCR_LSEON;
     for(uint32_t i = RTC_LSE_RETRY; i && (RCC->BDCR & RCC_BDCR_LSERDY); i--) __NOP();
     RCC->BDCR = (RCC->BDCR & ~RCC_BDCR_LSEDRV) | (drive << RCC_BDCR_LSEDRV_Pos);
@@ -219,6 +219,11 @@ status_t RTC_StartLSE(void)
     if(!rtc_wait(&RCC->BDCR, RCC_BDCR_LSERDY, RTC_LSE_RETRY)) return OK;
   }
   return ERR;
+}
+
+uint8_t RTC_LseDrive(void)
+{
+  return (uint8_t)((RCC->BDCR & RCC_BDCR_LSEDRV) >> RCC_BDCR_LSEDRV_Pos);
 }
 
 status_t RTC_Init(void)

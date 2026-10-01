@@ -67,12 +67,16 @@ typedef enum {
   ADC_ExtTrig_EXTI11 = 7
 } ADC_ExtTrig_t;
 
-// G0 errata: hardware oversampling combined with the configurable sequencer corrupts
-// the last conversion of a multi-channel sequence. The driver appends one sacrificial
-// repeat of the last channel, so every scan carries one extra word: size record
-// buffers and frame strides with this
-#define adc_scan_len(channel_count, ovs_enable) \
-  ((uint16_t)(channel_count) + (((ovs_enable) && (channel_count) > 1) ? 1 : 0))
+// Sacrificial conversions a record scan can take: the repeat closing an oversampled sequencer scan
+#define ADC_RECORD_PAD_MAX 1
+
+// Trigger to the start of sampling [half kernel cycles]:
+// datasheet `tLATR` 2 to 3 cycles, taken in the middle, and the cycle `LFTRIG` adds.
+#define ADC_TRIGGER_LATENCY_HALF 7
+
+// Sampling of 1.5 or 3.5 cycles takes a cycle more in the first conversion of a sequence
+// (errata "ADC sampling time might be one cycle longer").
+#define adc_first_extra_cycles(sampling_time) ((sampling_time) <= ADC_SamplingTime_16 ? 1u : 0u)
 
 //-------------------------------------------------------------------------------------------------
 #endif

@@ -73,5 +73,14 @@ typedef enum {
   ADC_ExtTrig_LPTIM2 = 13
 } ADC_ExtTrig_t;
 
+// Sacrificial conversions a record scan can take: the conversion opening every scan
+#define ADC_RECORD_PAD_MAX 1
+
+// Trigger to the start of sampling [half kernel cycles], datasheet `tLATR` typical 2 cycles
+#define ADC_TRIGGER_LATENCY_HALF 4
+
+// Sampling takes its programmed time in every conversion on this family
+#define adc_first_extra_cycles(sampling_time) 0u
+
 //-------------------------------------------------------------------------------------------------
 #endif
