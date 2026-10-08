@@ -1,4 +1,4 @@
-// lib/usb/usbd.c
+// lib/sh/usbd.c
 
 #include "usbd.h"
 

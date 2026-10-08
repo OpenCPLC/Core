@@ -35,10 +35,10 @@ static ADC_Common_TypeDef *adc_common(ADC_t *adc)
   return ADC1_COMMON;
 }
 
-// A conversion over 1ms after the previous one or the calibration reads wrong
+// Conversion over 1ms after the previous one or the calibration reads wrong
 // (errata "Wrong ADC result if conversion done late after calibration or previous conversion"),
 // so every sequence opens with a conversion of its first channel, dropped.
-// `SQ1..SQ4` sit in `SQR1` past the length field, `SQ5..SQ16` fill `SQR2..SQR4` five each.
+// `SQ1..SQ4` sit in `SQR1` past length field, `SQ5..SQ16` fill `SQR2..SQR4` five each.
 static bool set_sequence(ADC_t *adc, uint8_t *cha, uint8_t count)
 {
   if(!cha || !count || count > 15) return false; // 16 conversions at most, the opening one too
@@ -77,10 +77,10 @@ static void set_oversampling(ADC_t *adc, ADC_Oversampling_t *ovs)
 
 //----------------------------------------------------------------------------------------- Handler
 
-// An overrun means a sample was lost, and in a scanned sequence that also loses the channel
-// alignment of everything that follows, so the run is aborted and counted instead of limping
-// on with shifted data. Restart policy belongs to the application: it alone knows whether
-// a gap in the stream is acceptable.
+// Overrun means a sample was lost,
+// and with it the channel alignment of everything that follows in a scanned sequence,
+// so run is aborted and counted instead of limping on with shifted data.
+// Restart policy belongs to application: it alone knows whether a gap is acceptable.
 // `DR` is read with `EOC` still set, so a result landing before the read raises `OVR`.
 static void irq_handler(ADC_t *adc)
 {
@@ -91,7 +91,7 @@ static void irq_handler(ADC_t *adc)
   }
   else if(adc->reg->ISR & ADC_ISR_EOC) {
     ADC_Measure_t *mea = &adc->measure;
-    uint8_t k = mea->_active++ - mea->_lead; // past the list for a dropped conversion
+    uint8_t k = mea->_active++ - mea->_lead; // past list for a dropped conversion
     uint16_t value = adc->reg->DR;
     if(k < mea->chan_count) mea->output[k] = value;
     if(mea->_active >= mea->_total) ADC_Stop(adc);
@@ -154,7 +154,7 @@ void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
         break;
     }
   }
-  // Source bits change on a disabled converter, as the vendor library does it
+  // Source bits change on disabled converter, as vendor library does it
   if(ccr != common->CCR) {
     ADC_Disable(adc);
     common->CCR = ccr;
@@ -173,8 +173,8 @@ void ADC_Enable(ADC_t *adc)
 }
 
 // Inputs still selected in `SQRx` are clamped to VDD once every analog peripheral is off
-// (errata "Selected external ADC inputs unduly clamped to VDD when all analog peripherals
-// are disabled"), so the sequence goes before the converter.
+// (errata "Selected external ADC inputs unduly clamped to VDD
+// when all analog peripherals are disabled"), so sequence goes before converter.
 void ADC_Disable(ADC_t *adc)
 {
   if(adc->reg->CR & ADC_CR_ADSTART) {
@@ -191,10 +191,10 @@ void ADC_Disable(ADC_t *adc)
   }
 }
 
-// A Stop mode entered with the temperature sensor and its converter on corrupts the internal
-// reference (errata "Internal voltage reference corrupted upon Stop mode entry with temperature
-// sensing enabled"), and Stop 2 wants the regulator off (RM0434 §16.4.6): all of it goes off,
-// the calibration stays.
+// Stop mode entered with temperature sensor and its converter on corrupts internal reference
+// (errata "Internal voltage reference corrupted upon Stop mode entry
+// with temperature sensing enabled"), and Stop 2 wants regulator off (RM0434 §16.4.6).
+// All of it goes off, calibration stays.
 void ADC_Suspend(void)
 {
   if(!self) return;
@@ -222,7 +222,7 @@ void ADC_Resume(void)
 
 void ADC_Stop(ADC_t *adc)
 {
-  // `ADSTP` acts on a running conversion only
+  // `ADSTP` acts on running conversion only
   if(adc->reg->CR & ADC_CR_ADSTART) {
     adc->reg->CR |= ADC_CR_ADSTP;
     while(adc->reg->CR & ADC_CR_ADSTP) __NOP();
@@ -247,7 +247,7 @@ status_t ADC_Measure(ADC_t *adc)
 {
   if(adc->_busy) return BUSY;
   ADC_Measure_t *mea = &adc->measure;
-  // Sequence registers take writes on an enabled converter (RM0434 §16.4.10)
+  // Sequence registers take writes on enabled converter (RM0434 §16.4.10)
   ADC_Enable(adc);
   if(!set_sequence(adc, mea->chan, mea->chan_count)) return ERR;
   adc->_busy = ADC_State_Measure;
@@ -256,8 +256,8 @@ status_t ADC_Measure(ADC_t *adc)
   mea->_total = mea->chan_count + 1;
   set_oversampling(adc, &mea->oversampling);
   set_sampling_time(adc, mea->chan, mea->chan_count, mea->sampling_time);
-  // Single-shot by nature: the sequence ends on its own after the last channel,
-  // which keeps the data rate at the interrupt's pace instead of racing a free-running ADC.
+  // Single-shot by nature: sequence ends on its own after last channel,
+  // which keeps data rate at interrupt's pace instead of racing a free-running ADC.
   adc->reg->CFGR &= ~(ADC_CFGR_EXTEN | ADC_CFGR_CONT);
   adc->reg->ISR = ADC_ISR_EOC | ADC_ISR_OVR;
   adc->reg->IER |= ADC_IER_EOCIE;
@@ -325,7 +325,7 @@ void ADC_Init(ADC_t *adc)
   ADC_Disable(adc);
   ADC_Common_TypeDef *common = adc_common(adc);
   // Register route per `ADC_Clock_t`: reset `00` is no clock at all,
-  // `Default` is the system clock on this family.
+  // `Default` is system clock on this family.
   static const uint8_t clock_sel[] = { 3, 3, 2, 1 };
   RCC->CCIPR = (RCC->CCIPR & ~RCC_CCIPR_ADCSEL_Msk)
     | ((uint32_t)clock_sel[adc->clock] << RCC_CCIPR_ADCSEL_Pos);
@@ -337,8 +337,8 @@ void ADC_Init(ADC_t *adc)
   adc->reg->CR &= ~ADC_CR_ADCALDIF;
   adc->reg->CR |= ADC_CR_ADCAL;
   while(adc->reg->CR & ADC_CR_ADCAL) let();
-  // `ADEN` four kernel cycles after the calibration at the earliest (RM0434 §16.4.9),
-  // 100µs when a PLL route leaves the kernel clock unknown.
+  // `ADEN` four kernel cycles after calibration at the earliest (RM0434 §16.4.9),
+  // 100µs when PLL route leaves kernel clock unknown.
   uint32_t freq_Hz = ADC_Frequency_Hz(adc);
   ADC_Delay_us(freq_Hz ? 4000000u / freq_Hz + 1 : 100);
   #if(ADC_RECORD)

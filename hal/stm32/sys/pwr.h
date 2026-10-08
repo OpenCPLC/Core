@@ -52,6 +52,20 @@ uint32_t RCC_16MHz(void);
 uint32_t RCC_48MHz(void);
 uint32_t RCC_64MHz(void);
 
+/**
+ * @brief Fastest clock a bootloader takes for a moment, undone by `RCC_ResetClock`:
+ *   MSI 48MHz on WB, which leaves HSI16 and the PLL untouched, PLL 64MHz on G0.
+ * @return Resulting system clock [Hz]
+ */
+uint32_t RCC_BootClock(void);
+
+/**
+ * @brief Clock of a reset: MSI 4MHz on WB, HSI16 on G0, range 1, no wait state, PLL off.
+ *   A bootloader leaves it behind, so an image starts the same under any of them.
+ * @return Resulting system clock [Hz]
+ */
+uint32_t RCC_ResetClock(void);
+
 //---------------------------------------------------------------------------------------- PWR: Run
 
 typedef enum {

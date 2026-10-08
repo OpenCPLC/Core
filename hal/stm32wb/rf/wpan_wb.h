@@ -80,6 +80,16 @@ uint32_t WPAN_StackVersion(void);
 uint32_t WPAN_StackInfo(void);
 
 /**
+ * @brief Send one system command to CPU2 and wait for its response, FUS commands included.
+ *   A command restarting CPU2 answers with its ready event instead: watch `WPAN_Firmware`.
+ * @param[in] opcode Command opcode
+ * @param[in] param Command parameters, may be `NULL` when `len` is `0`
+ * @param[in] len Parameter length [B]
+ * @return First byte of the response, `0` = success, `0xFF` = none, CPU2 silent or not started
+ */
+uint8_t WPAN_SysCmd(uint16_t opcode, const void *param, uint8_t len);
+
+/**
  * @brief Start the BLE stack on CPU2.
  * @param[in] attributes GATT records of the application, its own 9 included
  * @param[in] services GATT services, GAP and GATT services included

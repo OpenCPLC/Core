@@ -1,4 +1,4 @@
-// lib/usb/usbd.h
+// lib/sh/usbd.h
 
 #ifndef USBD_H_
 #define USBD_H_

@@ -1,4 +1,4 @@
-// lib/ext/xmath.c
+// lib/std/xmath.c
 
 #include "xmath.h"
 

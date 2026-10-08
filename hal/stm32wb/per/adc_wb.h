@@ -29,12 +29,12 @@ typedef enum {
   ADC_IN_VBATEN = 18
 } ADC_IN_t;
 
-// Kernel clock route, zero (`Default`) follows the framework clock tree
+// Kernel clock route, zero (`Default`) follows framework clock tree
 typedef enum {
-  ADC_Clock_Default = 0, // the system clock, this family has no HSI16 route
+  ADC_Clock_Default = 0,  // system clock, this family has no HSI16 route
   ADC_Clock_SYSCLK = 1,
-  ADC_Clock_PLLP = 2,    // frequency unknown to the framework
-  ADC_Clock_PLLSAI = 3   // frequency unknown to the framework
+  ADC_Clock_PLLP = 2,     // frequency unknown to framework
+  ADC_Clock_PLLSAI = 3    // frequency unknown to framework
 } ADC_Clock_t;
 
 // Factory calibration, measured at VDDA = 3.6V on this family
@@ -73,10 +73,11 @@ typedef enum {
   ADC_ExtTrig_LPTIM2 = 13
 } ADC_ExtTrig_t;
 
-// Sacrificial conversions a record scan can take: the conversion opening every scan
-#define ADC_RECORD_PAD_MAX 1
+// Sacrificial conversions a record scan of `channel_count` channels can take:
+// conversion opening every scan.
+#define adc_record_pad_max(channel_count) 1
 
-// Trigger to the start of sampling [half kernel cycles], datasheet `tLATR` typical 2 cycles
+// Trigger to start of sampling [half kernel cycles], datasheet `tLATR` typical 2 cycles
 #define ADC_TRIGGER_LATENCY_HALF 4
 
 // Sampling takes its programmed time in every conversion on this family

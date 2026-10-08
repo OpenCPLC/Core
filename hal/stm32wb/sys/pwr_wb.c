@@ -137,11 +137,20 @@ static void set_flash_latency(uint32_t freq_Hz)
   while((FLASH->ACR & FLASH_ACR_LATENCY) != latency);
 }
 
+// Range 2 only up to 6MHz, where it runs without wait states; the radio needs range 1
 static void set_voltage_scale(uint32_t freq_Hz)
 {
-  uint32_t vos = (freq_Hz > 16000000) ? PWR_CR1_VOS_0 : PWR_CR1_VOS_1;
+  uint32_t vos = (freq_Hz > 6000000) ? PWR_CR1_VOS_0 : PWR_CR1_VOS_1;
   PWR->CR1 = (PWR->CR1 & ~PWR_CR1_VOS) | vos;
   while(PWR->SR2 & PWR_SR2_VOSF);
+}
+
+// CPU2 and its radio take 32MHz at most: past it the system clock reaches them halved
+static void set_cpu2_prescaler(uint32_t freq_Hz)
+{
+  uint32_t div = (freq_Hz > 32000000) ? RCC_EXTCFGR_C2HPRE_3 : 0; // `/2` or `/1`
+  RCC->EXTCFGR = (RCC->EXTCFGR & ~RCC_EXTCFGR_C2HPRE) | div;
+  while(!(RCC->EXTCFGR & RCC_EXTCFGR_C2HPREF));
 }
 
 static uint32_t set_hsi16(void)
@@ -169,12 +178,23 @@ static uint32_t set_msi(uint32_t range, uint32_t freq_Hz)
 
 uint32_t RCC_SetHSE(uint32_t xtal_Hz)
 {
+  // Range 1 before `HSEON`: the HSE32 that also clocks the radio starts in the range it finds
+  bool rise = xtal_Hz > SystemCoreClock;
+  if(rise) {
+    set_voltage_scale(xtal_Hz);
+    set_flash_latency(xtal_Hz);
+  }
   RCC->CR |= RCC_CR_HSEON;
   while(!(RCC->CR & RCC_CR_HSERDY));
   RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | (RCC_SW_HSE << RCC_CFGR_SW_Pos);
   while(((RCC->CFGR & RCC_CFGR_SWS) >> RCC_CFGR_SWS_Pos) != RCC_SW_HSE);
   RCC->CR &= ~RCC_CR_PLLON;
+  if(xtal_Hz && !rise) {
+    set_flash_latency(xtal_Hz);
+    set_voltage_scale(xtal_Hz);
+  }
   SystemCoreClock = xtal_Hz ? xtal_Hz : SystemCoreClock;
+  set_cpu2_prescaler(SystemCoreClock);
   return SystemCoreClock;
 }
 
@@ -203,6 +223,7 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
     ((hse_Hz ? RCC_PLLSRC_HSE : RCC_PLLSRC_HSI) << RCC_PLLCFGR_PLLSRC_Pos);
   RCC->CR |= RCC_CR_PLLON;
   while(!(RCC->CR & RCC_CR_PLLRDY));
+  set_cpu2_prescaler(freq_Hz); // the source above runs at 32MHz at most, the halving goes first
   RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | (RCC_SW_PLL << RCC_CFGR_SW_Pos);
   while(((RCC->CFGR & RCC_CFGR_SWS) >> RCC_CFGR_SWS_Pos) != RCC_SW_PLL);
   SystemCoreClock = freq_Hz;
@@ -212,6 +233,7 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
 uint32_t RCC_2MHz(void)
 {
   uint32_t freq_Hz = set_msi(RCC_CR_MSIRANGE_5, 2000000);
+  set_cpu2_prescaler(freq_Hz);
   set_flash_latency(2000000);
   // Voltage scale last, a lower range caps the frequency
   set_voltage_scale(2000000);
@@ -220,14 +242,36 @@ uint32_t RCC_2MHz(void)
 
 uint32_t RCC_16MHz(void)
 {
-  uint32_t freq_Hz = set_hsi16();
-  set_flash_latency(16000000);
+  // Range 1 as after reset, raised ahead of the clock when it comes from 2MHz
   set_voltage_scale(16000000);
+  uint32_t freq_Hz = set_hsi16();
+  set_cpu2_prescaler(freq_Hz);
+  set_flash_latency(16000000);
   return freq_Hz;
 }
 
 uint32_t RCC_48MHz(void) { return RCC_SetPLL(0, 2, 12, 2); }
 uint32_t RCC_64MHz(void) { return RCC_SetPLL(0, 2, 16, 2); }
+
+uint32_t RCC_BootClock(void)
+{
+  // MSI alone, raised in place: no other oscillator of the clock tree is touched
+  set_voltage_scale(48000000);
+  set_flash_latency(48000000);
+  set_cpu2_prescaler(48000000);
+  return set_msi(RCC_CR_MSIRANGE_11, 48000000);
+}
+
+uint32_t RCC_ResetClock(void)
+{
+  // Range 1 as after reset, raised ahead of the clock; MSI 4MHz alone would allow range 2
+  set_voltage_scale(16000000);
+  uint32_t freq_Hz = set_msi(RCC_CR_MSIRANGE_6, 4000000);
+  RCC->CR &= ~RCC_CR_HSION;
+  set_cpu2_prescaler(freq_Hz);
+  set_flash_latency(freq_Hz);
+  return freq_Hz;
+}
 
 //--------------------------------------------------------------------------------------------- PWR
 

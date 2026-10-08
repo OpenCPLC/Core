@@ -321,9 +321,13 @@ status_t WPAN_Start(IRQ_Priority_t priority)
   mm_table.traces_evt_pool = NULL;
   mm_table.tracespoolsize = 0;
   traces_table.traces_queue = (uint8_t *)&traces_queue;
-  // IPCC: event channels unmasked for receive, everything else stays masked.
+  // IPCC back to a power-up on both sides, as `Reset_IPCC` of the ST examples does,
+  // so a reset from the pin starts the CPU2 like power-on: flags cleared, channels masked.
+  // Then the event channels are unmasked for receive, everything else stays masked.
   IPCC->C1MR = 0xFFFFFFFFu;
   IPCC->C1SCR = 0x0000003Fu;
+  IPCC->C2MR = 0x003F003Fu;
+  IPCC->C2SCR = 0x0000003Fu;
   IPCC->C1CR = IPCC_C1CR_RXOIE | IPCC_C1CR_TXFIE;
   IPCC->C1MR &= ~(WPAN_CH_SYS | WPAN_CH_BLE);
   IRQ_EnableIPCC(priority, rx_handler, tx_handler, NULL);
@@ -371,7 +375,7 @@ uint16_t WPAN_Errors(void)
 
 //---------------------------------------------------------------------------------- System channel
 
-static uint8_t sys_cmd(uint16_t opcode, const void *param, uint8_t len)
+uint8_t WPAN_SysCmd(uint16_t opcode, const void *param, uint8_t len)
 {
   if(!wpan.init) return 0xFF;
   sys_cmd_buffer.type = WPAN_TYPE_SYS_CMD;
@@ -412,7 +416,7 @@ uint8_t WPAN_BleStackInit(uint16_t attributes, uint16_t services, uint16_t value
   param.min_tx_power = -40;
   param.max_tx_power = 6;
   param.ble_core_version = WPAN_BLE_CORE_5_4;
-  return sys_cmd(WPAN_SHCI_BLE_INIT, &param, sizeof(param));
+  return WPAN_SysCmd(WPAN_SHCI_BLE_INIT, &param, sizeof(param));
 }
 
 //------------------------------------------------------------------------------------- BLE channel
@@ -421,7 +425,7 @@ void WPAN_FlashEraseActivity(bool active)
 {
   if(!wpan.init) return; // no radio to warn
   uint8_t on = active ? 1 : 0;
-  (void)sys_cmd(WPAN_FLASH_ERASE_ACTIVITY, &on, 1);
+  (void)WPAN_SysCmd(WPAN_FLASH_ERASE_ACTIVITY, &on, 1);
 }
 
 uint8_t WPAN_BleCmd(uint16_t opcode, const uint8_t *param, uint8_t len,

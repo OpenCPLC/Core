@@ -1,4 +1,4 @@
-// lib/ext/xdef.h
+// lib/std/xdef.h
 
 #define ON  1 // Enabled
 #define OFF 0 // Disabled
@@ -9,6 +9,11 @@
 #include <limits.h>
 #include <math.h>
 #include "main.h"
+
+// Linker script and makefile come from Forge; this Core needs those of 0.4.8 or newer
+#if !defined(FORGE_VERSION) || FORGE_VERSION < 408
+  #error "Core needs Forge 0.4.8 or newer: opencplc -u, then opencplc <project>"
+#endif
 
 //------------------------------------------------------------------------------------------ Status
 

@@ -1,7 +1,7 @@
 // hal/host/per/adc.h
 
-// Contract of the converter a host build compiles against: the types, enums, fields
-// and prototypes firmware is written to. Implementations are inert.
+// Converter contract a host build compiles against:
+// types, enums, fields and prototypes the firmware is written to. Implementations are inert.
 
 #ifndef ADC_H_
 #define ADC_H_
@@ -17,13 +17,13 @@
 //------------------------------------------------------------------------------------------ Config
 
 #ifndef ADC_RECORD
-  // DMA recording API, `ADC_Record_t`; off leaves the one-shot conversions only
+  // DMA recording API, `ADC_Record_t`; off leaves one-shot conversions only
   #define ADC_RECORD 1
 #endif
 
 //------------------------------------------------------------------------------------- Host device
 
-// The G0 channel map, the board files are written against it
+// G0 channel map, board files are written against it
 typedef enum {
   ADC_IN_PA0 = 0,
   ADC_IN_PA1 = 1,
@@ -46,7 +46,7 @@ typedef enum {
   ADC_IN_PC5 = 18
 } ADC_IN_t;
 
-// Kernel clock route, zero (`Default`) follows the framework clock tree
+// Kernel clock route, zero (`Default`) follows framework clock tree
 typedef enum {
   ADC_Clock_Default = 0,
   ADC_Clock_SYSCLK = 1,
@@ -54,8 +54,8 @@ typedef enum {
   ADC_Clock_HSI16 = 3
 } ADC_Clock_t;
 
-// Factory calibration of the G0 at VDDA = 3.0V. No system memory off-target:
-// the typical values stand in, so a conversion using them lands where the target would
+// Factory calibration of G0 at VDDA = 3.0V. No system memory off-target:
+// typical values stand in, so a conversion using them lands where target would.
 #define ADC_CAL_VDDA_mV 3000
 #define ADC_VREFINT_CAL 1526u
 #define ADC_TS_CAL1     1037u // temperature sensor at 30 deg C
@@ -85,43 +85,51 @@ typedef enum {
   ADC_ExtTrig_EXTI11 = 7
 } ADC_ExtTrig_t;
 
-// Sacrificial conversions a record scan can take: the repeat closing an oversampled sequencer scan
-#define ADC_RECORD_PAD_MAX 1
+// Sacrificial conversions a record scan of `channel_count` channels can take:
+// repeat closing an oversampled sequencer scan of two channels or more.
+#define adc_record_pad_max(channel_count) ((channel_count) > 1 ? 1 : 0)
 
-// Trigger to the start of sampling [half kernel cycles]:
+// Trigger to start of sampling [half kernel cycles]:
 // datasheet `tLATR` 2 to 3 cycles, taken in the middle, and the cycle `LFTRIG` adds.
 #define ADC_TRIGGER_LATENCY_HALF 7
 
-// Sampling of 1.5 or 3.5 cycles takes a cycle more in the first conversion of a sequence
+// Sampling of 1.5 or 3.5 cycles takes a cycle more in first conversion of a sequence
 // (errata "ADC sampling time might be one cycle longer").
 #define adc_first_extra_cycles(sampling_time) ((sampling_time) <= ADC_SamplingTime_16 ? 1u : 0u)
 
 //------------------------------------------------------------------------------------------ Macros
 
-// Words one scan of `channel_count` channels can take in a record buffer, padding included
-#define adc_record_scan_max(channel_count) ((uint16_t)(channel_count) + ADC_RECORD_PAD_MAX)
+// Words one scan of `channel_count` channels can take in record buffer, padding included
+#define adc_record_scan_max(channel_count) \
+  ((uint16_t)(channel_count) + adc_record_pad_max(channel_count))
 
-// Buffer length (in samples) that holds `time_ms` of recording,
-// rounded down to whole scans of `scan_len` words (`adc_record_scan_max`).
-// The kernel frequency is the caller's to state, `ADC_Frequency_Hz` tells it at runtime.
-#define adc_record_buffer_size(freq_Hz, time_ms, sample_time, oversampling, scan_len) \
+/**
+ * @brief Buffer length that holds `time_ms` of recording, rounded down to whole scans.
+ * @param[in] freq_Hz Kernel clock, the caller's to state: `ADC_Frequency_Hz` tells it at runtime
+ * @param[in] time_ms Recording time
+ * @param[in] cycles Conversion cycles of one sample, sampling included
+ * @param[in] oversampling Samples accumulated per result, `1` without oversampling
+ * @param[in] scan_len Words per scan, `adc_record_scan_max`
+ * @return Length in samples
+ */
+#define adc_record_buffer_size(freq_Hz, time_ms, cycles, oversampling, scan_len) \
   (uint16_t)((scan_len) * \
-    ((time_ms) * ((freq_Hz) / 1000) / (sample_time) / (oversampling) / (scan_len)))
+    ((time_ms) * ((freq_Hz) / 1000) / (cycles) / (oversampling) / (scan_len)))
 
-// Multiply a raw conversion by this factor to get the voltage at the top of a resistor divider
+// Multiply raw conversion by this factor to get voltage at top of resistor divider
 #define resistor_divider_factor(vcc, up, down, resolution) \
   ((float)(vcc) * ((float)(up) + (down)) / (down) / ((1 << (resolution)) - 1))
 
-// Multiply a raw conversion by this factor to get the voltage at the ADC pin
+// Multiply raw conversion by this factor to get voltage at ADC pin
 #define volts_factor(vcc, resolution) \
   ((float)(vcc) / (float)((1 << (resolution)) - 1))
 
-// Full-scale count of a hardware-oversampled result: `ratio` (enum) samples accumulated,
-// then shifted; the maximum is a multiple of 4095, not a power of two minus one
+// Full-scale count of hardware-oversampled result: `ratio` (enum) samples accumulated,
+// then shifted; maximum is a multiple of 4095, not a power of two minus one.
 #define adc_oversampling_max(ratio, shift) \
   ((4095u << ((ratio) + 1)) >> (shift))
 
-// Number of accumulated samples for an oversampling ratio enum value
+// Number of accumulated samples for oversampling ratio enum value
 #define adc_oversampling_samples(ratio) (2u << (ratio))
 
 //------------------------------------------------------------------------------------------- Types
@@ -161,12 +169,12 @@ typedef enum {
 //-------------------------------------------------------------------------------------- Structures
 
 /**
- * @brief Hardware oversampling: each result is the average of `ratio` back-to-back samples.
- * With `shift` equal to log2 of the ratio the result stays on the native 12-bit scale;
- * a smaller shift extends the effective resolution instead.
+ * @brief Hardware oversampling: each result is average of `ratio` back-to-back samples.
+ * With `shift` equal to log2 of ratio, result stays on native 12-bit scale;
+ * smaller shift extends effective resolution instead.
  * @param[in] enable Enable oversampling
- * @param[in] ratio Samples averaged per result (2x to 256x)
- * @param[in] shift Right shift applied to the accumulated sum (0-8 bits)
+ * @param[in] ratio Samples averaged per result (2× to 256×)
+ * @param[in] shift Right shift applied to accumulated sum (0-8 bits)
  */
 typedef struct {
   bool enable;
@@ -175,18 +183,18 @@ typedef struct {
 } ADC_Oversampling_t;
 
 /**
- * @brief One-shot conversion of the `chan` list, paced by the end-of-conversion interrupt.
+ * @brief One-shot conversion of `chan` list, paced by end-of-conversion interrupt.
  * Start with `ADC_Measure` and wait with `ADC_Wait`,
- * or use the `ADC_Read` shortcut for a single channel.
+ * or use `ADC_Read` shortcut for single channel.
  * @param[in] chan Channel list, converted in this order
  * @param[in] chan_count Number of channels
  * @param[in] output Result buffer, at least `chan_count` long
- * @param[in] sampling_time Total conversion time per channel (see the family enum)
+ * @param[in] sampling_time Total conversion time per channel (see family enum)
  * @param[in] oversampling Oversampling configuration
  * Internal:
  * @param _active Conversion in progress
- * @param _lead Sacrificial conversions ahead of the list
- * @param _total Conversions in the sequence
+ * @param _lead Sacrificial conversions ahead of list
+ * @param _total Conversions in sequence
  */
 typedef struct {
   uint8_t *chan;
@@ -202,29 +210,30 @@ typedef struct {
 
 #if(ADC_RECORD)
 
-// DMA callback, interrupt context: set a flag and leave
+// DMA callback, interrupt context: set flag and leave
 typedef void (*ADC_DmaCallback_t)(void *arg);
 
 /**
- * @brief Free-running acquisition of the `chan` list into a DMA buffer,
+ * @brief Free-running acquisition of `chan` list into DMA buffer,
  * started with `ADC_Record`.
- * In `continuous_mode` the buffer is circular and the stream never stops:
- * read it with `ADC_LastSamples` or `ADC_RecordScan`, or react to the half/complete callbacks.
- * Otherwise the recording fills the buffer once and stops.
- * With `ext_trig` each sequence is started by the selected timer event
- * instead of free-running, which pins every scan to a known moment of the timer period.
+ * In `continuous_mode`, buffer is circular and stream never stops:
+ * read it with `ADC_LastSamples` or `ADC_RecordScan`, or react to half/complete callbacks.
+ * Otherwise recording fills buffer once and stops.
+ * Until buffer is filled once, readers can return slots the DMA has not written yet.
+ * With `ext_trig` each sequence is started by selected timer event instead of free-running,
+ * which pins every scan to a known moment of timer period.
  * @param[in] chan Channel list, converted in this order
  * @param[in] chan_count Number of channels
  * @param[in] dma DMA channel number
- * @param[in] sampling_time Total conversion time per channel (see the family enum)
+ * @param[in] sampling_time Total conversion time per channel (see family enum)
  * @param[in] oversampling Oversampling configuration
  * @param[in] continuous_mode Circular DMA, stream runs until stopped
- * @param[in] ext_trig Start each sequence on a hardware trigger
+ * @param[in] ext_trig Start each sequence on hardware trigger
  * @param[in] ext_select Trigger source, used when `ext_trig` is set
  * @param[in] buff DMA buffer, sized with `adc_record_scan_max`; whole scans of it are used
  * @param[in] buff_len Buffer length in samples
- * @param[in] HalfCallback Called when the first half of the buffer is filled (`NULL` = off)
- * @param[in] CompleteCallback Called when the buffer wraps or fills (`NULL` = off)
+ * @param[in] HalfCallback Called when first half of buffer is filled (`NULL` = off)
+ * @param[in] CompleteCallback Called when buffer wraps or fills (`NULL` = off)
  * @param[in] callback_arg User argument passed to both callbacks
  * Internal:
  * @param _dma DMA register set resolved from `dma`
@@ -255,12 +264,12 @@ typedef struct {
 #endif
 
 /**
- * @brief ADC controller. Fill the configuration, call `ADC_Init` once,
+ * @brief ADC controller. Fill configuration, call `ADC_Init` once,
  * then start work with `ADC_Measure`, `ADC_Record` or `ADC_Read`.
  * One job runs at a time: starting another returns `BUSY`
  * until the current one completes or `ADC_Stop` is called.
  * @param[in] reg ADC peripheral registers, `NULL` selects `ADC1`
- * @param[in] irq_priority Interrupt priority for the ADC and its DMA channel
+ * @param[in] irq_priority Interrupt priority for ADC and its DMA channel
  * @param[in] clock Kernel clock route (`ADC_Clock_...`), zero = family default
  * @param[in] prescaler ADC clock prescaler, common to every job on this ADC
  * @param[in] measure One-shot conversion configuration
@@ -280,35 +289,36 @@ typedef struct {
   #endif
   // internal
   volatile ADC_State_t _busy;
-  uint16_t _overrun;
+  volatile uint16_t _overrun;
 } ADC_t;
 
 //--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Initialize the peripheral: clocking, voltage regulator, self-calibration, analog
- * pins for every configured channel, DMA and interrupts. Call once before any conversion.
+ * @brief Initialize peripheral: clocking, voltage regulator, self-calibration,
+ * analog pins for every configured channel, DMA and interrupts.
+ * Call once before any conversion.
  * @param[in,out] adc Pointer to ADC structure
  */
 void ADC_Init(ADC_t *adc);
 
 /**
- * @brief Start the one-shot conversion described by `measure`. Returns immediately;
- * results land in `measure.output` and the ADC frees itself after the last channel.
+ * @brief Start one-shot conversion described by `measure`. Returns immediately;
+ * results land in `measure.output` and ADC frees itself after last channel.
  * @param[in,out] adc Pointer to ADC structure
  * @return `OK` when started, `BUSY` when another job is in progress,
- *   `ERR` when the list cannot be converted in its order
+ *   `ERR` when list cannot be converted in its order
  */
 status_t ADC_Measure(ADC_t *adc);
 
 /**
  * @brief Blocking single-channel read.
- * The pin is switched to analog mode on demand,
- * so the channel does not have to be listed in any configuration.
- * Yields to the scheduler until the ADC is free, then while the conversion runs.
- * Timing follows the `measure` configuration;
- * without one, the longest sampling time is used with oversampling off,
- * so the result stays on the native 12-bit scale.
+ * Pin is switched to analog mode on demand,
+ * so channel does not have to be listed in any configuration.
+ * Yields to scheduler until ADC is free, then while conversion runs.
+ * Timing follows `measure` configuration;
+ * without one, longest sampling time is used with oversampling off,
+ * so result stays on native 12-bit scale.
  * @param[in,out] adc Pointer to ADC structure
  * @param[in] chan Channel number (`ADC_IN_...`)
  * @return Raw conversion result
@@ -316,23 +326,23 @@ status_t ADC_Measure(ADC_t *adc);
 uint16_t ADC_Read(ADC_t *adc, uint8_t chan);
 
 /**
- * @brief Kernel clock frequency of the configured route after the prescaler.
+ * @brief Kernel clock frequency of configured route after prescaler.
  * @param[in] adc Pointer to ADC structure
- * @return Frequency [Hz], `0` when the framework cannot know it (a PLL route)
+ * @return Frequency [Hz], `0` when framework cannot know it (PLL route)
  */
 uint32_t ADC_Frequency_Hz(ADC_t *adc);
 
 /**
- * @brief Supply voltage computed from the internal reference (`ADC_IN_VREFEN`)
- * and its factory calibration, so the result does not rely on any assumed VDDA.
+ * @brief Supply voltage from internal reference (`ADC_IN_VREFEN`) and its factory calibration,
+ * so result does not rely on any assumed VDDA.
  * @param[in,out] adc Pointer to ADC structure
- * @return VDDA in millivolts, `0` on a failed conversion
+ * @return VDDA in millivolts, `0` on failed conversion
  */
 uint16_t ADC_Vdda_mV(ADC_t *adc);
 
 /**
- * @brief Internal temperature sensor (`ADC_IN_TSEN`) read through the two-point factory
- * calibration, compensated for the actual supply voltage.
+ * @brief Internal temperature sensor (`ADC_IN_TSEN`) read through two-point factory calibration,
+ * compensated for actual supply voltage.
  * @param[in,out] adc Pointer to ADC structure
  * @return Junction temperature in °C
  */
@@ -340,17 +350,19 @@ float ADC_Temperature_C(ADC_t *adc);
 
 #if(ADC_RECORD)
 /**
- * @brief Start the DMA recording described by `record`.
+ * @brief Start DMA recording described by `record`.
  * @param[in,out] adc Pointer to ADC structure
  * @return `OK` when started, `BUSY` when another job is in progress,
- *   `ERR` when the list cannot be converted in its order or `buff` holds no whole scan
+ *   `ERR` when list cannot be converted in its order or `buff` holds no whole scan
  */
 status_t ADC_Record(ADC_t *adc);
 
 /**
- * @brief Copy the most recent samples from the circular DMA buffer.
- * With `sort` the copy holds results only, deinterleaved into channel blocks aligned to scans,
- * so a copy of `chan_count` samples holds in `buffer[k]` the latest result of channel `k`.
+ * @brief Copy most recent samples from circular DMA buffer.
+ * With `sort`, copy holds results only, deinterleaved into channel blocks aligned to scans,
+ * so a copy of `chan_count` samples holds latest result of channel `k` in `buffer[k]`.
+ * While recording, sorted copy can span all scans but the one in progress,
+ * and DMA overwrites oldest samples first: copy has to keep ahead of it.
  * @param[in] adc Pointer to ADC structure
  * @param[out] buffer Output buffer
  * @param[in] count Number of samples to copy, with `sort` a multiple of `chan_count`
@@ -360,27 +372,27 @@ status_t ADC_Record(ADC_t *adc);
 status_t ADC_LastSamples(ADC_t *adc, uint16_t *buffer, uint16_t count, bool sort);
 
 /**
- * @brief Position of the DMA writer inside the record buffer:
- * how many samples of the current pass are already written.
- * Lets a reader pick data the DMA is not touching.
+ * @brief Position of DMA writer inside record buffer:
+ * how many samples of current pass are already written.
+ * Lets reader pick data the DMA is not touching.
  * @param[in] adc Pointer to ADC structure
- * @return Write position in samples, within the whole scans `buff` holds
+ * @return Write position in samples, within whole scans `buff` holds
  */
 uint16_t ADC_RecordPosition(ADC_t *adc);
 
-// Samples one scan takes in the DMA buffer, sacrificial conversions included
+// Samples one scan takes in DMA buffer, sacrificial conversions included
 uint8_t ADC_RecordStride(ADC_t *adc);
 
 /**
  * @brief Newest scan the DMA has completed, from its first listed channel on:
- * `scan[k]` is the result of `chan[k]`.
+ * `scan[k]` is result of `chan[k]`.
  * @param[in] adc Pointer to ADC structure
- * @return Scan in the DMA buffer, `NULL` before the first `ADC_Record`
+ * @return Scan in DMA buffer, `NULL` before first `ADC_Record`
  */
 const uint16_t *ADC_RecordScan(ADC_t *adc);
 
 /**
- * @brief Duration of one complete scan of the `record` sequence,
+ * @brief Duration of one complete scan of `record` sequence,
  * sacrificial conversions and oversampling included.
  * @param[in] adc Pointer to ADC structure
  * @return Scan time in seconds
@@ -388,53 +400,53 @@ const uint16_t *ADC_RecordScan(ADC_t *adc);
 float ADC_RecordScanTime_s(ADC_t *adc);
 
 /**
- * @brief Time from the trigger to the end of sampling of `record.chan[k]`,
- * of the first conversion it accumulates with oversampling. Known once `ADC_Record` has run.
+ * @brief Time from trigger to end of sampling of `record.chan[k]`,
+ * of first conversion it accumulates with oversampling. Known once `ADC_Record` has run.
  * @param[in] adc Pointer to ADC structure
  * @param[in] k Index into `record.chan`
- * @return Delay [ns], `0` when the kernel frequency is unknown (a PLL route)
+ * @return Delay [ns], `0` when kernel frequency is unknown (PLL route)
  */
 uint32_t ADC_SampleDelay_ns(ADC_t *adc, uint8_t k);
 #endif
 
 /**
- * @brief Number of runs aborted by a data overrun or a Stop mode since the last call;
- * reading clears the counter.
- * Restart policy stays with the application:
- * it alone knows whether a gap in the stream is acceptable.
+ * @brief Number of runs aborted by data overrun or Stop mode since last call;
+ * reading clears counter.
+ * Restart policy stays with application:
+ * it alone knows whether a gap in stream is acceptable.
  * @param[in,out] adc Pointer to ADC structure
  * @return Overrun count
  */
 uint16_t ADC_Overruns(ADC_t *adc);
 
 /**
- * @brief Abort the job in progress and free the ADC.
+ * @brief Abort job in progress and free ADC.
  * @param[in,out] adc Pointer to ADC structure
  */
 void ADC_Stop(ADC_t *adc);
 
-// Job in progress, or none: the ADC takes the next one
+// Job in progress, or none: ADC takes the next one
 bool ADC_IsBusy(ADC_t *adc);
 bool ADC_IsFree(ADC_t *adc);
 
-// Yield to the scheduler until the job in progress completes
+// Yield to scheduler until job in progress completes
 void ADC_Wait(ADC_t *adc);
 
-// Enable the ADC and wait until it is ready, or stop any conversion and disable it
+// Enable ADC and wait until it is ready, or stop any conversion and disable it
 void ADC_Enable(ADC_t *adc);
 void ADC_Disable(ADC_t *adc);
 
 //---------------------------------------------------------------------------------------- Internal
 
-// Family glue: analog mode, or the internal source, for every channel on the list
+// Family glue: analog mode, or internal source, for every channel on list
 void ADC_InitGPIO(ADC_t *adc, uint8_t *chan, uint8_t count);
 
-// Family glue for `PWR_Sleep`: the converter and its internal sources off before a Stop mode,
-// the job in progress counted as aborted, and the sources back after it.
+// Family glue for `PWR_Sleep`: converter and its internal sources off before Stop mode,
+// job in progress counted as aborted, and sources back after it.
 void ADC_Suspend(void);
 void ADC_Resume(void);
 
-// Busy wait of at least `us` at the core clock, usable in an interrupt
+// Busy wait of at least `us` at core clock, usable in interrupt
 void ADC_Delay_us(uint32_t us);
 
 // Divider, conversion cycles and oversampling ratio behind each enum value

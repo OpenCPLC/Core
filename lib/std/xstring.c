@@ -1,4 +1,4 @@
-// lib/ext/xstring.c
+// lib/std/xstring.c
 
 #include "xstring.h"
 

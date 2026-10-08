@@ -213,6 +213,8 @@ uint32_t RCC_16MHz(void)
 
 uint32_t RCC_48MHz(void) { return RCC_SetPLL(0, 2, 12, 2); }
 uint32_t RCC_64MHz(void) { return RCC_SetPLL(0, 2, 16, 2); }
+uint32_t RCC_BootClock(void) { return RCC_64MHz(); }
+uint32_t RCC_ResetClock(void) { return RCC_16MHz(); } // HSI16, the clock of a reset
 
 //--------------------------------------------------------------------------------------------- PWR
 

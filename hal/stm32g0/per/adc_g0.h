@@ -29,11 +29,11 @@ typedef enum {
   ADC_IN_PC5 = 18
 } ADC_IN_t;
 
-// Kernel clock route, zero (`Default`) follows the framework clock tree
+// Kernel clock route, zero (`Default`) follows framework clock tree
 typedef enum {
-  ADC_Clock_Default = 0, // HSI16: exact 16MHz whatever the system clock runs at
+  ADC_Clock_Default = 0,  // HSI16: exact 16MHz whatever the system clock runs at
   ADC_Clock_SYSCLK = 1,
-  ADC_Clock_PLLP = 2,    // frequency unknown to the framework
+  ADC_Clock_PLLP = 2,     // frequency unknown to framework
   ADC_Clock_HSI16 = 3
 } ADC_Clock_t;
 
@@ -67,14 +67,15 @@ typedef enum {
   ADC_ExtTrig_EXTI11 = 7
 } ADC_ExtTrig_t;
 
-// Sacrificial conversions a record scan can take: the repeat closing an oversampled sequencer scan
-#define ADC_RECORD_PAD_MAX 1
+// Sacrificial conversions a record scan of `channel_count` channels can take:
+// repeat closing an oversampled sequencer scan of two channels or more.
+#define adc_record_pad_max(channel_count) ((channel_count) > 1 ? 1 : 0)
 
-// Trigger to the start of sampling [half kernel cycles]:
+// Trigger to start of sampling [half kernel cycles]:
 // datasheet `tLATR` 2 to 3 cycles, taken in the middle, and the cycle `LFTRIG` adds.
 #define ADC_TRIGGER_LATENCY_HALF 7
 
-// Sampling of 1.5 or 3.5 cycles takes a cycle more in the first conversion of a sequence
+// Sampling of 1.5 or 3.5 cycles takes a cycle more in first conversion of a sequence
 // (errata "ADC sampling time might be one cycle longer").
 #define adc_first_extra_cycles(sampling_time) ((sampling_time) <= ADC_SamplingTime_16 ? 1u : 0u)
 

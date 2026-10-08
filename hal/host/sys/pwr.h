@@ -40,6 +40,8 @@ static inline uint32_t RCC_2MHz(void) { return 2000000; }
 static inline uint32_t RCC_16MHz(void) { return 16000000; }
 static inline uint32_t RCC_48MHz(void) { return 48000000; }
 static inline uint32_t RCC_64MHz(void) { return HOST_CLOCK_Hz; }
+static inline uint32_t RCC_BootClock(void) { return HOST_CLOCK_Hz; }
+static inline uint32_t RCC_ResetClock(void) { return HOST_CLOCK_Hz; }
 
 //--------------------------------------------------------------------------------------------- PWR
 

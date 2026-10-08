@@ -26,7 +26,7 @@ uint32_t ADC_Frequency_Hz(ADC_t *adc)
   uint32_t base;
   switch(adc->clock) {
     case ADC_Clock_SYSCLK: base = SystemCoreClock; break;
-    case ADC_Clock_PLLP: return 0; // the framework does not run the PLL
+    case ADC_Clock_PLLP: return 0; // framework does not run PLL
     default: base = 16000000u; break; // HSI16
   }
   return base / ADC_PRESCALER_TAB[adc->prescaler];
@@ -37,12 +37,12 @@ uint32_t ADC_Frequency_Hz(ADC_t *adc)
 static ADC_t *self;       // `ADC_Suspend` target, one converter on this family
 static uint32_t sources;  // internal sources `ADC_Suspend` switched off
 
-// Channel setup keeping the order of the list:
-// the configurable sequencer takes up to 8 conversions of channels 0..14 in any order,
-// the bitmask scan an ascending list.
-// With oversampling the last conversion of a sequencer scan reads wrong on G0,
-// though ST lists no erratum: a repeat of the last channel closes the scan and is dropped.
-// Returns those dropped repeats, `-1` when neither mode keeps the order.
+// Channel setup keeping list order:
+// configurable sequencer takes up to 8 conversions of channels 0..14 in any order,
+// bitmask scan takes an ascending list only.
+// With oversampling, last conversion of a sequencer scan reads wrong on G0,
+// though ST lists no erratum: a repeat of last channel closes the scan and is dropped.
+// Returns those dropped repeats, `-1` when neither mode keeps order.
 static int8_t select_channels(const uint8_t *cha, uint8_t count, bool ovs,
   uint32_t *chselr, uint32_t *mode)
 {
@@ -56,7 +56,7 @@ static int8_t select_channels(const uint8_t *cha, uint8_t count, bool ovs,
   }
   if(sequencer) {
     *mode = ADC_CFGR1_CHSELRMOD;
-    *chselr = 0xFFFFFFFFu; // unused slots keep the `0xF` end-of-sequence marker
+    *chselr = 0xFFFFFFFFu; // unused slots keep `0xF` end-of-sequence marker
     for(uint8_t i = 0; i < count + tail; i++) {
       *chselr &= ~(0xFu << (4 * i));
       *chselr |= (uint32_t)cha[i < count ? i : count - 1] << (4 * i);
@@ -76,17 +76,17 @@ static uint32_t oversampling_bits(ADC_Oversampling_t *ovs) {
     (ovs->enable ? ADC_CFGR2_OVSE : 0);
 }
 
-// `CFGR1` and `CFGR2` take writes only with the converter disabled (RM0444 §15.12.4, §15.12.5):
+// `CFGR1` and `CFGR2` take writes only with converter disabled (RM0444 §15.12.4, §15.12.5):
 // a write to an enabled one clears `RES`, and `CKMODE` on G071/G081 (errata).
 // Every channel setup change applies on its own `CCRDY` handshake, or `ADSTART` is ignored.
-// `LFTRIG` rearms the converter at each trigger: without it a conversion may read corrupted
+// `LFTRIG` rearms converter at each trigger: without it a conversion may read corrupted
 // when it starts over `tIDLE` (100µs) after the previous one or the enable (RM0444 §15.4.6).
 static void configure(ADC_t *adc, uint32_t cfgr1, uint32_t cfgr2, uint32_t chselr,
   ADC_SamplingTime_t sampling_time)
 {
   cfgr2 |= ADC_CFGR2_LFTRIG;
   if(adc->reg->CFGR1 != cfgr1 || adc->reg->CFGR2 != cfgr2 || adc->reg->SMPR != sampling_time) {
-    // `CCRDY` answers a `CHSELRMOD` write only when the bit changes
+    // `CCRDY` answers `CHSELRMOD` write only when bit changes
     bool mode_change = (adc->reg->CFGR1 ^ cfgr1) & ADC_CFGR1_CHSELRMOD;
     ADC_Disable(adc);
     adc->reg->ISR = ADC_ISR_CCRDY;
@@ -106,7 +106,7 @@ static void configure(ADC_t *adc, uint32_t cfgr1, uint32_t cfgr2, uint32_t chsel
 //-------------------------------------------------------------------------------------------- GPIO
 
 // Channel-to-pin map: 0..7 = PA0..PA7, 8..10 = PB0..PB2, 11 = PB10, 15..16 = PB11..PB12,
-// 17..18 = PC4..PC5; channels 12..14 are the internal temperature, VREFINT and VBAT sources.
+// 17..18 = PC4..PC5; channels 12..14 are internal temperature, VREFINT and VBAT sources.
 void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
 {
   unused(adc); // single common register block on this family
@@ -137,10 +137,10 @@ void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
 
 //----------------------------------------------------------------------------------------- Handler
 
-// An overrun means a sample was lost, and in a scanned sequence that also loses the channel
-// alignment of everything that follows, so the run is aborted and counted instead of limping
-// on with shifted data. Restart policy belongs to the application: it alone knows whether
-// a gap in the stream is acceptable.
+// Overrun means a sample was lost,
+// and with it the channel alignment of everything that follows in a scanned sequence,
+// so run is aborted and counted instead of limping on with shifted data.
+// Restart policy belongs to application: it alone knows whether a gap is acceptable.
 // `DR` is read with `EOC` still set, so a result landing before the read raises `OVR`.
 static void irq_handler(ADC_t *adc)
 {
@@ -151,7 +151,7 @@ static void irq_handler(ADC_t *adc)
   }
   else if(adc->reg->ISR & ADC_ISR_EOC) {
     ADC_Measure_t *mea = &adc->measure;
-    uint8_t k = mea->_active++ - mea->_lead; // past the list for a dropped conversion
+    uint8_t k = mea->_active++ - mea->_lead; // past list for a dropped conversion
     uint16_t value = adc->reg->DR;
     if(k < mea->chan_count) mea->output[k] = value;
     if(mea->_active >= mea->_total) ADC_Stop(adc);
@@ -205,8 +205,8 @@ void ADC_Disable(ADC_t *adc)
   }
 }
 
-// Stop modes want the converter, its regulator and the internal sources off
-// (RM0444 §15.3.2 and §15.9); the calibration stays.
+// Stop modes want converter, its regulator and internal sources off
+// (RM0444 §15.3.2 and §15.9); calibration stays.
 void ADC_Suspend(void)
 {
   if(!self) return;
@@ -233,7 +233,7 @@ void ADC_Resume(void)
 
 void ADC_Stop(ADC_t *adc)
 {
-  // `ADSTP` acts on a running conversion only
+  // `ADSTP` acts on running conversion only
   if(adc->reg->CR & ADC_CR_ADSTART) {
     adc->reg->CR |= ADC_CR_ADSTP;
     while(adc->reg->CR & ADC_CR_ADSTP) __NOP();
@@ -266,8 +266,8 @@ status_t ADC_Measure(ADC_t *adc)
   mea->_active = 0;
   mea->_lead = 0;
   mea->_total = mea->chan_count + tail;
-  // Single-shot by nature: the sequence ends on its own after the last channel,
-  // which keeps the data rate at the interrupt's pace instead of racing a free-running ADC.
+  // Single-shot by nature: sequence ends on its own after last channel,
+  // which keeps data rate at interrupt's pace instead of racing a free-running ADC.
   configure(adc, mode, oversampling_bits(&mea->oversampling), chselr, mea->sampling_time);
   adc->reg->ISR = ADC_ISR_EOC | ADC_ISR_OVR;
   adc->reg->IER |= ADC_IER_EOCIE;
@@ -292,7 +292,7 @@ status_t ADC_Record(ADC_t *adc)
   rec->_len = rec->buff_len - rec->buff_len % ADC_RecordStride(adc);
   if(!rec->_len) return ERR;
   adc->_busy = ADC_State_Record;
-  // Triggered mode arms one sequence per hardware event; otherwise the ADC free-runs
+  // Triggered mode arms one sequence per hardware event; otherwise ADC free-runs
   uint32_t trigger = rec->ext_trig
     ? ADC_CFGR1_EXTEN_0 | (rec->ext_select << ADC_CFGR1_EXTSEL_Pos)
     : ADC_CFGR1_CONT;
@@ -334,7 +334,7 @@ void ADC_Init(ADC_t *adc)
   RCC->APBENR2 |= RCC_APBENR2_ADCEN;
   ADC->CCR = (ADC->CCR & ~ADC_CCR_PRESC_Msk) | (adc->prescaler << ADC_CCR_PRESC_Pos);
   // Self-calibration with `DMAEN` clear: each factor reads one short,
-  // their mean rounded up goes back once the converter is on.
+  // their mean rounded up goes back once converter is on.
   adc->reg->CFGR1 &= ~ADC_CFGR1_DMAEN;
   adc->reg->CR |= ADC_CR_ADVREGEN;
   ADC_Delay_us(ADC_VREG_STARTUP_us);

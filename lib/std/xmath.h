@@ -1,4 +1,4 @@
-// lib/ext/xmath.h
+// lib/std/xmath.h
 
 #ifndef XMATH_H_
 #define XMATH_H_
