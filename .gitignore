@@ -1,0 +1,3 @@
+# Forge writes them next to `main.h` of every test project
+.tests/**/makefile
+.tests/**/flash.ld
