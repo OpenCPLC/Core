@@ -2,8 +2,7 @@
 
 /**
  * @name  Project: .tests/uno
- * @brief Project configuration, read by Forge on every load and by the framework at build.
- *        Edit values, keep definitions; `make` reloads the project after a change.
+ * @brief Compile test of PLC layer on Uno: board, its drivers and `plc/` have to build and link.
  * @date  2026-10-08
  */
 #ifndef MAIN_H_

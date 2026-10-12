@@ -2,8 +2,6 @@
 
 #include "flash.h"
 
-#include <string.h>
-
 #if defined(STM32WB)
   #include "hsem_wb.h"
   #define flash_take() HSEM_Wait(HSEM_FLASH)
@@ -32,7 +30,8 @@
   #define FLASH_PNB_MASK FLASH_CR_PNB
   #endif
 #elif defined(STM32WB)
-  #define FLASH_BSY (FLASH_SR_BSY | FLASH_SR_CFGBSY)
+  // `PESD` holds while CPU2 suspends flash operations, a control write then ends in `PGSERR`
+  #define FLASH_BSY (FLASH_SR_BSY | FLASH_SR_CFGBSY | FLASH_SR_PESD)
   #define FLASH_PNB_POS FLASH_CR_PNB_Pos
   #define FLASH_PNB_MASK FLASH_CR_PNB
 #endif
@@ -61,12 +60,16 @@ static inline __attribute__((always_inline)) void flash_wait(void)
   while(FLASH->SR & FLASH_BSY) __DSB();
 }
 
-// Page reads as erased: `0xFFFFFFFF` in every word
+// Page reads as erased: `0xFFFFFFFF` in every word, read through ECC piece by piece
 static bool page_is_erased(uint16_t page)
 {
-  const volatile uint32_t *word = (const volatile uint32_t *)FLASH_GetAddress(page, 0);
-  for(uint32_t i = 0; i < FLASH_PAGE_SIZE / sizeof(uint32_t); i++) {
-    if(word[i] != 0xFFFFFFFFu) return false;
+  uint32_t addr = FLASH_GetAddress(page, 0);
+  uint32_t word[16];
+  for(uint32_t at = addr; at < addr + FLASH_PAGE_SIZE; at += sizeof(word)) {
+    if(FLASH_Copy(at, word, sizeof(word), NULL)) return false;
+    for(uint32_t i = 0; i < array_len(word); i++) {
+      if(word[i] != 0xFFFFFFFFu) return false;
+    }
   }
   return true;
 }
@@ -148,12 +151,117 @@ uint32_t FLASH_Read(uint32_t addr)
   return *(const uint32_t *)addr;
 }
 
+//--------------------------------------------------------------------------------------------- ECC
+
+// A double ECC error raises NMI a few instructions after the load,
+// which completes with a wrong value.
+// `ecc_window` names the doubleword a check reads,
+// so the NMI tells that read from a fault anywhere else.
+static volatile uint32_t ecc_window;
+static volatile bool ecc_failed;
+
+// A read the current buffer or the WB data cache serves checks nothing: RM0444 and RM0434,
+// "a new read at the failing address may not generate an ECC error". So a check reads with
+// the data cache off, after this doubleword moved the current buffer off the caller's last one
+static const volatile uint64_t ecc_spare = 0x5A5A5A5A5A5A5A5Aull;
+
+// `flag` set in either ECC register, `ECC2R` has the flags at the bits of `ECCR`.
+// Inside the window it is the read's, whatever address the register holds: cleared just before
+// the load, and after a reset that cut a program or an erase the address can be wrong (errata)
+static bool ecc_flagged(uint32_t flag)
+{
+  if(FLASH->ECCR & flag) return true;
+  #if defined(STM32G0C1xx)
+  if(FLASH->ECC2R & flag) return true;
+  #endif
+  return false;
+}
+
+// A set flag freezes the register, so every read starts from clear ones
+static void ecc_clear(void)
+{
+  FLASH->ECCR = FLASH_ECCR_ECCC | FLASH_ECCR_ECCD;
+  #if defined(STM32G0C1xx)
+  FLASH->ECC2R = FLASH_ECC2R_ECCC | FLASH_ECC2R_ECCD;
+  #endif
+}
+
+// Doublewords of the range read once each in the window, `data` (`NULL` = skip) taking
+// the bytes of the range from those very reads
+static status_t ecc_copy(uint32_t addr, uint8_t *data, uint32_t size, bool *corrected)
+{
+  if(corrected) *corrected = false;
+  #if defined(STM32WB)
+  uint32_t dcen = FLASH->ACR & FLASH_ACR_DCEN;
+  FLASH->ACR &= ~FLASH_ACR_DCEN;
+  #endif
+  (void)ecc_spare;
+  status_t status = OK;
+  for(uint32_t at = addr & ~7u; at < addr + size; at += 8) {
+    uint32_t word[2];
+    ecc_clear();
+    ecc_failed = false;
+    ecc_window = at;
+    __DSB(); // flags cleared before the load
+    word[0] = *(volatile uint32_t *)at; // reads, and ECC checks, the whole doubleword
+    word[1] = *(volatile uint32_t *)(at + 4u); // from the same read
+    __DSB(); // a pending NMI taken before the window closes
+    __ISB();
+    ecc_window = 0;
+    if(ecc_failed) {
+      status = ERR;
+      break;
+    }
+    if(corrected && ecc_flagged(FLASH_ECCR_ECCC)) *corrected = true;
+    if(!data) continue;
+    const uint8_t *bytes = (const uint8_t *)word;
+    for(uint32_t i = 0; i < 8; i++) {
+      if(at + i >= addr && at + i < addr + size) data[at + i - addr] = bytes[i];
+    }
+  }
+  ecc_clear();
+  #if defined(STM32WB)
+  FLASH->ACR |= dcen;
+  #endif
+  return status;
+}
+
+status_t FLASH_Check(uint32_t addr, uint32_t size, bool *corrected)
+{
+  return ecc_copy(addr, NULL, size, corrected);
+}
+
+status_t FLASH_Copy(uint32_t addr, void *data, uint32_t size, bool *corrected)
+{
+  return ecc_copy(addr, data, size, corrected);
+}
+
+// A double ECC error inside the window is the read of the check, which it marks and returns.
+// Any other NMI stops the chip, as the default handler.
+void NMI_Handler(void)
+{
+  if(ecc_window && ecc_flagged(FLASH_ECCR_ECCD)) {
+    ecc_clear();
+    ecc_failed = true;
+    return;
+  }
+  while(1);
+}
+
 //------------------------------------------------------------------------------------------- Write
 
-// The two stores must not be split by an interrupt: a gap raises `PROGERR` or `SIZERR`
+// The two stores must not be split by an interrupt: a gap raises `PROGERR` or `SIZERR`.
+// The cycle they start waits with interrupts on, CPU2 can hold it suspended for long.
+// Ones program nothing, an erased doubleword reads them already: a cut never leaves a page
+// that reads blank, which `FLASH_Erase` spares, with a doubleword that takes no more writes.
 status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2)
 {
   if(addr & 7u) return ERR;
+  uint32_t word[2];
+  if(data1 == 0xFFFFFFFFu && data2 == 0xFFFFFFFFu) {
+    if(FLASH_Copy(addr, word, 8, NULL)) return ERR;
+    return word[0] == data1 && word[1] == data2 ? OK : ERR;
+  }
   if(flash_unlock()) return ERR;
   FLASH->SR = FLASH_CLR_FLAGS;
   FLASH->CR |= FLASH_CR_PG;
@@ -162,14 +270,17 @@ status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2)
   *(volatile uint32_t *)addr = data1;
   *(volatile uint32_t *)(addr + 4u) = data2;
   __DSB();
+  __set_PRIMASK(primask);
   flash_wait();
   FLASH->CR &= ~FLASH_CR_PG;
-  __set_PRIMASK(primask);
   if(flash_finish()) return ERR;
-  if(*(volatile uint32_t *)addr != data1) return ERR;
-  if(*(volatile uint32_t *)(addr + 4u) != data2) return ERR;
-  return OK;
+  // Read back through ECC: a plain read takes the line of the data cache along, and with it
+  // a neighbour a cut tore
+  if(FLASH_Copy(addr, word, 8, NULL)) return ERR;
+  return word[0] == data1 && word[1] == data2 ? OK : ERR;
 }
+
+#if defined(STM32G0)
 
 status_t FLASH_WriteFast(uint32_t addr, const uint32_t *data)
 {
@@ -196,6 +307,8 @@ status_t FLASH_WriteFast(uint32_t addr, const uint32_t *data)
   return OK;
 }
 
+#endif
+
 status_t FLASH_WritePage(uint16_t page, const uint8_t *data)
 {
   // Fast programming takes only the page erased last, so a blank page is erased again
@@ -214,72 +327,6 @@ status_t FLASH_WritePage(uint16_t page, const uint8_t *data)
   }
   #endif
   return OK;
-}
-
-//------------------------------------------------------------------------------------------ Record
-
-bool FLASH_Compare(uint16_t page, const uint8_t *data, uint16_t size)
-{
-  if(page >= FLASH_PAGES) return false;
-  uint32_t addr = FLASH_GetAddress(page, 0);
-  uint32_t flash_end = FLASH_GetAddress(FLASH_PAGES, 0);
-  if(flash_end - addr < 4u + size) return false;
-  uint32_t raw = FLASH_Read(addr);
-  if(raw == 0xFFFFFFFFu) return false;
-  if((uint16_t)raw != size) return false;
-  return memcmp(data, (const uint8_t *)(addr + 4u), size) == 0;
-}
-
-// Layout: `[size:4B][data:size B]` in doublewords, so the header doubleword carries
-// the size and the first four data bytes. The header is written last as the commit
-// marker: a torn save leaves it erased and `FLASH_Load` sees no record.
-// Single slot, no checksum; torn-write safety of the body is what PDB and EEPROM add
-status_t FLASH_Save(uint16_t page, const uint8_t *data, uint16_t size)
-{
-  if(page >= FLASH_PAGES) return ERR;
-  if(size == 0) return ERR;
-  uint32_t total = ((uint32_t)size + 4u + 7u) & ~7u;
-  uint32_t head = FLASH_GetAddress(page, 0);
-  uint32_t flash_end = FLASH_GetAddress(FLASH_PAGES, 0);
-  uint32_t end_page = FLASH_GetAddress(page + 1, 0);
-  if(flash_end - head < total) return ERR;
-  if(FLASH_Erase(page)) return ERR;
-  uint16_t first = size > 4 ? 4 : size;
-  uint32_t w1 = 0xFFFFFFFFu;
-  memcpy(&w1, data, first);
-  const uint8_t *body = data + first;
-  uint16_t left = size - first;
-  uint32_t addr = head + 8u; // the body follows the header doubleword
-  while(left) {
-    if(addr >= end_page) {
-      page++;
-      if(page >= FLASH_PAGES) return ERR;
-      if(FLASH_Erase(page)) return ERR;
-      end_page = FLASH_GetAddress(page + 1, 0);
-    }
-    uint32_t d[2] = { 0xFFFFFFFFu, 0xFFFFFFFFu };
-    uint16_t chunk = left > 8 ? 8 : left;
-    memcpy(d, body, chunk);
-    if(FLASH_Write(addr, d[0], d[1])) return ERR;
-    addr += 8u;
-    body += chunk;
-    left -= chunk;
-  }
-  return FLASH_Write(head, size, w1);
-}
-
-uint16_t FLASH_Load(uint16_t page, uint8_t *data)
-{
-  if(page >= FLASH_PAGES) return 0;
-  uint32_t addr = FLASH_GetAddress(page, 0);
-  uint32_t flash_end = FLASH_GetAddress(FLASH_PAGES, 0);
-  uint32_t raw = FLASH_Read(addr);
-  if(raw == 0xFFFFFFFFu) return 0;
-  uint16_t size = (uint16_t)raw;
-  if(size == 0) return 0;
-  if(flash_end - addr < 4u + size) return 0;
-  memcpy(data, (const uint8_t *)(addr + 4u), size);
-  return size;
 }
 
 //-------------------------------------------------------------------------------------------------

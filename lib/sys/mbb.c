@@ -176,28 +176,41 @@ int32_t MBB_Int(MBB_t *mbb, int64_t nbr, uint8_t base, bool sign,
   return len;
 }
 
-int32_t MBB_Float(MBB_t *mbb, float nbr, uint8_t accuracy, uint8_t fill_space)
+int32_t MBB_Float(MBB_t *mbb, float nbr, uint8_t accuracy, uint8_t fill_zero, uint8_t fill_space)
 {
   if(mbb->lock) return 0;
-  if(isNaN(nbr) || isInf(nbr)) {
+  for(uint16_t i = 0; i < accuracy; i++) nbr *= 10;
+  // Scaled first: `NaN`, `Inf` and what `int64_t` cannot hold print as text, padded with spaces
+  if(isNaN(nbr) || isInf(nbr) || nbr >= (float)INT64_MAX || nbr < (float)INT64_MIN) {
     #if(MBB_PRINT_NAN_INF)
     const char *txt = isNaN(nbr) ? "NaN" : (signbit(nbr) ? "-Inf" : "Inf");
     #else
     const char *txt = "-";
     #endif
     uint8_t len = (uint8_t)strlen(txt);
-    while(fill_space > len) { MBB_Char(mbb, ' '); fill_space--; }
-    return MBB_String(mbb, txt);
+    uint8_t width = maxv(fill_zero, fill_space, len);
+    if(mbb->size + width > mbb->limit) return 0;
+    for(uint8_t n = len; n < width; n++) MBB_Char(mbb, ' ');
+    MBB_String(mbb, txt);
+    return width;
   }
-  bool negative = nbr < 0;
-  for(uint16_t i = 0; i < accuracy; i++) nbr *= 10;
-  // Round half away from zero. Scaling lands just under the target, so a bare
-  // cast would print `0.01` at accuracy `2` as `0.00`
-  nbr += negative ? -0.5f : 0.5f;
-  if(!fill_space) fill_space = 1;
-  int32_t length = (int32_t)itoa_encode((int32_t)nbr, StrTempMem, 10, true,
-    negative ? accuracy + 2 : accuracy + 1, fill_space - 1);
-  int32_t n = length + (accuracy ? 1 : 0);
+  // Round half away from zero.
+  // Scaling lands just under the target,
+  // so a bare cast would print `0.01` at accuracy `2` as `0.00`.
+  // Magnitude goes to 64 bits as two exact 32-bit halves:
+  // a direct cast to `int64_t` pulls double arithmetic into a core without FPU.
+  float mag = absv(nbr) + 0.5f;
+  uint32_t high = (uint32_t)(mag / 4294967296.0f);
+  uint32_t low = (uint32_t)(mag - (float)high * 4294967296.0f);
+  uint64_t whole = (uint64_t)high << 32 | low;
+  int64_t value = (int64_t)(nbr < 0 ? 0 - whole : whole); // unsigned negation, `-2⁶³` included
+  // Dot counts in either width, a minus in the zeros
+  uint8_t dot = accuracy ? 1 : 0;
+  uint8_t digits = value < 0 ? accuracy + 2 : accuracy + 1;
+  uint8_t zeros = fill_zero > dot ? fill_zero - dot : 0;
+  uint8_t spaces = fill_space > dot ? fill_space - dot : 0;
+  int32_t length = (int32_t)itoa_encode(value, StrTempMem, 10, true, maxv(digits, zeros), spaces);
+  int32_t n = length + dot;
   if(mbb->size + n > mbb->limit) return 0;
   while(length) {
     if(accuracy && length == accuracy) mbb->buffer[mbb->size++] = '.';
@@ -212,7 +225,7 @@ int32_t MBB_Hex8(MBB_t *mbb, uint8_t nbr) { return MBB_Int(mbb, nbr, 16, false, 
 int32_t MBB_Hex16(MBB_t *mbb, uint16_t nbr) { return MBB_Int(mbb, nbr, 16, false, 4, 4); }
 int32_t MBB_Hex32(MBB_t *mbb, uint32_t nbr) { return MBB_Int(mbb, nbr, 16, false, 8, 8); }
 int32_t MBB_Bin8(MBB_t *mbb, uint8_t nbr) { return MBB_Int(mbb, nbr, 2, false, 8, 8); }
-int32_t MBB_Nbr(MBB_t *mbb, float nbr) { return MBB_Float(mbb, nbr, 3, 0); }
+int32_t MBB_Nbr(MBB_t *mbb, float nbr) { return MBB_Float(mbb, nbr, 3, 0, 0); }
 
 // Two-digit field followed by a separator, the piece every date and time is built from
 static void field(MBB_t *mbb, uint8_t value, char sep)
@@ -224,7 +237,7 @@ static void field(MBB_t *mbb, uint8_t value, char sep)
 int32_t MBB_Date(MBB_t *mbb, const RTC_Datetime_t *dt)
 {
   if(mbb->lock) return 0;
-  if(mbb->size + 10 >= mbb->limit) return 0;
+  if(mbb->size + 10 > mbb->limit) return 0;
   MBB_String(mbb, "20");
   field(mbb, dt->year, '-');
   field(mbb, dt->month, '-');
@@ -235,7 +248,7 @@ int32_t MBB_Date(MBB_t *mbb, const RTC_Datetime_t *dt)
 int32_t MBB_Time(MBB_t *mbb, const RTC_Datetime_t *dt)
 {
   if(mbb->lock) return 0;
-  if(mbb->size + 8 >= mbb->limit) return 0;
+  if(mbb->size + 8 > mbb->limit) return 0;
   field(mbb, dt->hour, ':');
   field(mbb, dt->minute, ':');
   field(mbb, dt->second, 0);
@@ -245,7 +258,7 @@ int32_t MBB_Time(MBB_t *mbb, const RTC_Datetime_t *dt)
 int32_t MBB_TimeMs(MBB_t *mbb, const RTC_Datetime_t *dt)
 {
   if(mbb->lock) return 0;
-  if(mbb->size + 12 >= mbb->limit) return 0;
+  if(mbb->size + 12 > mbb->limit) return 0;
   MBB_Time(mbb, dt);
   MBB_Char(mbb, '.');
   MBB_Int(mbb, dt->ms, 10, false, 3, 3);
@@ -255,7 +268,7 @@ int32_t MBB_TimeMs(MBB_t *mbb, const RTC_Datetime_t *dt)
 int32_t MBB_Datetime(MBB_t *mbb, const RTC_Datetime_t *dt)
 {
   if(mbb->lock) return 0;
-  if(mbb->size + 19 >= mbb->limit) return 0;
+  if(mbb->size + 19 > mbb->limit) return 0;
   MBB_Date(mbb, dt);
   MBB_Char(mbb, ' ');
   MBB_Time(mbb, dt);
@@ -265,7 +278,7 @@ int32_t MBB_Datetime(MBB_t *mbb, const RTC_Datetime_t *dt)
 int32_t MBB_DatetimeMs(MBB_t *mbb, const RTC_Datetime_t *dt)
 {
   if(mbb->lock) return 0;
-  if(mbb->size + 23 >= mbb->limit) return 0;
+  if(mbb->size + 23 > mbb->limit) return 0;
   MBB_Datetime(mbb, dt);
   MBB_Char(mbb, '.');
   MBB_Int(mbb, dt->ms, 10, false, 3, 3);
@@ -275,7 +288,7 @@ int32_t MBB_DatetimeMs(MBB_t *mbb, const RTC_Datetime_t *dt)
 int32_t MBB_AlarmTime(MBB_t *mbb, const RTC_AlarmCfg_t *alarm)
 {
   if(mbb->lock) return 0;
-  if(mbb->size + 8 >= mbb->limit) return 0;
+  if(mbb->size + 8 > mbb->limit) return 0;
   if(alarm->hour_mask) MBB_String(mbb, "**:");
   else field(mbb, alarm->hour, ':');
   if(alarm->minute_mask) MBB_String(mbb, "**:");
@@ -288,11 +301,16 @@ int32_t MBB_AlarmTime(MBB_t *mbb, const RTC_AlarmCfg_t *alarm)
 int32_t MBB_Alarm(MBB_t *mbb, const RTC_AlarmCfg_t *alarm)
 {
   if(mbb->lock) return 0;
-  if(mbb->size + 12 > mbb->limit) return 0;
-  MBB_String(mbb, RtcWeekdays[alarm->day_mask ? 0 : alarm->day]);
+  // Day, space and `hh:mm:ss`: a weekday and every day by name, a month day as its number
+  bool named = alarm->week || alarm->day_mask;
+  const char *name = named ? RtcWeekdays[alarm->day_mask ? 0 : alarm->day] : NULL;
+  int32_t len = (name ? (int32_t)strlen(name) : 2) + 9;
+  if(mbb->size + len > mbb->limit) return 0;
+  if(name) MBB_String(mbb, name);
+  else MBB_Int(mbb, alarm->day, 10, false, 2, 2);
   MBB_Char(mbb, ' ');
   MBB_AlarmTime(mbb, alarm);
-  return 12;
+  return len;
 }
 
 //----------------------------------------------------------------------------------------- Records
@@ -371,9 +389,11 @@ status_t MBB_FlashLoad(MBB_t *mbb)
 {
   if(mbb->lock) return ERR;
   if(!mbb->flash_page) return ERR;
-  // Record length is the first word of the page and `FLASH_Load` copies it unchecked.
-  // A record written by a firmware with a larger buffer would overrun this one
-  if((uint16_t)FLASH_Read(FLASH_GetAddress(mbb->flash_page, 0)) > mbb->limit) return ERR;
+  // Record length is the first word of the page, and `FLASH_Load` copies that many bytes:
+  // a record written by a firmware with a larger buffer would overrun this one.
+  uint32_t size;
+  if(FLASH_Copy(FLASH_GetAddress(mbb->flash_page, 0), &size, sizeof(size), NULL)) return ERR;
+  if(size > mbb->limit) return ERR;
   mbb->size = FLASH_Load(mbb->flash_page, mbb->buffer);
   return mbb->size ? OK : ERR;
 }

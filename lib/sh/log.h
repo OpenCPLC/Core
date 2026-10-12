@@ -3,6 +3,8 @@
 #ifndef LOG_H_
 #define LOG_H_
 
+#include <stdarg.h>
+
 #include "dbg.h"
 #include "xdef.h"
 #include "vrts.h"
@@ -81,6 +83,9 @@ extern bool LogPrintFlag;
  * @param[in] ... Format arguments
  */
 void print(const char *template, ...);
+
+// `print` with the arguments of a variadic caller
+void vprint(const char *template, va_list args);
 
 //--------------------------------------------------------------------------------------------- Log
 

@@ -30,5 +30,11 @@ jobs:
           key: opencplc-tools-0.5.0
       # make from Forge's tools, as a new console finds it
       - run: echo "$LOCALAPPDATA\OpenCPLC\make" >> "$GITHUB_PATH"
+      # a folder with `main.h` is a project, any other one helps the tests
       - name: Test projects
-        run: for pro in opencplc/ci/.tests/*/; do opencplc "${pro%/}" -y && make || exit 1; done
+        run: |
+          for main_h in opencplc/ci/.tests/*/main.h; do
+            opencplc "${main_h%/main.h}" -y && make || exit 1
+          done
+      - name: Unit tests
+        run: opencplc opencplc/ci -y && make test

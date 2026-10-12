@@ -33,6 +33,7 @@ static int64_t next_element(const uint8_t **ary, uint8_t size, bool sign)
 
 // `%a` state of one format pass
 typedef struct {
+  bool pending; // `%a` read, the next conversion with an argument takes the array, empty or not
   uint32_t count;
   uint8_t size;
   uint8_t sep_len;
@@ -45,16 +46,26 @@ static void array_sep(array_t *ary)
   if(ary->sep_len && ary->count) DBG_String(ary->sep);
 }
 
-// Integer conversion of `%d`, `%u`, `%x`, `%b`: one value, or every array element
-static void print_int(va_list *args, array_t *ary, uint8_t base, bool sign, bool long_int,
-  uint8_t fill_zero, uint8_t fill_space)
+// `true` when `%a` came before: the calling conversion takes the array and spends the prefix
+static bool array_take(array_t *ary)
 {
-  if(ary->count) {
+  bool pending = ary->pending;
+  ary->pending = false;
+  return pending;
+}
+
+// Integer conversion of `%d`, `%u`, `%x`, `%b`: one value, or every array element.
+// With `digits_only` the zeros count digits alone, so a minus, counted by `DBG_Int`, adds one.
+static void print_int(va_list *args, array_t *ary, uint8_t base, bool sign, bool long_int,
+  uint8_t fill_zero, uint8_t fill_space, bool digits_only)
+{
+  if(array_take(ary)) {
     const uint8_t *data = va_arg(*args, const uint8_t *);
     uint8_t size = base == 2 ? 1 : ary->size;
     while(ary->count) {
       ary->count--;
-      DBG_Int(next_element(&data, size, sign), base, sign, fill_zero, fill_space);
+      int64_t nbr = next_element(&data, size, sign);
+      DBG_Int(nbr, base, sign, fill_zero + (digits_only && sign && nbr < 0 ? 1 : 0), fill_space);
       array_sep(ary);
     }
     return;
@@ -63,15 +74,19 @@ static void print_int(va_list *args, array_t *ary, uint8_t base, bool sign, bool
   if(base == 2) nbr = (uint8_t)va_arg(*args, int);
   else if(long_int) nbr = va_arg(*args, int64_t);
   else nbr = sign ? va_arg(*args, int32_t) : (int64_t)va_arg(*args, uint32_t);
-  DBG_Int(nbr, base, sign, fill_zero, fill_space);
+  DBG_Int(nbr, base, sign, fill_zero + (digits_only && sign && nbr < 0 ? 1 : 0), fill_space);
 }
 
-static void print_args(const char *format, va_list args)
+static void print_args(const char *format, va_list list)
 {
+  // The printers take the list by address, which an array-typed `va_list` parameter,
+  // as on x86-64 Linux, cannot give: they get a copy
+  va_list args;
+  va_copy(args, list);
   array_t ary = { .size = 1 };
   while(*format) {
     if(*format != '%') {
-      if(ary.count) {
+      if(ary.pending) {
         if(ary.sep_len < LOG_ARYSPACE_MAXLEN) ary.sep[ary.sep_len++] = *format;
       }
       else DBG_Char(*format);
@@ -97,8 +112,10 @@ static void print_args(const char *format, va_list args)
     // asks for zeros; precision is the least digit count of an integer
     uint8_t fill_space = flag_zero ? 0 : width;
     uint8_t fill_zero = flag_zero ? width : (has_precision ? precision : 0);
+    bool digits_only = !flag_zero && has_precision;
     switch(*format) {
       case 'a': case 'A':
+        ary.pending = true;
         ary.count = va_arg(args, uint32_t);
         ary.size = maxv(precision, width);
         if(!ary.size) ary.size = 1;
@@ -106,28 +123,29 @@ static void print_args(const char *format, va_list args)
         ary.sep_len = 0;
         break;
       case 'i': case 'd':
-        print_int(&args, &ary, 10, true, long_int, fill_zero, fill_space);
+        print_int(&args, &ary, 10, true, long_int, fill_zero, fill_space, digits_only);
         break;
       case 'u':
-        print_int(&args, &ary, 10, false, long_int, fill_zero, fill_space);
+        print_int(&args, &ary, 10, false, long_int, fill_zero, fill_space, digits_only);
         break;
       case 'x': case 'X':
-        print_int(&args, &ary, 16, false, long_int, fill_zero, fill_space);
+        print_int(&args, &ary, 16, false, long_int, fill_zero, fill_space, digits_only);
         break;
       case 'b':
-        print_int(&args, &ary, 2, false, false, fill_zero, fill_space);
+        print_int(&args, &ary, 2, false, false, fill_zero, fill_space, digits_only);
         break;
       case 'f': case 'F': {
         if(!has_precision) precision = *format == 'f' ? 3 : 2;
-        if(ary.count) {
+        uint8_t zeros = flag_zero ? width : 0; // precision of a float is places, never zeros
+        if(array_take(&ary)) {
           const float *data = va_arg(args, const float *);
           while(ary.count) {
             ary.count--;
-            DBG_FloatSpace(*data++, precision, width);
+            MBB_Float(DbgFile, *data++, precision, zeros, fill_space);
             array_sep(&ary);
           }
         }
-        else DBG_FloatSpace((float)va_arg(args, double), precision, width);
+        else MBB_Float(DbgFile, (float)va_arg(args, double), precision, zeros, fill_space);
         break;
       }
       case 'p': {
@@ -139,7 +157,7 @@ static void print_args(const char *format, va_list args)
         break;
       }
       case 'c': {
-        if(ary.count) {
+        if(array_take(&ary)) {
           const char *data = va_arg(args, const char *);
           while(ary.count) {
             ary.count--;
@@ -151,7 +169,7 @@ static void print_args(const char *format, va_list args)
         break;
       }
       case 's': {
-        if(ary.count) {
+        if(array_take(&ary)) {
           const char *const *data = va_arg(args, const char *const *);
           while(ary.count) {
             ary.count--;
@@ -163,7 +181,7 @@ static void print_args(const char *format, va_list args)
         break;
       }
       case 'S': {
-        if(ary.count) {
+        if(array_take(&ary)) {
           const uint8_t *data = va_arg(args, const uint8_t *);
           const char *const *table = va_arg(args, const char *const *);
           while(ary.count) {
@@ -182,7 +200,7 @@ static void print_args(const char *format, va_list args)
       case 'o': case 'O': {
         void *obj = va_arg(args, void *);
         int32_t (*Print)(void *) = va_arg(args, int32_t (*)(void *));
-        if(ary.count) {
+        if(array_take(&ary)) {
           uint32_t size = va_arg(args, uint32_t);
           while(ary.count) {
             ary.count--;
@@ -195,7 +213,7 @@ static void print_args(const char *format, va_list args)
         break;
       }
       case 'B': {
-        if(ary.count) {
+        if(array_take(&ary)) {
           const bool *data = va_arg(args, const bool *);
           while(ary.count) {
             ary.count--;
@@ -234,6 +252,7 @@ static void print_args(const char *format, va_list args)
     }
     format++;
   }
+  va_end(args);
 }
 
 void print(const char *template, ...)
@@ -242,6 +261,11 @@ void print(const char *template, ...)
   va_start(args, template);
   print_args(template, args);
   va_end(args);
+}
+
+void vprint(const char *template, va_list args)
+{
+  print_args(template, args);
 }
 
 //--------------------------------------------------------------------------------------------- Log
@@ -255,24 +279,16 @@ static const char *const level_tag[] = {
   [LOG_Level_Panic] = ANSI_MAGNTA "PNC " ANSI_END
 };
 
-// Tag, message, line break. Critical is pushed to the port at once, panic blocks on it;
-// the rest waits for `DBG_Loop` and stays silent while `LogPrintFlag` is clear
+// Tag, message, line break. Critical and panic go to the port at once, blocking: a wait
+// that yields would let other threads write into the buffer on its way out.
+// The rest waits for `DBG_Loop` and stays silent while `LogPrintFlag` is clear.
 static void emit(LOG_Level_t lvl, const char *message, va_list args)
 {
   if(lvl < LOG_Level_Critical && !LogPrintFlag) return;
   DBG_String(level_tag[lvl]);
   print_args(message, args);
   DBG_Enter();
-  if(lvl == LOG_Level_Critical) {
-    DBG_Send(DbgFile->buffer, DbgFile->size);
-    MBB_Clear(DbgFile);
-  }
-  else if(lvl == LOG_Level_Panic) {
-    DBG_WaitBlock();
-    UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
-    DBG_WaitBlock();
-    MBB_Clear(DbgFile);
-  }
+  if(lvl >= LOG_Level_Critical) DBG_Flush();
 }
 
 // Variadic front of `emit`, one per level below
@@ -294,10 +310,7 @@ void _LOG_Panic(const char *message)
   DBG_String(level_tag[LOG_Level_Panic]);
   DBG_String(message);
   DBG_Enter();
-  DBG_WaitBlock();
-  UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
-  DBG_WaitBlock();
-  MBB_Clear(DbgFile);
+  DBG_Flush();
 }
 
 void _LOG_Message(LOG_Level_t lvl, const char *message, ...)

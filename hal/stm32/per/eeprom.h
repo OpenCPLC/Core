@@ -16,7 +16,7 @@ typedef enum {
   EEPROM_State_None,
   EEPROM_State_Empty,      // every slot erased
   EEPROM_State_Filled,     // data, no marker, no BEGIN: the active half mid-write
-  EEPROM_State_InProgress, // BEGIN at slot 0, no marker: a rewrite target mid-copy
+  EEPROM_State_InProgress, // BEGIN at slot 0 or a marker not whole: a rewrite cut
   EEPROM_State_Full,       // every data slot written, marker erased, no BEGIN
   EEPROM_State_Complete    // marker present: a rewritten half carrying its generation
 } EEPROM_State_t;
@@ -34,9 +34,15 @@ typedef enum {
  *   half is a marker with a generation counter, the newer half wins on `Complete/Complete`.
  *   The first slot of a rewrite target takes a BEGIN tag before any data, so a power loss
  *   mid-rewrite is recognized on the next boot and no `Full/Full` data-loss path exists.
- *   Reserved keys: `0xFFFFFFFF` erased, `0xFFFFFFFE` marker, `0xFFFFFFFD` begin.
- *   A torn write leaves a garbage slot; one whose key field happens to equal a user key
- *   reads back as that key, a `2^-32` chance per bad write.
+ *   Reserved keys: `0xFFFFFFFF` erased, `0xFFFFFFFE` marker, `0xFFFFFFFD` begin,
+ *   `0xFFFFFFFC` a slot ECC cannot read.
+ *   A write cut halfway leaves a slot ECC cannot read, which every read skips, or one ECC
+ *   corrects to a wrong value, about 5% of cuts on G071. So the newest slot of the store,
+ *   the only one a cut tears, counts only when it reads clean: init moves the store without
+ *   one ECC corrected, and the key in flight keeps its old value. The cost: a bit flipped
+ *   by age in that slot drops it as well, which loses a key written only once.
+ *   A slot ECC corrects anywhere else counts as written.
+ *   Damage ECC misses goes unnoticed: the key its key field matches reads the damaged value.
  * @param[in] page_start First flash page
  * @param[in] page_count Number of pages, even and at least `2`
  * Internal:
@@ -96,7 +102,7 @@ status_t EEPROM_Write(EEPROM_t *eeprom, uint32_t key, uint32_t value);
 uint32_t EEPROM_Read(EEPROM_t *eeprom, uint32_t key, uint32_t default_value);
 
 /**
- * @brief Store a variable under its own address.
+ * @brief Store a variable under its own address, on the host its low 32 bits.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
  * @param[in] var Variable
  * @return `OK` on success, `ERR` on a flash error

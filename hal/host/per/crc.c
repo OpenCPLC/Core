@@ -24,38 +24,57 @@ static uint32_t reflect_bits(uint32_t data, uint8_t width)
   return reflection;
 }
 
+// Register of the run in progress, as the unit of the chip holds it
+static uint32_t reg;
+
 //-------------------------------------------------------------------------------------------------
+
+void CRC_Start(const CRC_t *crc)
+{
+  reg = crc->initial;
+}
 
 // Bit-at-a-time division, the same result a lookup table would give.
 // Keeping it tableless makes `CRC_t` identical to the target one and removes an
 // init step that the target, running on the CRC peripheral, has no counterpart for.
-uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count)
+void CRC_Next(const CRC_t *crc, const void *data, uint32_t count)
 {
   uint32_t mask = get_crc_mask(crc->width);
   uint32_t topbit = 1u << (crc->width - 1);
-  uint32_t remainder = crc->initial;
   const uint8_t *bytes = data;
   for(uint32_t i = 0; i < count; i++) {
     uint8_t byte = bytes[i];
     if(crc->reflect_data_in) byte = (uint8_t)reflect_bits(byte, 8);
-    remainder ^= (uint32_t)byte << (crc->width - 8);
+    reg ^= (uint32_t)byte << (crc->width - 8);
     for(uint8_t bit = 0; bit < 8; bit++) {
-      if(remainder & topbit) remainder = (remainder << 1) ^ crc->polynomial;
-      else remainder <<= 1;
-      remainder &= mask;
+      if(reg & topbit) reg = (reg << 1) ^ crc->polynomial;
+      else reg <<= 1;
+      reg &= mask;
     }
   }
-  if(crc->reflect_data_out) remainder = reflect_bits(remainder, crc->width);
-  remainder ^= crc->final_xor;
+}
+
+uint32_t CRC_End(const CRC_t *crc)
+{
+  uint32_t out = reg;
+  if(crc->reflect_data_out) out = reflect_bits(out, crc->width);
+  out ^= crc->final_xor;
   if(crc->invert_out) {
-    uint8_t *p = (uint8_t *)&remainder;
+    uint8_t *p = (uint8_t *)&out;
     switch(crc->width) {
       case 32:
         return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
       case 16: return ((uint32_t)p[0] << 8) | p[1];
     }
   }
-  return remainder;
+  return out;
+}
+
+uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count)
+{
+  CRC_Start(crc);
+  CRC_Next(crc, data, count);
+  return CRC_End(crc);
 }
 
 //-------------------------------------------------------------------------------------------------

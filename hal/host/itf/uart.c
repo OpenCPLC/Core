@@ -9,14 +9,26 @@
   #include <windows.h>
   #include <conio.h>
 #else
-  #include <unistd.h>
+  #include "posix.h"
   #include <termios.h>
   #include <fcntl.h>
   #include <sys/select.h>
 #endif
 
+#ifdef HOST_TEST
+  #include "test.h"
+#endif
+
 //----------------------------------------------------------------------------------- Console setup
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(HOST_TEST)
+
+// A test has no console: nothing comes in, and the harness takes what goes out
+static void console_init(void) {}
+static void console_deinit(void) {}
+static int console_kbhit(void) { return 0; }
+static int console_getch(void) { return -1; }
+
+#elif defined(_WIN32) || defined(_WIN64)
 
 static HANDLE stdin_handle;
 static DWORD orig_mode;
@@ -130,8 +142,16 @@ status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len)
   if(!uart->_init) return ERR;
   if(uart->_tx_busy) return BUSY;
   uart->_tx_busy = true;
+  #ifdef HOST_TEST
+  uint16_t room = sizeof(uart->_sent) - uart->_sent_len;
+  uint16_t kept = len < room ? len : room;
+  memcpy(uart->_sent + uart->_sent_len, data, kept);
+  uart->_sent_len += kept;
+  _TEST_Output(uart, data, len);
+  #else
   fwrite(data, 1, len, stdout);
   fflush(stdout);
+  #endif
   uart->_tx_busy = false;
   return OK;
 }
@@ -178,4 +198,16 @@ uint32_t UART_CalcTime_ms(UART_t *uart, uint16_t len)
   return (uint32_t)(((uint64_t)bits * len * 1000) / uart->baud);
 }
 
+//-------------------------------------------------------------------------------------------- Host
+#if defined(HOST_TEST)
+
+uint16_t UART_HostSent(UART_t *uart, uint8_t *data)
+{
+  uint16_t len = uart->_sent_len;
+  if(data) memcpy(data, uart->_sent, len);
+  uart->_sent_len = 0;
+  return len;
+}
+
+#endif
 //-------------------------------------------------------------------------------------------------

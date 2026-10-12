@@ -1,5 +1,4 @@
 // .tests/wb55/main.c
-// Compile test of Core for STM32WB55: every file the chip pulls in has to build and link.
 
 #include <vrts.h>
 #include <sys.h>
@@ -29,29 +28,29 @@ GPIO_t led = { // Nucleo-WB55RG green `LD2`
 
 void loop(void)
 {
-  GPIO_Init(&led); // Initialize LED
+  GPIO_Init(&led);
   while(1) {
-    GPIO_Tgl(&led); // Toggle LED state
-    LOG_Info("Do nothing"); // Print message in loop
-    delay(1000); // Wait 1s
+    GPIO_Tgl(&led);
+    LOG_Info("Do nothing");
+    delay(1000);
   }
 }
 
 //-------------------------------------------------------------------------------------------- main
 
-stack(stack_dbg, 256);   // Memory stack for debugger thread (logs + bash)
-stack(stack_loop, 256);  // Memory stack for `loop` function
+stack(stack_dbg, 256);
+stack(stack_loop, 256);
 
 int main(void)
 {
-  sys_init(); // Configure system clock, systick and heap
-  RTC_Init(); // Enable real-time clock (RTC)
-  DBG_Init(&dbg_uart); // Initialize debugger (logs + bash)
+  sys_init(); // clock, systick and heap
+  RTC_Init();
+  DBG_Init(&dbg_uart); // logs and shell on this port
   DBG_Enter();
   LOG_Info("Build: %s %s", __DATE__, __TIME__);
   LOG_Info("Target MCU: " ANSI_PINK "STM32WB55" ANSI_END);
-  thread(DBG_Loop, stack_dbg); // Add debugger thread (logs + bash)
-  thread(loop, stack_loop); // Add `loop` function as thread
-  vrts_init(); // Start VRTS thread switching system
-  while(1); // Program should never reach this point
+  thread(DBG_Loop, stack_dbg);
+  thread(loop, stack_loop);
+  vrts_init();
+  while(1); // `vrts_init` never returns
 }

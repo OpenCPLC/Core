@@ -2,8 +2,7 @@
 
 /**
  * @name  Project: .tests/wb55
- * @brief Project configuration, read by Forge on every load and by the framework at build.
- *        Edit values, keep definitions; `make` reloads the project after a change.
+ * @brief Compile test of Core for STM32WB55: every file the chip pulls in has to build and link.
  * @date  2026-10-08
  */
 #ifndef MAIN_H_

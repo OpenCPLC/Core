@@ -38,7 +38,7 @@ typedef enum {
   PDB_Asc = 1   // oldest first, forward physical order
 } PDB_Dir_t;
 
-// Record filter, `true` keeps the record; `ctx` is `PDB_Query_t.filter_ctx`
+// Record filter, `true` keeps the record, a copy in RAM; `ctx` is `PDB_Query_t.filter_ctx`
 typedef bool (*PDB_Filter_t)(const void *record, void *ctx);
 
 //--------------------------------------------------------------------------------------- Structure
@@ -110,6 +110,7 @@ typedef struct {
  * @param _skipped Matching records skipped so far
  * @param _steps_left Slots left to visit
  * @param _done Walk finished
+ * @param _record Record under the cursor, copied through ECC
  */
 typedef struct {
   uint32_t count;
@@ -124,6 +125,7 @@ typedef struct {
   uint32_t _skipped;
   uint32_t _steps_left;
   bool _done;
+  uint64_t _record[PDB_RECORD_LIMIT / 8];
 } PDB_Iter_t;
 
 //--------------------------------------------------------------------------------------------- API
@@ -170,7 +172,7 @@ status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query);
 status_t PDB_IterNext(PDB_Iter_t *iter, void *out);
 
 /**
- * @brief Record under the iterator, in flash, valid until the next insert or delete.
+ * @brief Record under the iterator, the copy it holds, valid until the next `PDB_IterNext`.
  * @param[in] iter Iterator after a successful `PDB_IterNext`
  * @return Pointer to the record
  */

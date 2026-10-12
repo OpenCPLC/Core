@@ -61,6 +61,10 @@ typedef struct {
   // internal
   volatile bool _tx_busy;
   bool _init;
+  #if defined(HOST_TEST)
+  uint8_t _sent[256]; // bytes put on the line since `UART_HostSent` took them
+  uint16_t _sent_len;
+  #endif
 } UART_t;
 
 //--------------------------------------------------------------------------------------------- API
@@ -86,6 +90,18 @@ void UART_Clear(UART_t *uart);
 
 uint32_t UART_CalcTime_ms(UART_t *uart, uint16_t len);
 
+//-------------------------------------------------------------------------------------------- Host
+#if defined(HOST_TEST)
+
+/**
+ * @brief Bytes the port put on the line since the last call, at most 256.
+ * @param[in] uart Port
+ * @param[out] data Buffer for 256 bytes, `NULL` drops them
+ * @return Byte count
+ */
+uint16_t UART_HostSent(UART_t *uart, uint8_t *data);
+
+#endif
 //------------------------------------------------------------------------------------------ Device
 
 // Unique ID, the 96 bits the target reads at `UID_BASE`

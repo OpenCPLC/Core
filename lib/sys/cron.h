@@ -29,8 +29,8 @@
 //--------------------------------------------------------------------------------------- Wildcards
 
 #define cron_bit(n) ((uint64_t)1 << (n))
-// Match all values for a field
-#define cron_any (~(uint64_t)0)
+// Match all values for a field: every bit set in a field of any width, no conversion warning
+#define cron_any (-1)
 // Match a single value `x`, `cron_at(8)` = 8
 #define cron_at(x) cron_bit(x)
 // Match the inclusive range `[a..b]`, `cron_range(1, 5)` = 1..5

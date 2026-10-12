@@ -2,6 +2,8 @@
 
 #include "dma.h"
 
+#include <stddef.h>
+
 #include "xdef.h"
 
 // Nothing moves data on its own off-target. A descriptor is filled with the null register
