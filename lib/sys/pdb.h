@@ -1,4 +1,4 @@
-// hal/stm32/per/pdb.h
+// lib/sys/pdb.h
 
 #ifndef PDB_H_
 #define PDB_H_

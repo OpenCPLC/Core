@@ -49,18 +49,19 @@
 // - a doubleword takes one write after its erase, the way ECC flash holds it;
 //   zeros may go over one not written with ones, anything else ends in `PROGERR`
 // - ones program nothing, an erased doubleword reads them already
-// - `FLASH_Erase` spares a page that reads blank, ones a programmer wrote and all
+// - `FLASH_Erase` spares a page that reads blank, ones a programmer wrote and all,
+//   but not one ECC corrects to ones, as an erase cut halfway leaves it
 // - a row goes only into the page erased last, over fresh doublewords
 // - `FLASH_WritePage` erases, blank or not, and programs in rows, on WB in doublewords
-// - a program cycle cut halfway leaves its doublewords unreadable to ECC, or read back corrected
-//   to a wrong value, see `FLASH_Cut_t`; a plain read of one stops the model, as NMI the chip,
-//   so data a cut may have torn comes through `FLASH_Copy`
+// - a cycle cut halfway, program or erase, leaves the doublewords it touched unreadable to ECC,
+//   or read back corrected to a wrong value, see `FLASH_Cut_t`; a plain read of one stops
+//   the model, as NMI the chip, so data a cut may have torn comes through `FLASH_Copy`
 // - a bit flipped by age ECC corrects, two it cannot read, see `FLASH_HostAge`
 // A host application keeps its pages in `FLASH_DIR` between runs.
 // A test owns the chip in RAM and cuts the power where it wants, see `FLASH_HostCut`.
 
 /**
- * @brief Erase a page, skipped when it reads erased already.
+ * @brief Erase a page, skipped when it reads erased already, ECC correcting none of it.
  * @param[in] page Page index
  * @return `OK` erased, `ERR` beyond the chip
  */
@@ -180,7 +181,7 @@ void FLASH_SetDirectory(const char *path);
 // Where a power cut lands in its cycle
 typedef enum {
   FLASH_Cut_Before,     // before the cycle, which never starts
-  FLASH_Cut_Unreadable, // halfway: the doublewords of a program cycle fail ECC
+  FLASH_Cut_Unreadable, // halfway: the doublewords the cycle touched fail ECC
   FLASH_Cut_Corrected   // halfway: ECC corrects them to a wrong value, ~5% of cuts on G071
 } FLASH_Cut_t;
 

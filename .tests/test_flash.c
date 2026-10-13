@@ -162,6 +162,24 @@ static void save_after_a_cut_lands(void)
   }
 }
 
+static void erase_page(void) { FLASH_Erase(PAGE); }
+
+// An erase cut halfway can leave a page that reads blank only through ECC:
+// the next erase takes it, so its doublewords take writes again
+static void erase_after_a_cut_lands(void)
+{
+  FLASH_HostBlank();
+  uint32_t addr = FLASH_GetAddress(PAGE, 0);
+  TEST_Check(FLASH_Write(addr, 0xFFFFFFFFu, 0x5A5A5A5Au) == OK);
+  FLASH_HostCut(0, FLASH_Cut_Corrected, erase_page);
+  bool corrected;
+  uint32_t word[2];
+  TEST_Check(FLASH_Copy(addr, word, 8, &corrected) == OK && corrected, "ones through ECC");
+  TEST_Check(word[0] == 0xFFFFFFFFu && word[1] == 0xFFFFFFFFu, "ones through ECC");
+  TEST_Check(FLASH_Erase(PAGE) == OK);
+  TEST_Check(FLASH_Write(addr, 1, 2) == OK, "write after the erase");
+}
+
 //-------------------------------------------------------------------------------------------------
 
 void TEST_Cases(void)
@@ -174,4 +192,5 @@ void TEST_Cases(void)
   TEST(save_survives_a_torn_cut);
   TEST(save_survives_a_miscorrected_cut);
   TEST(save_after_a_cut_lands);
+  TEST(erase_after_a_cut_lands);
 }

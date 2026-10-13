@@ -1,4 +1,4 @@
-// hal/stm32/per/eeprom.h
+// lib/sys/eeprom.h
 
 #ifndef EEPROM_H_
 #define EEPROM_H_
@@ -36,12 +36,12 @@ typedef enum {
  *   mid-rewrite is recognized on the next boot and no `Full/Full` data-loss path exists.
  *   Reserved keys: `0xFFFFFFFF` erased, `0xFFFFFFFE` marker, `0xFFFFFFFD` begin,
  *   `0xFFFFFFFC` a slot ECC cannot read.
- *   A write cut halfway leaves a slot ECC cannot read, which every read skips, or one ECC
- *   corrects to a wrong value, about 5% of cuts on G071. So the newest slot of the store,
- *   the only one a cut tears, counts only when it reads clean: init moves the store without
- *   one ECC corrected, and the key in flight keeps its old value. The cost: a bit flipped
- *   by age in that slot drops it as well, which loses a key written only once.
- *   A slot ECC corrects anywhere else counts as written.
+ *   A write cut halfway leaves a slot ECC cannot read, or one ECC corrects to a wrong value,
+ *   about 5% of cuts on G071, and a slot a cut tore can pass ECC on a later read (WB55).
+ *   So the newest slot of the store, the only one a cut tears, counts only when it reads
+ *   clean: init moves the store without it, and the key in flight keeps its old value.
+ *   The cost: a bit flipped by age in that slot drops it as well, which loses a key written
+ *   only once. Elsewhere a slot ECC corrects counts as written, one it cannot read is skipped.
  *   Damage ECC misses goes unnoticed: the key its key field matches reads the damaged value.
  * @param[in] page_start First flash page
  * @param[in] page_count Number of pages, even and at least `2`

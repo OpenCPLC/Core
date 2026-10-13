@@ -168,6 +168,34 @@ static void corrected_newest_slot_dropped(void)
   TEST_Equal(EEPROM_Read(&eeprom, 7, ABSENT), 1, "other key");
 }
 
+// The newest slot ECC cannot read leaves with the store too: a slot a cut tore can pass ECC
+// on a later read, with a wrong value
+static void unreadable_newest_slot_dropped(void)
+{
+  FLASH_HostBlank();
+  power_up();
+  TEST_Check(EEPROM_Write(&eeprom, 7, 1) == OK);
+  TEST_Check(EEPROM_Write(&eeprom, 7, 2) == OK);
+  uint32_t slot = eeprom._cursor - 8;
+  FLASH_HostAge(slot, 2);
+  power_up();
+  TEST_Equal(EEPROM_Read(&eeprom, 7, ABSENT), 1, "older value");
+  TEST_Check(FLASH_Check(slot, 8, NULL) == OK, "store moved, its old half cleared");
+}
+
+// A target left written, by a rewrite whose BEGIN tag failed, is cleared by the next rewrite
+static void rewrite_clears_its_target(void)
+{
+  FLASH_HostBlank();
+  power_up();
+  TEST_Check(FLASH_Write(eeprom._addr_start[!eeprom._active], 1, 2) == OK, "target taken");
+  for(uint32_t i = 0; i < 600; i++) {
+    TEST_Check(EEPROM_Write(&eeprom, i % 4 + 1, i) == OK, "write:%u", i);
+  }
+  power_up();
+  TEST_Equal(EEPROM_Read(&eeprom, 4, ABSENT), 599, "newest write, past the rewrite");
+}
+
 // A store whose marker aged unreadable goes on: no source stands behind it to take its place
 static void aged_marker_taken_over(void)
 {
@@ -374,6 +402,8 @@ void TEST_Cases(void)
   TEST(refused_slot_skipped);
   TEST(aged_slot_kept);
   TEST(corrected_newest_slot_dropped);
+  TEST(unreadable_newest_slot_dropped);
+  TEST(rewrite_clears_its_target);
   TEST(aged_marker_taken_over);
   TEST(write_survives_a_cut);
   TEST(write_survives_a_torn_cut);

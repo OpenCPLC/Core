@@ -308,8 +308,11 @@ uint32_t BOOT_Install(void)
   BOOT_Result_t result = BOOT_Result_None;
   uint32_t mailbox = FLASH_GetAddress(BOOT_MAILBOX_PAGE, 0);
   BOOT_Mailbox_t box;
-  // A record cut mid write holds doublewords ECC cannot read: no request
-  if(!FLASH_Copy(mailbox, &box, sizeof(box), NULL) && box.magic == BOOT_MAILBOX_MAGIC) {
+  bool corrected;
+  // A record a cut tore, writing or erasing it, holds doublewords ECC cannot read or corrects:
+  // no request. It lives only from a transfer to its install, no bit ages in it
+  bool request = !FLASH_Copy(mailbox, &box, sizeof(box), &corrected) && !corrected;
+  if(request && box.magic == BOOT_MAILBOX_MAGIC) {
     result = waiting_check(&box);
     // The record outlives the copy: a power loss in between repeats it from the start.
     // A slot already holding the image is done, a refused image takes its record along.

@@ -60,13 +60,15 @@ static inline __attribute__((always_inline)) void flash_wait(void)
   while(FLASH->SR & FLASH_BSY) __DSB();
 }
 
-// Page reads as erased: `0xFFFFFFFF` in every word, read through ECC piece by piece
+// Page reads as erased: `0xFFFFFFFF` in every word, read through ECC piece by piece.
+// Ones ECC corrected do not count: an erase cut late leaves them, over cells not erased whole.
 static bool page_is_erased(uint16_t page)
 {
   uint32_t addr = FLASH_GetAddress(page, 0);
   uint32_t word[16];
+  bool corrected;
   for(uint32_t at = addr; at < addr + FLASH_PAGE_SIZE; at += sizeof(word)) {
-    if(FLASH_Copy(at, word, sizeof(word), NULL)) return false;
+    if(FLASH_Copy(at, word, sizeof(word), &corrected) || corrected) return false;
     for(uint32_t i = 0; i < array_len(word); i++) {
       if(word[i] != 0xFFFFFFFFu) return false;
     }

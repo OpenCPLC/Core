@@ -131,20 +131,32 @@ static bool cycle(void)
   return false;
 }
 
-// Erase cycle, blank or not; a cut halfway leaves the upper half of the page as it was
+// Erase cycle, blank or not. A cut halfway erases nothing whole: every doubleword the page holds
+// written stays, unreadable to ECC or corrected by it to a wrong value, as `cut_at` says.
 static void erase(uint16_t page)
 {
   bool torn = cycle();
-  uint32_t size = torn ? FLASH_PAGE_SIZE / 2 : FLASH_PAGE_SIZE;
   uint32_t cell = (uint32_t)page * FLASH_PAGE_SIZE / 8;
-  memset(page_at(page), 0xFF, size);
-  memset(chip.written + cell, false, size / 8);
-  memset(chip.damaged + cell, false, size / 8);
-  memset(chip.corrected + cell, false, size / 8);
-  memset(chip.torn + cell, false, size / 8);
+  if(torn) {
+    for(uint32_t i = cell; i < cell + FLASH_PAGE_SIZE / 8; i++) {
+      if(!chip.written[i]) continue;
+      chip.torn[i] = true;
+      if(cut_at == FLASH_Cut_Unreadable) chip.damaged[i] = true;
+      else {
+        chip.corrected[i] = true;
+        memset(chip.memory + 8 * i + 4, 0xFF, 4); // the upper word on its way to erased
+      }
+    }
+    store(page);
+    longjmp(power_loss, 1);
+  }
+  memset(page_at(page), 0xFF, FLASH_PAGE_SIZE);
+  memset(chip.written + cell, false, FLASH_PAGE_SIZE / 8);
+  memset(chip.damaged + cell, false, FLASH_PAGE_SIZE / 8);
+  memset(chip.corrected + cell, false, FLASH_PAGE_SIZE / 8);
+  memset(chip.torn + cell, false, FLASH_PAGE_SIZE / 8);
   chip.erased_last = page;
   store(page);
-  if(torn) longjmp(power_loss, 1);
 }
 
 // Program cycle of `size` bytes at `at` from the base.
@@ -171,9 +183,11 @@ status_t FLASH_Erase(uint16_t page)
 {
   if(page >= FLASH_PAGES) return ERR;
   mount();
-  // A blank page is spared the cycle; one with a doubleword ECC cannot read is not blank
+  // A blank page is spared the cycle; one with a doubleword ECC cannot read or corrects is not
+  // blank, an erase cut halfway leaves ones ECC corrected over cells not erased whole
+  bool corrected;
   if(blank(page_at(page), FLASH_PAGE_SIZE) &&
-    !FLASH_Check(FLASH_GetAddress(page, 0), FLASH_PAGE_SIZE, NULL)) return OK;
+    !FLASH_Check(FLASH_GetAddress(page, 0), FLASH_PAGE_SIZE, &corrected) && !corrected) return OK;
   erase(page);
   return OK;
 }

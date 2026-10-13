@@ -1,4 +1,4 @@
-// hal/stm32/per/pdb.c
+// lib/sys/pdb.c
 
 #include "pdb.h"
 

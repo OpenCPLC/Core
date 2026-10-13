@@ -1,4 +1,4 @@
-// hal/stm32/per/eeprom.c
+// lib/sys/eeprom.c
 
 #include "eeprom.h"
 
@@ -78,24 +78,25 @@ static uint32_t _find_cursor(EEPROM_t *e, EEPROM_Storage_t s)
   return cursor;
 }
 
-// Newest slot of a half when ECC corrected it, `0` otherwise.
-// A write cut halfway reads back corrected to a wrong value on about 5% of cuts (G071),
-// and nothing tells that from a bit flipped by age: the newest slot, the only one a cut tears,
+// Newest slot of a half unless it reads clean, `0` otherwise.
+// A write cut halfway leaves its slot unreadable or corrected to a wrong value, about 5% of
+// cuts on G071, and a slot a cut tore can pass ECC on a later read (WB55). Nothing tells
+// a correction from a bit flipped by age: the newest slot, the only one a cut tears,
 // counts only when it reads clean
-static uint32_t _corrected_tail(EEPROM_t *e, EEPROM_Storage_t s)
+static uint32_t _torn_tail(EEPROM_t *e, EEPROM_Storage_t s)
 {
   uint32_t cursor = _find_cursor(e, s);
   bool corrected;
-  if(cursor == e->_addr_start[s] || FLASH_Check(cursor - 8, 8, &corrected)) return 0;
-  return corrected ? cursor - 8 : 0;
+  if(cursor == e->_addr_start[s]) return 0;
+  return FLASH_Check(cursor - 8, 8, &corrected) || corrected ? cursor - 8 : 0;
 }
 
-// Newest entry of a key: physical order is write order, so the scan runs from the end
+// Newest entry of a key: physical order is write order, so the scan runs down from the cursor,
+// every slot above it erased
 static status_t _read_key(EEPROM_t *e, uint32_t key, uint32_t *out)
 {
   uint32_t start = e->_addr_start[e->_active];
-  uint32_t marker = _marker_addr(e, e->_active);
-  for(uint32_t addr = marker; addr > start;) {
+  for(uint32_t addr = e->_cursor; addr > start;) {
     addr -= 8;
     uint64_t slot = _slot(addr);
     if((uint32_t)slot >= EEPROM_DAMAGED_KEY) continue; // erased, marker, BEGIN or damaged
@@ -131,6 +132,8 @@ static status_t _write_marker(EEPROM_t *e, EEPROM_Storage_t s, uint16_t gen)
 // Keys past the capacity are dropped by physical position,
 // the store is meant for key sets smaller than a half.
 // The slot at `skip` stays behind, `0` for none.
+// The target is cleared first: one a failed rewrite left written takes no BEGIN tag,
+// and a blank page costs only the look.
 static status_t _rewrite(EEPROM_t *e, EEPROM_Storage_t src_s, uint32_t skip)
 {
   EEPROM_Storage_t dst_s = !src_s;
@@ -139,6 +142,7 @@ static status_t _rewrite(EEPROM_t *e, EEPROM_Storage_t src_s, uint32_t skip)
   uint32_t dst_start = e->_addr_start[dst_s];
   uint32_t dst_marker = _marker_addr(e, dst_s);
   uint16_t new_gen = (uint16_t)(e->_generation + 1);
+  if(_clear_storage(e, dst_s)) return ERR;
   if(FLASH_Write(dst_start, EEPROM_BEGIN_KEY, (uint32_t)new_gen)) return ERR;
   uint32_t dst_cursor = dst_start + 8;
   uint32_t src = src_end;
@@ -256,7 +260,7 @@ status_t EEPROM_Init(EEPROM_t *e)
       if(_clear_storage(e, EEPROM_Storage_A)) return ERR;
       e->_active = EEPROM_Storage_B;
       if(sb == EEPROM_State_Full) {
-        if(_rewrite(e, EEPROM_Storage_B, _corrected_tail(e, EEPROM_Storage_B))) return ERR;
+        if(_rewrite(e, EEPROM_Storage_B, _torn_tail(e, EEPROM_Storage_B))) return ERR;
       }
       else e->_cursor = _find_cursor(e, e->_active);
     }
@@ -267,7 +271,7 @@ status_t EEPROM_Init(EEPROM_t *e)
       if(_clear_storage(e, EEPROM_Storage_B)) return ERR;
       e->_active = EEPROM_Storage_A;
       if(sa == EEPROM_State_Full) {
-        if(_rewrite(e, EEPROM_Storage_A, _corrected_tail(e, EEPROM_Storage_A))) return ERR;
+        if(_rewrite(e, EEPROM_Storage_A, _torn_tail(e, EEPROM_Storage_A))) return ERR;
       }
       else e->_cursor = _find_cursor(e, e->_active);
     }
@@ -276,20 +280,14 @@ status_t EEPROM_Init(EEPROM_t *e)
   else if(sa == EEPROM_State_Full && sb == EEPROM_State_Full) {
     if(EEPROM_Clear(e)) return ERR;
   }
-  // One Full: rewrite it, the other side is scratch
+  // One Full: rewrite it, the other side is scratch the rewrite clears
   else if(sa == EEPROM_State_Full) {
-    if(sb == EEPROM_State_Filled) {
-      if(_clear_storage(e, EEPROM_Storage_B)) return ERR;
-    }
     e->_active = EEPROM_Storage_A;
-    if(_rewrite(e, EEPROM_Storage_A, _corrected_tail(e, EEPROM_Storage_A))) return ERR;
+    if(_rewrite(e, EEPROM_Storage_A, _torn_tail(e, EEPROM_Storage_A))) return ERR;
   }
   else if(sb == EEPROM_State_Full) {
-    if(sa == EEPROM_State_Filled) {
-      if(_clear_storage(e, EEPROM_Storage_A)) return ERR;
-    }
     e->_active = EEPROM_Storage_B;
-    if(_rewrite(e, EEPROM_Storage_B, _corrected_tail(e, EEPROM_Storage_B))) return ERR;
+    if(_rewrite(e, EEPROM_Storage_B, _torn_tail(e, EEPROM_Storage_B))) return ERR;
   }
   // Filled/Filled: a rewrite of a Filled half cut at its BEGIN tag, or cut later and its target
   // cleared halfway, which can take the tag and leave copies. A log starts with a key, that
@@ -315,8 +313,8 @@ status_t EEPROM_Init(EEPROM_t *e)
     e->_active = EEPROM_Storage_A;
     e->_cursor = e->_addr_start[EEPROM_Storage_A];
   }
-  // The newest slot of the store counts only when it reads clean, see `_corrected_tail`
-  uint32_t tail = _corrected_tail(e, e->_active);
+  // The newest slot of the store counts only when it reads clean, see `_torn_tail`
+  uint32_t tail = _torn_tail(e, e->_active);
   if(tail && _rewrite(e, e->_active, tail)) return ERR;
   e->_init = true;
   return OK;

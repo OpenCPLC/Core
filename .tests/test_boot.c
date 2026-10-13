@@ -130,7 +130,9 @@ static uint32_t slot_crc(void)
 static bool mailbox_read(BOOT_Mailbox_t *box)
 {
   uint32_t addr = FLASH_GetAddress(BOOT_MAILBOX_PAGE, 0);
-  return !FLASH_Copy(addr, box, sizeof(*box), NULL) && box->magic == BOOT_MAILBOX_MAGIC;
+  bool corrected;
+  if(FLASH_Copy(addr, box, sizeof(*box), &corrected) || corrected) return false;
+  return box->magic == BOOT_MAILBOX_MAGIC;
 }
 
 static bool mailbox_has_record(void)

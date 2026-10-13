@@ -30,7 +30,7 @@
 //--------------------------------------------------------------------------------------------- API
 
 /**
- * @brief Erase a page, skipped when it reads erased already.
+ * @brief Erase a page, skipped when it reads erased already, ECC correcting none of it.
  * @param[in] page Page index
  * @return `OK` on success, `ERR` on a flash error or a page still holding data
  */
