@@ -11,7 +11,7 @@
 
 //--------------------------------------------------------------------------------------------- API
 
-uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count)
+void CRC_Start(const CRC_t *crc)
 {
   RCC_EnableCRC();
   CRC->POL = crc->polynomial;
@@ -28,8 +28,17 @@ uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count)
   }
   CRC->CR |= (crc->reflect_data_out << CRC_CR_REV_OUT_Pos) | CRC_CR_RESET;
   __DSB();
+}
+
+void CRC_Next(const CRC_t *crc, const void *data, uint32_t count)
+{
+  unused(crc);
   const uint8_t *bytes = data;
   while(count--) *(volatile uint8_t *)&CRC->DR = *bytes++;
+}
+
+uint32_t CRC_End(const CRC_t *crc)
+{
   uint32_t out = CRC->DR ^ crc->final_xor;
   if(!crc->invert_out) return out;
   switch(crc->width) {
@@ -37,6 +46,13 @@ uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count)
     case 16: return __REV16(out) & 0xFFFFu;
     default: return out;
   }
+}
+
+uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count)
+{
+  CRC_Start(crc);
+  CRC_Next(crc, data, count);
+  return CRC_End(crc);
 }
 
 uint16_t CRC_Append(const CRC_t *crc, uint8_t *data, uint16_t count)

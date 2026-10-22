@@ -111,11 +111,12 @@ bool BUFF_Push(BUFF_t *buff, uint8_t value)
       BUFF_Break(buff);
       return true;
     }
-    // FF / Ctrl+C: close + skip message
+    // FF / Ctrl+C: the line being typed goes, lines entered before it stay.
+    // A lone `\f` takes its place for the echo to show, and Enter does not close it.
     if(value == '\f' || value == 0x03) {
+      while(BUFF_Pop(buff, NULL));
       BUFF_Append(buff, '\f');
-      BUFF_Break(buff);
-      BUFF_Skip(buff);
+      buff->_break_allow = false;
       return true;
     }
     // Ctrl+S (XOFF): ignore

@@ -74,7 +74,7 @@ float str_to_uf32(const char *str);
  * @param[out] str Output, `fill_space` bytes at most, not terminated
  * @param[in] base Numeric base, `2` to `36`
  * @param[in] sign `true` treats `nbr` as signed and writes `-` when negative
- * @param[in] fill_zero Least digits, padded with leading zeros
+ * @param[in] fill_zero Least width of sign and digits, padded with leading zeros
  * @param[in] fill_space Least width, padded with leading spaces
  * @return Bytes written
  */
@@ -91,10 +91,10 @@ char *str_from_int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero,
 /**
  * @brief Write `nbr` at `dst`, forward, without a terminator.
  * @param[out] dst Destination, room for the widest number in `base` or for `fill_zero`
- *   digits, whichever is longer
+ *   characters, whichever is longer
  * @param[in] nbr Number to write
  * @param[in] base Numeric base, `2` to `36`
- * @param[in] fill_zero Least digits to write, padded with leading zeros
+ * @param[in] fill_zero Least width of sign and digits, padded with leading zeros
  * @return Position right after the written digits, ready for the next append
  */
 char *str_append_int(char *dst, int64_t nbr, uint8_t base, uint8_t fill_zero);

@@ -56,6 +56,8 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
           reg++;
         }
       }
+      // Bits past the last coil asked for are zero
+      if(count % 8) modbus->buffer_tx[2 + rcount] &= (1 << (count % 8)) - 1;
       break;
     case MODBUS_Fnc_ReadHoldingRegisters:
     case MODBUS_Fnc_ReadInputRegisters:
@@ -162,9 +164,12 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
       }
       break;
     default:
-      size_tx = size_rx;
+      // A function the slave lacks: exception `01`, illegal function
+      size_tx = 3;
       modbus->buffer_tx = (uint8_t *)heap_alloc(size_tx + 2);
-      for(uint16_t i = 0; i < size_tx; i++) modbus->buffer_tx[i] = modbus->buffer_rx[i];
+      modbus->buffer_tx[0] = modbus->buffer_rx[0];
+      modbus->buffer_tx[1] = modbus->buffer_rx[1] | 0x80;
+      modbus->buffer_tx[2] = 0x01;
       break;
   }
   if(size_tx) {

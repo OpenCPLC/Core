@@ -11,7 +11,7 @@
   #include <windows.h>
   #include <process.h>
 #else
-  #include <unistd.h>
+  #include "posix.h"
 #endif
 
 //------------------------------------------------------------------------------------ Program path

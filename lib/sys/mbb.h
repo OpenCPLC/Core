@@ -15,7 +15,8 @@
 //------------------------------------------------------------------------------------------ Config
 
 #ifndef MBB_PRINT_NAN_INF
-  // `MBB_Float` prints `NaN` and `Inf` by name, otherwise a single `-`
+  // `MBB_Float` prints `NaN` and `Inf` by name, otherwise a single `-`.
+  // A number past `int64_t` once scaled counts as `Inf`.
   #define MBB_PRINT_NAN_INF 0
 #endif
 
@@ -151,7 +152,7 @@ int32_t MBB_DropLastLine(MBB_t *mbb);
  * @param[in] nbr Number to write
  * @param[in] base Numeric base, `2` to `36`
  * @param[in] sign `true` treats `nbr` as signed
- * @param[in] fill_zero Least digits, padded with leading zeros
+ * @param[in] fill_zero Least width of sign and digits, padded with leading zeros
  * @param[in] fill_space Least width, padded with leading spaces
  * @return Bytes appended
  */
@@ -163,10 +164,11 @@ int32_t MBB_Int(MBB_t *mbb, int64_t nbr, uint8_t base, bool sign,
  * @param[in,out] mbb Buffer
  * @param[in] nbr Number to write
  * @param[in] accuracy Decimal places
+ * @param[in] fill_zero Least width, padded with zeros after the sign
  * @param[in] fill_space Least width, padded with leading spaces
  * @return Bytes appended
  */
-int32_t MBB_Float(MBB_t *mbb, float nbr, uint8_t accuracy, uint8_t fill_space);
+int32_t MBB_Float(MBB_t *mbb, float nbr, uint8_t accuracy, uint8_t fill_zero, uint8_t fill_space);
 
 int32_t MBB_Dec(MBB_t *mbb, int64_t nbr);
 int32_t MBB_uDec(MBB_t *mbb, uint64_t nbr);
@@ -176,7 +178,8 @@ int32_t MBB_Hex32(MBB_t *mbb, uint32_t nbr);
 int32_t MBB_Bin8(MBB_t *mbb, uint8_t nbr);
 int32_t MBB_Nbr(MBB_t *mbb, float nbr); // three decimal places
 
-// Date and time fields as text: `YYYY-MM-DD`, `hh:mm:ss`, `hh:mm:ss.mmm`, alarm as `**:mm:ss`
+// Date and time fields as text: `YYYY-MM-DD`, `hh:mm:ss`, `hh:mm:ss.mmm`, alarm as `**:mm:ss`.
+// `MBB_Alarm` puts the day in front, a weekday by name and a month day as `DD`.
 int32_t MBB_Date(MBB_t *mbb, const RTC_Datetime_t *dt);
 int32_t MBB_Time(MBB_t *mbb, const RTC_Datetime_t *dt);
 int32_t MBB_TimeMs(MBB_t *mbb, const RTC_Datetime_t *dt);

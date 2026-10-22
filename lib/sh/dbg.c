@@ -7,6 +7,7 @@
 #include "heap.h"
 #include "log.h"
 #include "pwr.h"
+#include "sys.h"
 
 // The whole batch is copied out through one allocation, so the heap has to hold it
 // with room left for the block header
@@ -63,6 +64,16 @@ static bool echo_idle(void)
 
 #if(DBG_ECHO_MODE)
 
+// Next typed byte. Ctrl+C in the receive interrupt drops the line being typed
+// at any time, so the line moves with interrupts off.
+static bool echo_take(char *value)
+{
+  __disable_irq();
+  bool taken = BUFF_Echo(&rx_buff, value);
+  __enable_irq();
+  return taken;
+}
+
 // Typed bytes back to the console: backspace erases, enter closes the line,
 // a line in progress hides the logs until it is closed
 static void echo(void)
@@ -70,10 +81,13 @@ static void echo(void)
   static bool entered = false;
   static bool typing = false;
   char value;
-  while(BUFF_Echo(&rx_buff, &value)) {
+  while(echo_take(&value)) {
     if(value == '\b' || value == 0x7F) {
+      __disable_irq();
       BUFF_Pop(&rx_buff, NULL);
-      if(BUFF_Pop(&rx_buff, NULL)) DBG_Char(0x7F);
+      bool erased = BUFF_Pop(&rx_buff, NULL);
+      __enable_irq();
+      if(erased) DBG_Char(0x7F);
       continue;
     }
     if(value == '\n' || value == '\f') {
@@ -134,6 +148,15 @@ void DBG_WaitBlock(void)
   while(UART_IsBusy(DbgUart)) __NOP();
 }
 
+void DBG_Flush(void)
+{
+  DBG_WaitBlock(); // a batch `DBG_Loop` sent may still be on its way
+  if(!DbgFile->size) return;
+  UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
+  DBG_WaitBlock();
+  MBB_Clear(DbgFile);
+}
+
 void DBG_Send(const uint8_t *data, uint16_t len)
 {
   DBG_Wait();
@@ -167,11 +190,8 @@ int32_t DBG_Int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint8_t
   return MBB_Int(DbgFile, nbr, base, sign, fill_zero, fill_space);
 }
 
-int32_t DBG_Float(float nbr, uint8_t accuracy) { return MBB_Float(DbgFile, nbr, accuracy, 1); }
+int32_t DBG_Float(float nbr, uint8_t accuracy) { return MBB_Float(DbgFile, nbr, accuracy, 0, 0); }
 
-int32_t DBG_FloatSpace(float nbr, uint8_t accuracy, uint8_t fill_space) {
-  return MBB_Float(DbgFile, nbr, accuracy, fill_space);
-}
 
 int32_t DBG_Dec(int64_t nbr) { return MBB_Dec(DbgFile, nbr); }
 int32_t DBG_uDec(uint64_t nbr) { return MBB_uDec(DbgFile, nbr); }

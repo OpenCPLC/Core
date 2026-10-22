@@ -46,8 +46,11 @@ static inline const uint8_t *bootloader_key(void) {
   return FLASH_Ref(FLASH_GetAddress(BOOT_MAILBOX_PAGE, 0) - BOOT_KEY_SIZE);
 }
 
-static inline const BOOT_Header_t *header_of(uint16_t page) {
-  return FLASH_Ref(FLASH_GetAddress(page, 0) + BOOT_HEADER_OFFSET);
+// Header of the image on `page`, copied through ECC
+static status_t header_copy(uint16_t page, BOOT_Header_t *header)
+{
+  uint32_t addr = FLASH_GetAddress(page, 0) + BOOT_HEADER_OFFSET;
+  return FLASH_Copy(addr, header, sizeof(*header), NULL);
 }
 
 static inline bool erased(const uint8_t *data, uint32_t len)
@@ -181,17 +184,29 @@ BOOT_Result_t BOOT_ImageCheck(uint16_t page, uint32_t *size, uint32_t *crc)
   if(page >= FLASH_PAGES) return BOOT_Result_Crc;
   uint32_t base = FLASH_GetAddress(page, 0);
   uint32_t room = (uint32_t)(FLASH_PAGES - page) * FLASH_PAGE_SIZE;
-  const BOOT_Header_t *header = FLASH_Ref(base + BOOT_HEADER_OFFSET);
-  if(header->magic != BOOT_MAGIC) return BOOT_Result_Crc;
+  // An image cut mid write holds doublewords ECC cannot read: no image.
+  // So every byte comes through ECC, a plain read of one could raise NMI.
+  BOOT_Header_t header;
+  if(header_copy(page, &header)) return BOOT_Result_Crc;
+  if(header.magic != BOOT_MAGIC) return BOOT_Result_Crc;
   // An erased size is `0xFFFFFFFF`, so the bound is tested without adding to it;
   // the trailer is read as a word, so the size has to keep it aligned.
-  if(header->size <= BOOT_HEADER_OFFSET + sizeof(BOOT_Header_t)) return BOOT_Result_Crc;
-  if(header->size > room - BOOT_TRAILER_SIZE || header->size % 4u) return BOOT_Result_Crc;
-  if(header->origin != FLASH_GetAddress(BOOT_APP_PAGE, 0)) return BOOT_Result_Origin;
-  if(header->chip != chip_id()) return BOOT_Result_Chip;
-  uint32_t code = CRC_Run(&crc32_iso, FLASH_Ref(base), header->size);
-  if(FLASH_Read(base + header->size) != code) return BOOT_Result_Crc;
-  if(size) *size = header->size;
+  if(header.size <= BOOT_HEADER_OFFSET + sizeof(BOOT_Header_t)) return BOOT_Result_Crc;
+  if(header.size > room - BOOT_TRAILER_SIZE || header.size % 4u) return BOOT_Result_Crc;
+  if(header.origin != FLASH_GetAddress(BOOT_APP_PAGE, 0)) return BOOT_Result_Origin;
+  if(header.chip != chip_id()) return BOOT_Result_Chip;
+  uint8_t piece[128];
+  CRC_Start(&crc32_iso);
+  for(uint32_t done = 0; done < header.size; done += sizeof(piece)) {
+    uint32_t take = minv(header.size - done, sizeof(piece));
+    if(FLASH_Copy(base + done, piece, take, NULL)) return BOOT_Result_Crc;
+    CRC_Next(&crc32_iso, piece, take);
+  }
+  uint32_t code = CRC_End(&crc32_iso);
+  uint32_t trailer;
+  if(FLASH_Copy(base + header.size, &trailer, sizeof(trailer), NULL)) return BOOT_Result_Crc;
+  if(trailer != code) return BOOT_Result_Crc;
+  if(size) *size = header.size;
   if(crc) *crc = code;
   return BOOT_Result_None;
 }
@@ -210,7 +225,7 @@ static status_t install(uint16_t src, uint32_t bytes)
   if(FLASH_Erase(BOOT_APP_PAGE)) return ERR;
   for(uint16_t i = pages; i-- > 0;) {
     IWDG_Refresh();
-    memcpy(page_buffer, FLASH_Ref(FLASH_GetAddress(src + i, 0)), FLASH_PAGE_SIZE);
+    if(FLASH_Copy(FLASH_GetAddress(src + i, 0), page_buffer, FLASH_PAGE_SIZE, NULL)) return ERR;
     if(FLASH_WritePage(BOOT_APP_PAGE + i, page_buffer)) return ERR;
   }
   return OK;
@@ -222,8 +237,10 @@ static status_t install(uint16_t src, uint32_t bytes)
 static bool signed_by_key(uint32_t base, uint32_t size)
 {
   const uint8_t *key = bootloader_key();
-  const uint8_t *signature = FLASH_Ref(base + size + BOOT_SIGNATURE_OFFSET);
+  uint8_t signature[BOOT_SIGNATURE_SIZE];
   if(erased(key, BOOT_KEY_SIZE)) return false;
+  uint32_t at = base + size + BOOT_SIGNATURE_OFFSET;
+  if(FLASH_Copy(at, signature, sizeof(signature), NULL)) return false;
   // Ed25519 of RFC 8032: SHA-512 over `R`, the key and the image, reduced to the scalar `h`
   crypto_sha512_ctx ctx;
   crypto_sha512_init(&ctx);
@@ -231,7 +248,9 @@ static bool signed_by_key(uint32_t base, uint32_t size)
   crypto_sha512_update(&ctx, key, BOOT_KEY_SIZE);
   for(uint32_t done = 0; done < size; done += BOOT_HASH_CHUNK) {
     IWDG_Refresh();
-    crypto_sha512_update(&ctx, FLASH_Ref(base + done), minv(size - done, BOOT_HASH_CHUNK));
+    uint32_t take = minv(size - done, BOOT_HASH_CHUNK);
+    if(FLASH_Copy(base + done, page_buffer, take, NULL)) return false;
+    crypto_sha512_update(&ctx, page_buffer, take);
   }
   uint8_t hash[64], h[32];
   crypto_sha512_final(&ctx, hash);
@@ -263,9 +282,12 @@ static BOOT_Result_t waiting_check(const BOOT_Mailbox_t *box)
   if(size != box->size || crc != box->crc) return BOOT_Result_Crc;
   #if(BOOT_KEY)
   // The image in the slot sets the floor; an empty or broken slot takes any generation
-  bool slot_whole = !boot_check(BOOT_APP_PAGE, NULL, NULL);
-  if(slot_whole && header_of((uint16_t)box->page)->epoch < header_of(BOOT_APP_PAGE)->epoch) {
-    return BOOT_Result_Epoch;
+  if(!boot_check(BOOT_APP_PAGE, NULL, NULL)) {
+    BOOT_Header_t waiting, slot;
+    if(header_copy((uint16_t)box->page, &waiting) || header_copy(BOOT_APP_PAGE, &slot)) {
+      return BOOT_Result_Crc;
+    }
+    if(waiting.epoch < slot.epoch) return BOOT_Result_Epoch;
   }
   #endif
   return BOOT_Result_None;
@@ -284,15 +306,20 @@ uint32_t BOOT_Install(void)
   RCC_BootClock(); // a signature takes seconds at the reset clock
   #endif
   BOOT_Result_t result = BOOT_Result_None;
-  const BOOT_Mailbox_t *box = FLASH_Ref(FLASH_GetAddress(BOOT_MAILBOX_PAGE, 0));
-  if(box->magic == BOOT_MAILBOX_MAGIC) {
-    result = waiting_check(box);
+  uint32_t mailbox = FLASH_GetAddress(BOOT_MAILBOX_PAGE, 0);
+  BOOT_Mailbox_t box;
+  bool corrected;
+  // A record a cut tore, writing or erasing it, holds doublewords ECC cannot read or corrects:
+  // no request. It lives only from a transfer to its install, no bit ages in it
+  bool request = !FLASH_Copy(mailbox, &box, sizeof(box), &corrected) && !corrected;
+  if(request && box.magic == BOOT_MAILBOX_MAGIC) {
+    result = waiting_check(&box);
     // The record outlives the copy: a power loss in between repeats it from the start.
     // A slot already holding the image is done, a refused image takes its record along.
-    bool installed = slot_holds(box);
+    bool installed = slot_holds(&box);
     if(!result && !installed) {
-      installed = !install((uint16_t)box->page, box->size + BOOT_TRAILER_SIZE) &&
-        slot_holds(box);
+      installed = !install((uint16_t)box.page, box.size + BOOT_TRAILER_SIZE) &&
+        slot_holds(&box);
     }
     if(installed) result = BOOT_Result_Installed;
     if(result) FLASH_Erase(BOOT_MAILBOX_PAGE);

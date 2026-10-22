@@ -3,7 +3,11 @@
 #include "vrts.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "xdef.h"
+#ifdef HOST_TEST
+  #include "test.h"
+#endif
 
 #if defined(_WIN32) || defined(_WIN64)
   #include <windows.h>
@@ -11,7 +15,7 @@
   #include <pthread.h>
   #include <sched.h>
   #include <sys/time.h>
-  #include <unistd.h>
+  #include <time.h> // `nanosleep`, since `unistd.h` would clash with the `sleep` here
 #endif
 
 //------------------------------------------------------------------------------------------- Panic
@@ -25,13 +29,22 @@ __attribute__((weak)) void vrts_panic(const char *msg)
 #endif
 {
   fprintf(stderr, "vrts_panic: %s\n", msg);
+  #ifdef HOST_TEST
+  exit(1); // the harness names the case the program ended in
+  #else
   while(1);
+  #endif
 }
 
 //----------------------------------------------------------------------------------------- Globals
 
 volatile uint64_t VrtsTicker;
+#ifdef HOST_TEST
+// The harness owns the clock of a test build
+bool VrtsVirtualTime = true;
+#else
 bool VrtsVirtualTime;
+#endif
 static uint32_t tick_ms = 1;
 static uint64_t start_time_ms;
 
@@ -59,7 +72,7 @@ static inline uint64_t vrts_ticker_get(void)
 
 //--------------------------------------------------------------------------------------- Threading
 
-#if(VRTS_SWITCHING)
+#if(VRTS_SWITCHING) && !defined(HOST_TEST)
 
 // The target runs one thread at a time and hands the core over only inside `let()`.
 // Host threads are real OS threads, so that contract is rebuilt on a baton: exactly one
@@ -132,7 +145,7 @@ static void sched_idle(void)
   #if defined(_WIN32) || defined(_WIN64)
   Sleep(1);
   #else
-  usleep(1000);
+  nanosleep(&(struct timespec){ .tv_nsec = 1000000 }, NULL);
   #endif
 }
 
@@ -229,7 +242,7 @@ uint8_t vrts_active_thread(void)
   return (uint8_t)vrts.owner;
 }
 
-#else // !VRTS_SWITCHING
+#else // !VRTS_SWITCHING, or a test build where threads wait for a model of their own
 
 bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
 {
@@ -240,7 +253,12 @@ bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
 void vrts_init(void) {}
 void vrts_lock(void) {}
 bool vrts_unlock(void) { return true; }
+#ifdef HOST_TEST
+// Waiting is a step of the harness clock: a tick forward and the tasks due
+void let(void) { _TEST_Step(); }
+#else
 void let(void) {}
+#endif
 uint8_t vrts_active_thread(void) { return 0; }
 
 #endif
@@ -284,10 +302,13 @@ void delay(uint32_t ms)
 
 void sleep(uint32_t ms)
 {
-  #if defined(_WIN32) || defined(_WIN64)
+  #ifdef HOST_TEST
+  // The thread holds the core: time passes and nothing else runs
+  VrtsTicker += (ms + tick_ms - 1) / tick_ms;
+  #elif defined(_WIN32) || defined(_WIN64)
   Sleep(ms);
   #else
-  usleep(ms * 1000);
+  nanosleep(&(struct timespec){ .tv_sec = ms / 1000, .tv_nsec = ms % 1000 * 1000000L }, NULL);
   #endif
 }
 

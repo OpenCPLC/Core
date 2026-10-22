@@ -120,6 +120,7 @@ bool BUFF_Pop(BUFF_t *buff, uint8_t *value);
 /**
  * @brief Push byte with optional console-mode filtering.
  *   Handles ESC sequences, Enter, Ctrl+C, XOFF.
+ *   Ctrl+C drops the line being typed and leaves a lone `\f`, which opens the next line.
  * @param[in,out] buff Pointer to buffer structure
  * @param[in] value Byte to push
  * @return `true` if appended or message ended, `false` if ignored or full

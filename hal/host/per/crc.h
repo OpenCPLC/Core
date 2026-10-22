@@ -49,6 +49,29 @@ typedef struct {
 uint32_t CRC_Run(const CRC_t *crc, const void *data, uint32_t count);
 
 /**
+ * @brief Checksum of data fed in pieces, the one `CRC_Run` gives of them whole:
+ *   `CRC_Start`, then `CRC_Next` on every piece in order, then `CRC_End`.
+ *   One run at a time, the unit holds it.
+ * @param[in] crc Algorithm
+ */
+void CRC_Start(const CRC_t *crc);
+
+/**
+ * @brief Next piece of the checksum `CRC_Start` began.
+ * @param[in] crc Algorithm of `CRC_Start`
+ * @param[in] data Bytes
+ * @param[in] count Number of bytes
+ */
+void CRC_Next(const CRC_t *crc, const void *data, uint32_t count);
+
+/**
+ * @brief Checksum of the pieces fed since `CRC_Start`.
+ * @param[in] crc Algorithm of `CRC_Start`
+ * @return Checksum
+ */
+uint32_t CRC_End(const CRC_t *crc);
+
+/**
  * @brief Calculate CRC and append to data (big-endian).
  * @param[in] crc CRC algorithm configuration
  * @param[in,out] data Data buffer (must have space for CRC)

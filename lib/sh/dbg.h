@@ -56,6 +56,10 @@ void DBG_Loop(void);
 void DBG_Wait(void);
 void DBG_WaitBlock(void);
 
+// Send what the printers left and wait for the port, blocking.
+// Fit for the console thread itself and for the last lines before a halt.
+void DBG_Flush(void);
+
 /**
  * @brief Send bytes straight to the port, waiting before and after.
  * @param[in] data Bytes to send
@@ -93,7 +97,6 @@ int32_t DBG_Bool(bool value);
 
 int32_t DBG_Int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint8_t fill_space);
 int32_t DBG_Float(float nbr, uint8_t accuracy);
-int32_t DBG_FloatSpace(float nbr, uint8_t accuracy, uint8_t fill_space);
 int32_t DBG_Dec(int64_t nbr);
 int32_t DBG_uDec(uint64_t nbr);
 int32_t DBG_Hex8(uint8_t nbr);

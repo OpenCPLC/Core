@@ -14,7 +14,7 @@
   static bool rng_bcrypt_available;
 #else
   #include <fcntl.h>
-  #include <unistd.h>
+  #include "posix.h"
   static int rng_urandom_fd = -1;
 #endif
 

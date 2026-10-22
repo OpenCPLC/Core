@@ -1,4 +1,4 @@
-// hal/host/per/pdb.h
+// lib/sys/pdb.h
 
 #ifndef PDB_H_
 #define PDB_H_
@@ -30,34 +30,26 @@ typedef enum {
   PDB_Status_None,
   PDB_Status_Empty,
   PDB_Status_Filled,
-  PDB_Status_Full,
+  PDB_Status_Full
 } PDB_Status_t;
 
 typedef enum {
-  PDB_Desc = 0, // Newest first (reverse physical order).
-  PDB_Asc = 1   // Oldest first (forward physical order).
+  PDB_Desc = 0, // newest first, reverse physical order
+  PDB_Asc = 1   // oldest first, forward physical order
 } PDB_Dir_t;
 
-// Filter callback. Returns `true` to include record. `ctx` from `PDB_Query_t.filter_ctx`.
+// Record filter, `true` keeps the record, a copy in RAM; `ctx` is `PDB_Query_t.filter_ctx`
 typedef bool (*PDB_Filter_t)(const void *record, void *ctx);
 
+//--------------------------------------------------------------------------------------- Structure
+
 /**
- * @brief PDB (picoDatabase) instance.
- * Append-only circular flash log with fixed-size records.
- * First `uint32_t` of each record is a monotonic sort key
- * (timestamp, counter, sequence: user decides).
- * Iterator `dir` traverses physical layout.
- * Assumes user writes monotonic keys.
- * Order across page wrap-around is not re-sorted.
- * Requires doubleword (8B) flash write via `FLASH_Write`.
- * Host build: runs on the emulated Flash of `hal/host/per/flash.h`,
- * which keeps NOR rules and persists every page, so behaviour matches the target.
- * Records live in the emulated image, reached through `FLASH_Read`/`FLASH_Ref`
- * instead of the memory-mapped pointer used on target.
- * Not reentrant. Single-threaded or cooperative scheduler (VRTS) only.
- * Torn-write recovery requires `crc != NULL`.
- * Without CRC, partially written records after power loss may be read as valid garbage,
- * and init may pick a partially-erased page as active.
+ * @brief Pico database: an append-only ring of fixed-size records over flash pages.
+ *   The first word of a record is its sort key, written monotonic by the caller:
+ *   a timestamp, a counter, a sequence. The iterator walks the physical order, nothing
+ *   is re-sorted across the page wrap. Not reentrant: one thread, or the cooperative
+ *   scheduler. Torn-write recovery needs a `crc`; without one a partial record after a
+ *   power loss reads as valid garbage and init may pick a half-erased page as active.
  * @param[in] page_start First flash page reserved for PDB
  * @param[in] page_count Number of flash pages (must be >= 2)
  * @param[in] payload_size User record size in bytes (>= 4, first 4B = sort key)
@@ -118,6 +110,7 @@ typedef struct {
  * @param _skipped Matching records skipped so far
  * @param _steps_left Slots left to visit
  * @param _done Walk finished
+ * @param _record Record under the cursor, copied through ECC
  */
 typedef struct {
   uint32_t count;
@@ -132,6 +125,7 @@ typedef struct {
   uint32_t _skipped;
   uint32_t _steps_left;
   bool _done;
+  uint64_t _record[PDB_RECORD_LIMIT / 8];
 } PDB_Iter_t;
 
 //--------------------------------------------------------------------------------------------- API
@@ -178,11 +172,9 @@ status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query);
 status_t PDB_IterNext(PDB_Iter_t *iter, void *out);
 
 /**
- * @brief Zero-copy reference to current iterator record.
- * Returns pointer directly into the emulated flash image.
- * Valid until next `PDB_Insert` or `PDB_Delete`.
- * @param[in] iter Iterator (after successful `PDB_IterNext`)
- * @return Pointer to record in flash
+ * @brief Record under the iterator, the copy it holds, valid until the next `PDB_IterNext`.
+ * @param[in] iter Iterator after a successful `PDB_IterNext`
+ * @return Pointer to the record
  */
 const void *PDB_IterRef(PDB_Iter_t *iter);
 

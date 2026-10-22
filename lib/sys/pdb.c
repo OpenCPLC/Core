@@ -1,10 +1,4 @@
-// hal/host/per/pdb.c
-
-// Port of `hal/stm32/per/pdb.c`. The algorithm is unchanged:
-// only the three flash accesses differ,
-// because host flash is emulated instead of memory-mapped.
-// A record is read with `FLASH_Read` and referenced with `FLASH_Ref`,
-// in place of the `*(volatile uint32_t *)addr` cast used on target.
+// lib/sys/pdb.c
 
 #include "pdb.h"
 
@@ -24,19 +18,21 @@ static void _calc_bounds(PDB_t *pdb)
   _page_bounds(pdb, pdb->_page_active, &pdb->_pointer_start, &pdb->_pointer_end);
 }
 
-static bool _slot_erased(uint32_t addr, uint16_t size)
+// Slot copied through ECC into `record`, `_record_size` bytes: `true` when it holds a whole
+// record, `*erased` for an erased one. One ECC cannot read holds a record cut mid write:
+// used, and never valid
+static bool _slot_load(PDB_t *pdb, uint32_t addr, uint8_t *record, bool *erased)
 {
-  for(uint16_t i = 0; i < size; i += 4) {
-    if(FLASH_Read(addr + i) != 0xFFFFFFFF) return false;
+  *erased = false;
+  if(FLASH_Copy(addr, record, pdb->_record_size, NULL)) return false;
+  *erased = true;
+  for(uint16_t i = 0; i < pdb->_record_size; i++) {
+    if(record[i] != 0xFF) *erased = false;
   }
-  return true;
-}
-
-static bool _record_valid(PDB_t *pdb, uint32_t addr)
-{
+  if(*erased) return false;
   if(!pdb->crc) return true;
   uint16_t len = pdb->payload_size + pdb->crc->width / 8;
-  return CRC_Error(pdb->crc, (uint8_t *)FLASH_Ref(addr), len) == OK;
+  return CRC_Error(pdb->crc, record, len) == OK;
 }
 
 // Scan page, locate slot after the last non-erased record.
@@ -52,10 +48,13 @@ static PDB_Status_t _scan_page(PDB_t *pdb, uint16_t page, uint32_t *cursor)
   uint16_t valid_count = 0;
   bool any_used = false;
   for(uint32_t addr = start; addr < end; addr += pdb->_record_size) {
-    if(_slot_erased(addr, pdb->_record_size)) continue;
+    uint64_t record[PDB_RECORD_LIMIT / 8];
+    bool erased;
+    bool valid = _slot_load(pdb, addr, (uint8_t *)record, &erased);
+    if(erased) continue;
     any_used = true;
     last_used = addr + pdb->_record_size;
-    if(_record_valid(pdb, addr)) valid_count++;
+    if(valid) valid_count++;
   }
   if(!any_used) {
     *cursor = start;
@@ -96,9 +95,10 @@ static bool _find_newest_page(PDB_t *pdb, uint16_t *out_page)
     uint32_t start, end;
     _page_bounds(pdb, p, &start, &end);
     for(uint32_t addr = start; addr < end; addr += pdb->_record_size) {
-      if(_slot_erased(addr, pdb->_record_size)) continue;
-      if(!_record_valid(pdb, addr)) continue;
-      uint32_t key = FLASH_Read(addr);
+      uint64_t record[PDB_RECORD_LIMIT / 8];
+      bool erased;
+      if(!_slot_load(pdb, addr, (uint8_t *)record, &erased)) continue;
+      uint32_t key = (uint32_t)record[0]; // the sort key, first 4 bytes
       if(!have || key > best) { best = key; best_page = p; have = true; }
     }
   }
@@ -308,18 +308,18 @@ status_t PDB_IterNext(PDB_Iter_t *iter, void *out)
     if(!iter->_steps_left) { iter->_done = true; return ERR; }
     iter->_steps_left--;
     if(step(iter)) { iter->_done = true; return ERR; }
-    if(_slot_erased(iter->_pointer, pdb->_record_size)) continue;
-    if(!_record_valid(pdb, iter->_pointer)) continue;
-    uint32_t key = FLASH_Read(iter->_pointer);
+    bool erased;
+    if(!_slot_load(pdb, iter->_pointer, (uint8_t *)iter->_record, &erased)) continue;
+    uint32_t key = (uint32_t)iter->_record[0]; // the sort key, first 4 bytes
     if(iter->_query.key_min && key < iter->_query.key_min) continue;
     if(iter->_query.key_max && key > iter->_query.key_max) continue;
     if(iter->_query.filter
-      && !iter->_query.filter(FLASH_Ref(iter->_pointer), iter->_query.filter_ctx)) continue;
+      && !iter->_query.filter(iter->_record, iter->_query.filter_ctx)) continue;
     if(iter->_skipped < iter->_query.skip) {
       iter->_skipped++;
       continue;
     }
-    if(out) memcpy(out, FLASH_Ref(iter->_pointer), pdb->payload_size);
+    if(out) memcpy(out, iter->_record, pdb->payload_size);
     iter->count++;
     if(iter->_query.limit && iter->count >= iter->_query.limit) iter->_done = true;
     return OK;
@@ -328,7 +328,7 @@ status_t PDB_IterNext(PDB_Iter_t *iter, void *out)
 
 const void *PDB_IterRef(PDB_Iter_t *iter)
 {
-  return FLASH_Ref(iter->_pointer);
+  return iter->_record;
 }
 
 //------------------------------------------------------------------------------------ Select/Count
