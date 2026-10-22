@@ -47,15 +47,20 @@
 // Flash of the chip, modelled in RAM at the addresses of the chip, as its driver acts on it:
 // - an erase sets the page to `0xFF` and every doubleword in it fresh again
 // - a doubleword takes one write after its erase, the way ECC flash holds it;
-//   zeros may go over one not written with ones, anything else ends in `PROGERR`
+//   zeros may go over one not written with ones, anything else ends in `PROGERR`,
+//   and zeros leave a doubleword ECC reads clean, whatever it held
 // - ones program nothing, an erased doubleword reads them already
 // - `FLASH_Erase` spares a page that reads blank, ones a programmer wrote and all,
-//   but not one ECC corrects to ones, as an erase cut halfway leaves it
+//   but not one ECC corrects to ones, as an erase cut halfway leaves it;
+//   `FLASH_EraseFull` erases it all the same
 // - a row goes only into the page erased last, over fresh doublewords
 // - `FLASH_WritePage` erases, blank or not, and programs in rows, on WB in doublewords
 // - a cycle cut halfway, program or erase, leaves the doublewords it touched unreadable to ECC,
-//   or read back corrected to a wrong value, see `FLASH_Cut_t`; a plain read of one stops
-//   the model, as NMI the chip, so data a cut may have torn comes through `FLASH_Copy`
+//   read back corrected to a wrong value, or read erased and unreadable by turns,
+//   see `FLASH_Cut_t`; a plain read of one stops the model, as NMI the chip,
+//   so data a cut may have torn comes through `FLASH_Copy`
+// - an erase cut late leaves its page reading erased, its cells short of a full erase:
+//   they hold no program until the page is erased whole
 // - a bit flipped by age ECC corrects, two it cannot read, see `FLASH_HostAge`
 // A host application keeps its pages in `FLASH_DIR` between runs.
 // A test owns the chip in RAM and cuts the power where it wants, see `FLASH_HostCut`.
@@ -66,6 +71,14 @@
  * @return `OK` erased, `ERR` beyond the chip
  */
 status_t FLASH_Erase(uint16_t page);
+
+/**
+ * @brief Erase a page through a whole cycle, blank or not:
+ *   a page an erase cut late left reading blank comes out erased whole.
+ * @param[in] page Page index
+ * @return `OK` erased, `ERR` beyond the chip
+ */
+status_t FLASH_EraseFull(uint16_t page);
 
 /**
  * @brief Address of a byte inside a page.
@@ -117,8 +130,8 @@ void *FLASH_Ref(uint32_t addr);
  * @param[in] addr Flash address, 8-byte aligned
  * @param[in] data1 Lower word
  * @param[in] data2 Upper word
- * @return `OK` when the doubleword holds the words, `ERR` misaligned, beyond the chip
- *   or over a written doubleword
+ * @return `OK` when the doubleword holds the words, `ERR` misaligned, beyond the chip,
+ *   over a written doubleword or on a page an erase cut late left short of a full erase
  */
 status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2);
 
@@ -128,7 +141,8 @@ status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2);
  * @brief Program a 256-byte row, G0 only.
  * @param[in] addr Row address, 256-byte aligned, in the page erased last
  * @param[in] data 64 words
- * @return `OK` programmed, `ERR` misaligned, in another page or over a written doubleword
+ * @return `OK` programmed, `ERR` misaligned, in another page, over a written doubleword
+ *   or on a page an erase cut late left short of a full erase
  */
 status_t FLASH_WriteFast(uint32_t addr, const uint32_t *data);
 
@@ -180,9 +194,11 @@ void FLASH_SetDirectory(const char *path);
 
 // Where a power cut lands in its cycle
 typedef enum {
-  FLASH_Cut_Before,     // before the cycle, which never starts
-  FLASH_Cut_Unreadable, // halfway: the doublewords the cycle touched fail ECC
-  FLASH_Cut_Corrected   // halfway: ECC corrects them to a wrong value, ~5% of cuts on G071
+  FLASH_Cut_Before,      // before the cycle, which never starts
+  FLASH_Cut_Unreadable,  // halfway: the doublewords the cycle touched fail ECC
+  FLASH_Cut_Corrected,   // halfway: ECC corrects them to a wrong value, ~5% of cuts on G071
+  FLASH_Cut_Unstable,    // halfway: they read erased and fail ECC by turns, as on WB55
+  FLASH_Cut_Late         // late: an erase leaves the page reading erased, a program lands whole
 } FLASH_Cut_t;
 
 #if defined(HOST_TEST)

@@ -40,7 +40,7 @@ typedef enum {
 
 /**
  * @brief Digital input configuration.
- * @param[in] name Name used in bash queries
+ * @param[in] name Name used in bash queries, the keys of the stored times come from it
  * @param[in] gpio Underlying GPIO configuration (`port`, `pin`, `reverse`)
  * @param[in] gpif Input filter instance `GPIF_t` (debounce, edge and toggle times)
  * @param[in] mode Operating mode.
@@ -49,7 +49,7 @@ typedef enum {
  * with effective OFF latency `hold_ms + toff_ms` after the last pulse.
  * `DIN_Mode_FastCounter` uses `pwmi` + `channel` instead of GPIF
  * @param[in] hold_ms AC pulse-stretch hold [ms], must exceed the zero-crossing gap
- * @param[in] eeprom Pointer to `EEPROM_t` for non-volatile storage, `NULL` = no persistence
+ * @param[in] eeprom Pointer to `EEPROM_t` for the stored times, `NULL` or no `name` = none
  * @param[in] pwmi Pointer to `PWMI_t` controller for fast counter.
  * One `PWMI_t` (one timer) is shared by up to 4 inputs,
  * the board assigns each DI one capture channel

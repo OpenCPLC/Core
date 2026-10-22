@@ -141,6 +141,11 @@ status_t FLASH_Erase(uint16_t page)
   return flash_erase(page);
 }
 
+status_t FLASH_EraseFull(uint16_t page)
+{
+  return flash_erase(page);
+}
+
 //-------------------------------------------------------------------------------------------- Read
 
 uint32_t FLASH_GetAddress(uint16_t page, int16_t offset)

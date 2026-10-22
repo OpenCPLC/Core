@@ -2,7 +2,6 @@
 
 #include "eeprom.h"
 
-#include <stdarg.h>
 #include <string.h>
 
 //--------------------------------------------------------------------------------------- Constants
@@ -30,12 +29,6 @@ static uint64_t _slot(uint32_t addr)
   uint64_t slot;
   if(FLASH_Copy(addr, &slot, 8, NULL)) return EEPROM_DAMAGED_WORD;
   return slot;
-}
-
-// Variable address as its key, the low 32 bits of a host address
-static inline uint32_t _key(const void *var)
-{
-  return (uint32_t)(uintptr_t)var;
 }
 
 // State of a half, generation of a `Complete` one in `*gen_out` (`NULL` = skip).
@@ -108,12 +101,14 @@ static status_t _read_key(EEPROM_t *e, uint32_t key, uint32_t *out)
   return ERR;
 }
 
+// Every page erased whole, blank or not:
+// an erase cut late leaves a page that reads blank and holds no write until then.
 static status_t _clear_storage(EEPROM_t *e, EEPROM_Storage_t s)
 {
   uint16_t base = e->page_start + (s == EEPROM_Storage_B ? e->_storage_pages : 0);
   // Last page first: a rewrite target cleared halfway keeps the BEGIN tag of its first page
   for(int32_t i = (int32_t)e->_storage_pages - 1; i >= 0; i--) {
-    if(FLASH_Erase(base + (uint16_t)i)) return ERR;
+    if(FLASH_EraseFull(base + (uint16_t)i)) return ERR;
   }
   return OK;
 }
@@ -133,7 +128,7 @@ static status_t _write_marker(EEPROM_t *e, EEPROM_Storage_t s, uint16_t gen)
 // the store is meant for key sets smaller than a half.
 // The slot at `skip` stays behind, `0` for none.
 // The target is cleared first: one a failed rewrite left written takes no BEGIN tag,
-// and a blank page costs only the look.
+// and one reading blank may be an erase cut late.
 static status_t _rewrite(EEPROM_t *e, EEPROM_Storage_t src_s, uint32_t skip)
 {
   EEPROM_Storage_t dst_s = !src_s;
@@ -187,11 +182,12 @@ status_t EEPROM_Clear(EEPROM_t *e)
 {
   uint16_t page_count = 2 * e->_storage_pages;
   for(uint16_t i = 0; i < page_count; i++) {
-    if(FLASH_Erase(e->page_start + i)) return ERR;
+    if(FLASH_EraseFull(e->page_start + i)) return ERR;
   }
   e->_active = EEPROM_Storage_A;
   e->_cursor = e->_addr_start[EEPROM_Storage_A];
   e->_generation = 0;
+  e->_blank = false;
   return OK;
 }
 
@@ -207,11 +203,12 @@ status_t EEPROM_Init(EEPROM_t *e)
   e->_addr_start[EEPROM_Storage_B] = FLASH_GetAddress(e->page_start + e->_storage_pages, 0);
   e->_addr_end[EEPROM_Storage_B] = FLASH_GetAddress(e->page_start + 2 * e->_storage_pages, 0);
   e->_generation = 0;
+  e->_blank = false;
   uint16_t gen_a = 0, gen_b = 0;
   EEPROM_State_t sa = _storage_status(e, EEPROM_Storage_A, &gen_a);
   EEPROM_State_t sb = _storage_status(e, EEPROM_Storage_B, &gen_b);
   // Both Complete: power loss between the marker write and the source clear.
-  // The higher generation wins, the compare wraps with the 16-bit counter
+  // The higher generation wins, the compare wraps with the 16-bit counter.
   if(sa == EEPROM_State_Complete && sb == EEPROM_State_Complete) {
     int16_t diff = (int16_t)((uint16_t)(gen_a - gen_b));
     if(diff == 0) {
@@ -251,9 +248,10 @@ status_t EEPROM_Init(EEPROM_t *e)
   else if(sa == EEPROM_State_InProgress && sb == EEPROM_State_InProgress) {
     if(EEPROM_Clear(e)) return ERR;
   }
-  // InProgress on one: that half is the rewrite target, clear it and replay the
-  // rewrite when the source is Full. Beside an Empty half no source stands behind it:
-  // the source is cleared only after the marker, so this is a store whose marker aged
+  // InProgress on one: that half is the rewrite target, clear it,
+  // and replay the rewrite when the source is Full.
+  // Beside an Empty half no source stands behind it:
+  // the source is cleared only after the marker, so this is a store whose marker aged.
   else if(sa == EEPROM_State_InProgress) {
     if(sb == EEPROM_State_Empty) _take_over(e, EEPROM_Storage_A);
     else {
@@ -289,9 +287,10 @@ status_t EEPROM_Init(EEPROM_t *e)
     e->_active = EEPROM_Storage_B;
     if(_rewrite(e, EEPROM_Storage_B, _torn_tail(e, EEPROM_Storage_B))) return ERR;
   }
-  // Filled/Filled: a rewrite of a Filled half cut at its BEGIN tag, or cut later and its target
-  // cleared halfway, which can take the tag and leave copies. A log starts with a key, that
-  // target with what is left of the tag: the half starting with a key is the store, else A
+  // Filled/Filled: a rewrite of a Filled half cut at its BEGIN tag,
+  // or cut later and its target cleared halfway, which can take the tag and leave copies.
+  // A log starts with a key, that target with what is left of the tag:
+  // the half starting with a key is the store, else A.
   else if(sa == EEPROM_State_Filled && sb == EEPROM_State_Filled) {
     bool keyed_a = (uint32_t)_slot(e->_addr_start[EEPROM_Storage_A]) < EEPROM_DAMAGED_KEY;
     bool keyed_b = (uint32_t)_slot(e->_addr_start[EEPROM_Storage_B]) < EEPROM_DAMAGED_KEY;
@@ -308,10 +307,12 @@ status_t EEPROM_Init(EEPROM_t *e)
     e->_active = EEPROM_Storage_B;
     e->_cursor = _find_cursor(e, e->_active);
   }
-  // Empty/Empty: fresh flash
+  // Empty/Empty: fresh flash, or a clear cut late that left A reading blank:
+  // the first write erases A whole before it lands.
   else {
     e->_active = EEPROM_Storage_A;
     e->_cursor = e->_addr_start[EEPROM_Storage_A];
+    e->_blank = true;
   }
   // The newest slot of the store counts only when it reads clean, see `_torn_tail`
   uint32_t tail = _torn_tail(e, e->_active);
@@ -320,10 +321,15 @@ status_t EEPROM_Init(EEPROM_t *e)
   return OK;
 }
 
-// A failed `FLASH_Write` skips the slot and retries once on the next; the cursor moves
-// past a broken slot either way, so the next call never lands on it again
+// A failed `FLASH_Write` skips the slot and retries once on the next;
+// the cursor moves past a broken slot either way, so the next call never lands on it again.
 static status_t _store_kv(EEPROM_t *e, uint32_t key, uint32_t value)
 {
+  // A store `EEPROM_Init` found empty erases its half whole before the first write
+  if(e->_blank) {
+    if(_clear_storage(e, e->_active)) return ERR;
+    e->_blank = false;
+  }
   if(e->_cursor >= _marker_addr(e, e->_active)) {
     if(_rewrite(e, e->_active, 0)) return ERR;
   }
@@ -356,60 +362,6 @@ uint32_t EEPROM_Read(EEPROM_t *e, uint32_t key, uint32_t default_value)
   uint32_t value;
   if(_read_key(e, key, &value)) return default_value;
   return value;
-}
-
-// A RAM address is never a reserved key, so the guard of `EEPROM_Write` is not needed
-status_t EEPROM_Save(EEPROM_t *e, uint32_t *var)
-{
-  return _store_kv(e, _key(var), *var);
-}
-
-status_t EEPROM_Load(EEPROM_t *e, uint32_t *var)
-{
-  return _read_key(e, _key(var), var);
-}
-
-status_t EEPROM_SaveList(EEPROM_t *e, uint32_t *var, ...)
-{
-  va_list args; va_start(args, var);
-  status_t status = OK;
-  while(var) {
-    if(EEPROM_Save(e, var)) status = ERR;
-    var = va_arg(args, uint32_t *);
-  }
-  va_end(args);
-  return status;
-}
-
-status_t EEPROM_LoadList(EEPROM_t *e, uint32_t *var, ...)
-{
-  va_list args; va_start(args, var);
-  status_t status = OK;
-  while(var) {
-    if(EEPROM_Load(e, var)) status = ERR;
-    var = va_arg(args, uint32_t *);
-  }
-  va_end(args);
-  return status;
-}
-
-status_t EEPROM_Save64(EEPROM_t *e, uint64_t *var)
-{
-  uint32_t *p = (uint32_t *)var;
-  if(EEPROM_Save(e, &p[0])) return ERR;
-  if(EEPROM_Save(e, &p[1])) return ERR;
-  return OK;
-}
-
-status_t EEPROM_Load64(EEPROM_t *e, uint64_t *var)
-{
-  uint32_t *p = (uint32_t *)var;
-  uint32_t lo, hi;
-  if(_read_key(e, _key(&p[0]), &lo)) return ERR;
-  if(_read_key(e, _key(&p[1]), &hi)) return ERR;
-  p[0] = lo;
-  p[1] = hi;
-  return OK;
 }
 
 status_t EEPROM_WriteF32(EEPROM_t *e, uint32_t key, float value)
@@ -455,54 +407,6 @@ uint32_t CACHE_Read(uint32_t key, uint32_t default_value)
 {
   if(!eeprom_cache) return default_value;
   return EEPROM_Read(eeprom_cache, key, default_value);
-}
-
-status_t CACHE_Save(uint32_t *var)
-{
-  if(!eeprom_cache) return ERR;
-  return EEPROM_Save(eeprom_cache, var);
-}
-
-status_t CACHE_Load(uint32_t *var)
-{
-  if(!eeprom_cache) return ERR;
-  return EEPROM_Load(eeprom_cache, var);
-}
-
-status_t CACHE_SaveList(uint32_t *var, ...)
-{
-  va_list args; va_start(args, var);
-  status_t status = OK;
-  while(var) {
-    if(CACHE_Save(var)) status = ERR;
-    var = va_arg(args, uint32_t *);
-  }
-  va_end(args);
-  return status;
-}
-
-status_t CACHE_LoadList(uint32_t *var, ...)
-{
-  va_list args; va_start(args, var);
-  status_t status = OK;
-  while(var) {
-    if(CACHE_Load(var)) status = ERR;
-    var = va_arg(args, uint32_t *);
-  }
-  va_end(args);
-  return status;
-}
-
-status_t CACHE_Save64(uint64_t *var)
-{
-  if(!eeprom_cache) return ERR;
-  return EEPROM_Save64(eeprom_cache, var);
-}
-
-status_t CACHE_Load64(uint64_t *var)
-{
-  if(!eeprom_cache) return ERR;
-  return EEPROM_Load64(eeprom_cache, var);
 }
 
 status_t CACHE_WriteF32(uint32_t key, float value)

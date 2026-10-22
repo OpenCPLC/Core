@@ -18,16 +18,20 @@
 //------------------------------------------------------------------------------------------- Types
 
 /**
- * @brief Journal record stored in PDB.
- * `time` is the sort key (first 4B: required by PDB contract). Captured
- * automatically by `JRN_Insert` from RTC, or from `tick_keep` when RTC
- * is not initialized.
- * @param time Unix timestamp from RTC, or boot tick as fallback
+ * @brief Journal record stored in PDB, `16B`.
+ * `number` and `crc` are written by PDB, `time` is captured by `JRN_Insert` from RTC.
+ * @param number Number PDB gives the record, from `1`
+ * @param time Unix timestamp from RTC, `0` while the clock is not set
  * @param code User-defined event code
+ * @param data Value of the event
+ * @param crc CRC-32 PDB writes
  */
 typedef struct {
+  uint32_t number;
   uint32_t time;
   uint16_t code;
+  uint16_t data;
+  uint32_t crc;
 } JRN_t;
 
 //--------------------------------------------------------------------------------------------- API
@@ -35,21 +39,22 @@ typedef struct {
 /**
  * @brief Initialize journal database.
  * Single-instance module: stores `pdb` pointer internally for later calls.
- * `payload_size` is set automatically to `sizeof(JRN_t)`.
+ * `record_size` is set automatically to `sizeof(JRN_t)`.
  * Safe under cooperative schedulers (VRTS): all operations complete without
  * yielding. Not safe under preemptive RTOS or from ISR: wrap externally.
- * @param[in,out] pdb Pre-configured `PDB_t` instance (`page_start`, `page_count`, `crc`)
- * @return `OK` on success, `ERR` on `NULL` pointer or flash error
+ * @param[in,out] pdb Pre-configured `PDB_t` instance (`page_start`, `page_count`, `kind`)
+ * @return `OK` on success, `ERR` on `NULL` pointer or invalid config
  */
 status_t JRN_Init(PDB_t *pdb);
 
 /**
  * @brief Insert journal record. Time is captured automatically from RTC,
- * or from `tick_keep` if RTC is not initialized.
+ * `0` while the clock is not set.
  * @param[in] code Event code
+ * @param[in] data Value of the event
  * @return `OK` on success, `ERR` on flash error
  */
-status_t JRN_Insert(uint16_t code);
+status_t JRN_Insert(uint16_t code, uint16_t data);
 
 /**
  * @brief Erase all journal records.
@@ -88,7 +93,7 @@ uint32_t JRN_Count(const PDB_Query_t *query);
 /**
  * @brief Compact buffer: extract only timestamps from journal records.
  * Overwrites `JRN_t[]` with `uint32_t[]` timestamps in place.
- * Safe: `JRN_t.time` is at offset 0, written before later reads.
+ * Safe: timestamp `i` lands before record `i + 1`, read after it.
  * @param[in,out] mbb Buffer with `JRN_t` records
  */
 void JRN_GetTimestamp(MBB_t *mbb);

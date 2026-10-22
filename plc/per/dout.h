@@ -23,11 +23,11 @@
  * @brief Digital output: a relay (RO), a transistor (TO) or a triac (XO).
  *   A relay drives its own pin, the others share a `PWM_t` timer and take one channel of it.
  * @param[in] relay Relay output, switching cycles are counted
- * @param[in] name Name shown in the shell
+ * @param[in] name Name shown in the shell, the keys of the retained state come from it
  * @param[in] gpio Pin of a relay output, `port` and `pin` set by the board
  * @param[in] pwm PWM timer of a transistor or triac output
  * @param[in] channel Channel of `pwm` this output takes
- * @param[in] eeprom Store of the retained state, `NULL` = nothing retained
+ * @param[in] eeprom Store of the retained state, `NULL` or no `name` = nothing retained
  * @param[in,out] save Retain `value` across resets, kept in `eeprom` itself
  * @param[out] value Level of a relay, compare value of a PWM channel; set through the API
  * @param[out] cycles Switching cycles of a relay, retained in `eeprom`

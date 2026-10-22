@@ -32,6 +32,9 @@ typedef struct {
   bool damaged[FLASH_SIZE / 8];    // ECC cannot read it: a cycle cut halfway, two aged bits
   bool corrected[FLASH_SIZE / 8];  // ECC corrects it: a cycle cut halfway, one aged bit
   bool torn[FLASH_SIZE / 8];       // of a cycle cut halfway: a plain read can fail it, as on WB55
+  bool unstable[FLASH_SIZE / 8];   // of a cycle cut halfway: reads erased and fails ECC by turns
+  bool flipped[FLASH_SIZE / 8];    // unstable, read erased the last time
+  bool weak[FLASH_PAGES];          // erase cut late: reads erased, its cells short of a full erase
   int32_t erased_last;             // page of the last erase cycle, the only one a row goes into
 } chip_t;
 
@@ -52,6 +55,14 @@ static bool blank(const uint8_t *cell, uint32_t size)
   return true;
 }
 
+static bool zeros(const uint8_t *cell, uint32_t size)
+{
+  for(uint32_t i = 0; i < size; i++) {
+    if(cell[i]) return false;
+  }
+  return true;
+}
+
 // Every page erased and nothing written, as from the factory
 static void chip_blank(void)
 {
@@ -60,7 +71,35 @@ static void chip_blank(void)
   memset(chip.damaged, false, sizeof(chip.damaged));
   memset(chip.corrected, false, sizeof(chip.corrected));
   memset(chip.torn, false, sizeof(chip.torn));
+  memset(chip.unstable, false, sizeof(chip.unstable));
+  memset(chip.flipped, false, sizeof(chip.flipped));
+  memset(chip.weak, false, sizeof(chip.weak));
   chip.erased_last = -1;
+}
+
+// Page erased whole: `0xFF` in every byte, every doubleword fresh
+static void page_clean(uint16_t page)
+{
+  uint32_t cell = (uint32_t)page * FLASH_PAGE_SIZE / 8;
+  uint32_t cells = FLASH_PAGE_SIZE / 8;
+  memset(page_at(page), 0xFF, FLASH_PAGE_SIZE);
+  memset(chip.written + cell, false, cells);
+  memset(chip.damaged + cell, false, cells);
+  memset(chip.corrected + cell, false, cells);
+  memset(chip.torn + cell, false, cells);
+  memset(chip.unstable + cell, false, cells);
+  memset(chip.flipped + cell, false, cells);
+  chip.weak[page] = false;
+}
+
+// Zeros programmed over a doubleword, its ECC zeros too: it reads clean, whatever it held
+static void cell_zeroed(uint32_t cell)
+{
+  chip.damaged[cell] = false;
+  chip.corrected[cell] = false;
+  chip.torn[cell] = false;
+  chip.unstable[cell] = false;
+  chip.flipped[cell] = false;
 }
 
 #if defined(HOST_TEST)
@@ -131,17 +170,21 @@ static bool cycle(void)
   return false;
 }
 
-// Erase cycle, blank or not. A cut halfway erases nothing whole: every doubleword the page holds
-// written stays, unreadable to ECC or corrected by it to a wrong value, as `cut_at` says.
+// Erase cycle, blank or not.
+// A cut halfway erases nothing whole: every doubleword the page holds written stays,
+// unreadable to ECC, corrected by it to a wrong value, or read erased and unreadable by turns,
+// as `cut_at` says.
+// A cut late leaves the page reading erased, short of a full erase.
 static void erase(uint16_t page)
 {
-  bool torn = cycle();
-  uint32_t cell = (uint32_t)page * FLASH_PAGE_SIZE / 8;
-  if(torn) {
+  bool cut = cycle();
+  if(cut && cut_at != FLASH_Cut_Late) {
+    uint32_t cell = (uint32_t)page * FLASH_PAGE_SIZE / 8;
     for(uint32_t i = cell; i < cell + FLASH_PAGE_SIZE / 8; i++) {
       if(!chip.written[i]) continue;
       chip.torn[i] = true;
       if(cut_at == FLASH_Cut_Unreadable) chip.damaged[i] = true;
+      else if(cut_at == FLASH_Cut_Unstable) chip.unstable[i] = true;
       else {
         chip.corrected[i] = true;
         memset(chip.memory + 8 * i + 4, 0xFF, 4); // the upper word on its way to erased
@@ -150,31 +193,41 @@ static void erase(uint16_t page)
     store(page);
     longjmp(power_loss, 1);
   }
-  memset(page_at(page), 0xFF, FLASH_PAGE_SIZE);
-  memset(chip.written + cell, false, FLASH_PAGE_SIZE / 8);
-  memset(chip.damaged + cell, false, FLASH_PAGE_SIZE / 8);
-  memset(chip.corrected + cell, false, FLASH_PAGE_SIZE / 8);
-  memset(chip.torn + cell, false, FLASH_PAGE_SIZE / 8);
-  chip.erased_last = page;
+  page_clean(page);
   store(page);
+  if(cut) {
+    chip.weak[page] = true;
+    longjmp(power_loss, 1);
+  }
+  chip.erased_last = page;
 }
 
 // Program cycle of `size` bytes at `at` from the base.
-// A cut halfway leaves the upper half fresh, and every doubleword of the cycle unreadable to ECC
-// or corrected by it to what the half reads.
+// A cut halfway leaves the upper half fresh, and every doubleword of the cycle unreadable to ECC,
+// corrected by it to what the half reads, or read erased and unreadable by turns.
+// A cut late lands the cycle whole. A page short of a full erase holds none of it.
 static void program(uint32_t at, const void *data, uint32_t size)
 {
-  bool torn = cycle();
+  bool cut = cycle();
+  bool torn = cut && cut_at != FLASH_Cut_Late;
+  uint32_t first = at / 8, cells = (size + 7) / 8;
   if(torn) {
-    bool *ecc = cut_at == FLASH_Cut_Corrected ? chip.corrected : chip.damaged;
-    memset(ecc + at / 8, true, (size + 7) / 8);
-    memset(chip.torn + at / 8, true, (size + 7) / 8);
+    bool *ecc = cut_at == FLASH_Cut_Corrected ? chip.corrected :
+      cut_at == FLASH_Cut_Unstable ? chip.unstable : chip.damaged;
+    memset(ecc + first, true, cells);
+    memset(chip.torn + first, true, cells);
     size /= 2;
   }
   memcpy(chip.memory + at, data, size);
-  memset(chip.written + at / 8, true, (size + 7) / 8);
+  memset(chip.written + first, true, (size + 7) / 8);
+  if(!torn) {
+    for(uint32_t i = first; i < first + cells; i++) {
+      if(chip.weak[at / FLASH_PAGE_SIZE]) chip.damaged[i] = true;
+      else if(zeros(chip.memory + 8 * i, 8)) cell_zeroed(i);
+    }
+  }
   store((uint16_t)(at / FLASH_PAGE_SIZE));
-  if(torn) longjmp(power_loss, 1);
+  if(cut) longjmp(power_loss, 1);
 }
 
 //------------------------------------------------------------------------------------------- Erase
@@ -188,6 +241,14 @@ status_t FLASH_Erase(uint16_t page)
   bool corrected;
   if(blank(page_at(page), FLASH_PAGE_SIZE) &&
     !FLASH_Check(FLASH_GetAddress(page, 0), FLASH_PAGE_SIZE, &corrected) && !corrected) return OK;
+  erase(page);
+  return OK;
+}
+
+status_t FLASH_EraseFull(uint16_t page)
+{
+  if(page >= FLASH_PAGES) return ERR;
+  mount();
   erase(page);
   return OK;
 }
@@ -218,14 +279,26 @@ void *FLASH_Ref(uint32_t addr)
   return addr - FLASH_BASE < FLASH_SIZE ? chip.memory + (addr - FLASH_BASE) : NULL;
 }
 
+// Doubleword `cell` through ECC: `ERR` when ECC cannot read it.
+// An unstable one reads erased and fails by turns, erased first.
+static status_t cell_read(uint32_t cell, bool *corrected)
+{
+  if(chip.damaged[cell]) return ERR;
+  if(chip.unstable[cell]) {
+    chip.flipped[cell] = !chip.flipped[cell];
+    return chip.flipped[cell] ? OK : ERR;
+  }
+  if(corrected && chip.corrected[cell]) *corrected = true;
+  return OK;
+}
+
 status_t FLASH_Check(uint32_t addr, uint32_t size, bool *corrected)
 {
   if(corrected) *corrected = false;
   for(uint32_t at = addr & ~7u; at < addr + size; at += 8) {
     uint32_t cell = (at - FLASH_BASE) / 8;
     if(cell >= FLASH_SIZE / 8) continue;
-    if(chip.damaged[cell]) return ERR;
-    if(corrected && chip.corrected[cell]) *corrected = true;
+    if(cell_read(cell, corrected)) return ERR;
   }
   return OK;
 }
@@ -235,6 +308,13 @@ status_t FLASH_Copy(uint32_t addr, void *data, uint32_t size, bool *corrected)
   if(addr - FLASH_BASE > FLASH_SIZE || size > FLASH_SIZE - (addr - FLASH_BASE)) return ERR;
   if(FLASH_Check(addr, size, corrected)) return ERR;
   memcpy(data, FLASH_Ref(addr), size);
+  // An unstable doubleword the check read erased copies as ones
+  for(uint32_t at = addr & ~7u; at < addr + size; at += 8) {
+    uint32_t cell = (at - FLASH_BASE) / 8;
+    if(!chip.unstable[cell] || !chip.flipped[cell]) continue;
+    uint32_t from = maxv(at, addr), to = minv(at + 8, addr + size);
+    memset((uint8_t *)data + (from - addr), 0xFF, to - from);
+  }
   return OK;
 }
 
@@ -255,7 +335,7 @@ status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2)
   if(chip.written[cell] && (data1 || data2 || blank(chip.memory + at, 8))) return ERR;
   uint32_t data[2] = { data1, data2 };
   program(at, data, sizeof(data));
-  return OK;
+  return chip.weak[at / FLASH_PAGE_SIZE] ? ERR : OK;
 }
 
 #if !defined(STM32WB55xx)
@@ -270,7 +350,7 @@ status_t FLASH_WriteFast(uint32_t addr, const uint32_t *data)
     if(chip.written[cell]) return ERR;
   }
   program(at, data, FLASH_ROW);
-  return OK;
+  return chip.weak[at / FLASH_PAGE_SIZE] ? ERR : OK;
 }
 
 #endif
@@ -314,14 +394,7 @@ void FLASH_HostProgram(uint32_t addr, const uint8_t *data, uint32_t len)
   uint32_t at = addr - FLASH_BASE;
   uint16_t first = (uint16_t)(at / FLASH_PAGE_SIZE);
   uint16_t last = (uint16_t)((at + len - 1) / FLASH_PAGE_SIZE);
-  for(uint16_t page = first; page <= last; page++) {
-    uint32_t cell = (uint32_t)page * FLASH_PAGE_SIZE / 8;
-    memset(page_at(page), 0xFF, FLASH_PAGE_SIZE);
-    memset(chip.written + cell, false, FLASH_PAGE_SIZE / 8);
-    memset(chip.damaged + cell, false, FLASH_PAGE_SIZE / 8);
-    memset(chip.corrected + cell, false, FLASH_PAGE_SIZE / 8);
-    memset(chip.torn + cell, false, FLASH_PAGE_SIZE / 8);
-  }
+  for(uint16_t page = first; page <= last; page++) page_clean(page);
   memcpy(chip.memory + at, data, len);
   memset(chip.written + at / 8, true, (at + len - 1) / 8 - at / 8 + 1);
   chip.erased_last = -1;

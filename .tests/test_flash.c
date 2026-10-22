@@ -4,6 +4,8 @@
 // After a power cut at any flash cycle of a save, before it or halfway through it,
 // the page holds the old record, no record or the new one, never a mix of them.
 // `FLASH_Copy` takes what ECC passes, and a doubleword ECC cannot read fails it.
+// A page an erase cut late left reading blank holds writes only after `FLASH_EraseFull`,
+// and zeros go over a doubleword a cut tore, which then reads them clean.
 
 // A G081: 128kB of flash in pages of 2kB
 #define FLASH_PAGE_SIZE 2048
@@ -180,6 +182,69 @@ static void erase_after_a_cut_lands(void)
   TEST_Check(FLASH_Write(addr, 1, 2) == OK, "write after the erase");
 }
 
+// An erase cut late leaves a page reading blank, ECC clean, that holds no program:
+// `FLASH_Erase` spares it, `FLASH_EraseFull` erases it whole and writes land again.
+static void late_erase_cut_takes_a_full_erase(void)
+{
+  FLASH_HostBlank();
+  uint32_t addr = FLASH_GetAddress(PAGE, 0);
+  TEST_Check(FLASH_Write(addr, 1, 2) == OK);
+  FLASH_HostCut(0, FLASH_Cut_Late, erase_page);
+  bool corrected;
+  uint32_t word[2];
+  TEST_Check(FLASH_Copy(addr, word, 8, &corrected) == OK && !corrected, "reads clean");
+  TEST_Check(word[0] == 0xFFFFFFFFu && word[1] == 0xFFFFFFFFu, "reads erased");
+  uint32_t cycles = FLASH_HostCycles();
+  TEST_Check(FLASH_Erase(PAGE) == OK);
+  TEST_Equal(FLASH_HostCycles(), cycles, "spared, it reads blank");
+  FLASH_HostSave();
+  TEST_Check(FLASH_Write(addr, 3, 4) == ERR, "no program holds");
+  TEST_Check(FLASH_Copy(addr, word, 8, NULL) == ERR, "the program it took");
+  FLASH_HostRestore();
+  TEST_Check(FLASH_EraseFull(PAGE) == OK);
+  TEST_Check(FLASH_Write(addr, 3, 4) == OK, "write after the full erase");
+  TEST_Check(FLASH_Copy(addr, word, 8, NULL) == OK && word[0] == 3 && word[1] == 4);
+}
+
+static void write_doubleword(void) { FLASH_Write(FLASH_GetAddress(PAGE, 0), 5, 6); }
+
+// A program cut so leaves its doubleword reading erased and failing ECC by turns, erased first:
+// a write over it is refused, zeros go over it and it reads them clean.
+static void unstable_cut_reads_by_turns(void)
+{
+  FLASH_HostBlank();
+  uint32_t addr = FLASH_GetAddress(PAGE, 0);
+  FLASH_HostCut(0, FLASH_Cut_Unstable, write_doubleword);
+  uint32_t word[2];
+  for(uint8_t turn = 0; turn < 4; turn++) {
+    bool erased = FLASH_Copy(addr, word, 8, NULL) == OK;
+    TEST_Check(erased == !(turn % 2), "turn:%u", turn);
+    if(erased) TEST_Check(word[0] == 0xFFFFFFFFu && word[1] == 0xFFFFFFFFu, "turn:%u", turn);
+  }
+  TEST_Check(FLASH_Write(addr, 5, 6) == ERR, "a write over it");
+  TEST_Check(FLASH_Write(addr, 0, 0) == OK, "zeros over it");
+  bool corrected;
+  for(uint8_t turn = 0; turn < 2; turn++) {
+    TEST_Check(FLASH_Copy(addr, word, 8, &corrected) == OK && !corrected, "turn:%u", turn);
+    TEST_Check(!word[0] && !word[1], "turn:%u reads zeros", turn);
+  }
+}
+
+// Zeros over a doubleword ECC cannot read leave it reading them clean
+static void zeros_go_over_an_unreadable_doubleword(void)
+{
+  FLASH_HostBlank();
+  uint32_t addr = FLASH_GetAddress(PAGE, 0);
+  TEST_Check(FLASH_Write(addr, 7, 8) == OK);
+  FLASH_HostAge(addr, 2);
+  uint32_t word[2];
+  TEST_Check(FLASH_Copy(addr, word, 8, NULL) == ERR, "two aged bits");
+  TEST_Check(FLASH_Write(addr, 0, 0) == OK, "zeros over it");
+  bool corrected;
+  TEST_Check(FLASH_Copy(addr, word, 8, &corrected) == OK && !corrected, "reads clean");
+  TEST_Check(!word[0] && !word[1], "reads zeros");
+}
+
 //-------------------------------------------------------------------------------------------------
 
 void TEST_Cases(void)
@@ -193,4 +258,7 @@ void TEST_Cases(void)
   TEST(save_survives_a_miscorrected_cut);
   TEST(save_after_a_cut_lands);
   TEST(erase_after_a_cut_lands);
+  TEST(late_erase_cut_takes_a_full_erase);
+  TEST(unstable_cut_reads_by_turns);
+  TEST(zeros_go_over_an_unreadable_doubleword);
 }

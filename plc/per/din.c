@@ -2,10 +2,18 @@
 
 #include "din.h"
 
+#include "xstring.h"
+
 //-------------------------------------------------------------------------------------------------
 
-// Field behind a time parameter, with its default. The EEPROM key is the field address,
-// so both the loader and the setter must reach the very same field
+// Key of a time parameter: djb2 of the channel name, one round more for the parameter,
+// the same in every build.
+static uint32_t din_key(const DIN_t *din, DIN_Time_t time)
+{
+  return hash_djb2(din->name) * 33u + time;
+}
+
+// Field behind a time parameter, with its default
 static uint32_t *DIN_TimeField(DIN_t *din, DIN_Time_t time, uint32_t *fallback)
 {
   switch(time) {
@@ -21,14 +29,14 @@ static uint32_t *DIN_TimeField(DIN_t *din, DIN_Time_t time, uint32_t *fallback)
 
 void DIN_Init(DIN_t *din)
 {
-  if(din->eeprom) {
+  if(din->eeprom && din->name) {
     // Idempotent, but the descriptor may be shared with no output owning it
     EEPROM_Init(din->eeprom);
     // A value set in the board configuration wins over the stored one
     for(uint8_t time = DIN_Time_Ton; time <= DIN_Time_Hold; time++) {
       uint32_t fallback;
       uint32_t *field = DIN_TimeField(din, (DIN_Time_t)time, &fallback);
-      if(!*field) EEPROM_Load(din->eeprom, field);
+      if(!*field) *field = EEPROM_Read(din->eeprom, din_key(din, (DIN_Time_t)time), 0);
     }
   }
   if(!din->hold_ms) din->hold_ms = DIN_DEFAULT_HOLD_ms;
@@ -116,7 +124,9 @@ uint32_t DIN_Time(DIN_t *din, DIN_Time_t time, uint32_t ms)
     uint32_t backup = *field;
     *field = (ms == DIN_DEFAULT_TIME) ? fallback : ms;
     // Rollback on save failure keeps RAM and EEPROM consistent
-    if(din->eeprom && EEPROM_Save(din->eeprom, field)) *field = backup;
+    if(din->eeprom && din->name && EEPROM_Write(din->eeprom, din_key(din, time), *field)) {
+      *field = backup;
+    }
   }
   return *field;
 }
