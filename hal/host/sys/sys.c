@@ -63,6 +63,8 @@ void sys_init(void)
   ctrlc_disable();
 }
 
+void clock_init(void) {}
+
 int sys_exit_requested(void)
 {
   return exit_requested;

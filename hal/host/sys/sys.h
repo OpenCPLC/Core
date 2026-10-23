@@ -7,11 +7,22 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "heap.h"
+#include "main.h"
+
+//------------------------------------------------------------------------------------------ Config
+
+#ifndef SYS_CLOCK_FREQ
+  // System clock of the chip the build stands for [Hz], board files time their peripherals by it
+  #define SYS_CLOCK_FREQ 16000000u
+#endif
 
 //--------------------------------------------------------------------------------------------- API
 
 // Heap and the exit request on `Ctrl+C`; the request is polled by the main loop
 void sys_init(void);
+
+// Clock tree of the chip, nothing to set up off-target
+void clock_init(void);
 int sys_exit_requested(void);
 void sys_exit_request(void);
 

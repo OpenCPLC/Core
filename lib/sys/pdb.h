@@ -17,7 +17,7 @@
 #endif
 
 #ifndef PDB_RECORD_LIMIT
-  // Largest record [B]: a copy in `PDB_Iter_t` and on the stack of `PDB_Insert`
+  // Largest record [B]: a copy in `PDB_Iter_t` and on the stack of `PDB_Init` and `PDB_Insert`
   #define PDB_RECORD_LIMIT 32
 #endif
 
@@ -109,7 +109,7 @@ typedef struct {
  * @param _number Number of the last valid record walked, `0` before the first
  * @param _skipped Matching records skipped so far
  * @param _done Walk finished
- * @param _record Record under the cursor, copied through ECC
+ * @param _record Record under the cursor, copied through ECC, aligned for any record struct
  */
 typedef struct {
   uint32_t count;

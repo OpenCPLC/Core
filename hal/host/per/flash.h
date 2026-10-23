@@ -73,8 +73,8 @@
 status_t FLASH_Erase(uint16_t page);
 
 /**
- * @brief Erase a page through a whole cycle, blank or not:
- *   a page an erase cut late left reading blank comes out erased whole.
+ * @brief Erase a page through a whole cycle, also one reading blank:
+ *   after an erase cut late it reads blank but holds no program until erased whole.
  * @param[in] page Page index
  * @return `OK` erased, `ERR` beyond the chip
  */

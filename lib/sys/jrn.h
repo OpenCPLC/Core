@@ -19,7 +19,6 @@
 
 /**
  * @brief Journal record stored in PDB, `16B`.
- * `number` and `crc` are written by PDB, `time` is captured by `JRN_Insert` from RTC.
  * @param number Number PDB gives the record, from `1`
  * @param time Unix timestamp from RTC, `0` while the clock is not set
  * @param code User-defined event code
@@ -93,7 +92,7 @@ uint32_t JRN_Count(const PDB_Query_t *query);
 /**
  * @brief Compact buffer: extract only timestamps from journal records.
  * Overwrites `JRN_t[]` with `uint32_t[]` timestamps in place.
- * Safe: timestamp `i` lands before record `i + 1`, read after it.
+ * Safe in place: timestamp `i` overwrites only records already read.
  * @param[in,out] mbb Buffer with `JRN_t` records
  */
 void JRN_GetTimestamp(MBB_t *mbb);

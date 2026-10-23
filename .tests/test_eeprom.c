@@ -1,4 +1,5 @@
 // .tests/test_eeprom.c
+
 // EEPROM emulation on the host flash: the newest value of a key wins,
 // through rewrites of the halves and power cycles alike.
 // After a power cut at any flash cycle of a write, wherever in it,
@@ -109,6 +110,19 @@ static void clear_forgets_everything(void)
   TEST_Equal(EEPROM_Read(&eeprom, 2, ABSENT), 42, "write after the clear");
 }
 
+// 600 writes over keys 1 to 4, rewrites among them, then a power-up:
+// every key reads the last of its writes.
+static void writes_get_through(void)
+{
+  for(uint32_t i = 0; i < 600; i++) {
+    TEST_Check(EEPROM_Write(&eeprom, i % 4 + 1, i) == OK, "write:%u", i);
+  }
+  power_up();
+  for(uint32_t key = 1; key <= 4; key++) {
+    TEST_Check(EEPROM_Read(&eeprom, key, ABSENT) == 595 + key, "key:%u", key);
+  }
+}
+
 static void erase_page_a(void) { FLASH_EraseFull(FLASH_PAGES - pages); }
 
 // A clear erases its pages whole, also one an erase cut late left reading blank
@@ -119,13 +133,7 @@ static void clear_erases_every_page_whole(void)
   FLASH_HostCut(0, FLASH_Cut_Late, erase_page_a);
   power_up();
   TEST_Check(EEPROM_Clear(&eeprom) == OK);
-  for(uint32_t i = 0; i < 600; i++) {
-    TEST_Check(EEPROM_Write(&eeprom, i % 4 + 1, i) == OK, "write:%u", i);
-  }
-  power_up();
-  for(uint32_t key = 1; key <= 4; key++) {
-    TEST_Check(EEPROM_Read(&eeprom, key, ABSENT) == 595 + key, "key:%u", key);
-  }
+  writes_get_through();
 }
 
 static void clear_store(void) { EEPROM_Clear(&eeprom); }
@@ -140,13 +148,7 @@ static void store_cleared_late_takes_writes(void)
   FLASH_HostCut(0, FLASH_Cut_Late, clear_store);
   power_up();
   TEST_Equal(EEPROM_Read(&eeprom, 1, ABSENT), ABSENT, "cleared");
-  for(uint32_t i = 0; i < 600; i++) {
-    TEST_Check(EEPROM_Write(&eeprom, i % 4 + 1, i) == OK, "write:%u", i);
-  }
-  power_up();
-  for(uint32_t key = 1; key <= 4; key++) {
-    TEST_Check(EEPROM_Read(&eeprom, key, ABSENT) == 595 + key, "key:%u", key);
-  }
+  writes_get_through();
 }
 
 // A slot that refuses its write is skipped: the value lands one slot on
@@ -224,6 +226,7 @@ static void rewrite_clears_its_target(void)
   TEST_Equal(EEPROM_Read(&eeprom, 4, ABSENT), 599, "newest write, past the rewrite");
 }
 
+// First page of the half a rewrite goes to: the one not taking writes
 static void erase_target_page(void)
 {
   FLASH_EraseFull(FLASH_PAGES - pages + (eeprom._active == EEPROM_Storage_A ? pages / 2 : 0));
@@ -237,13 +240,7 @@ static void rewrite_erases_its_target_whole(void)
   power_up();
   FLASH_HostCut(0, FLASH_Cut_Late, erase_target_page);
   power_up();
-  for(uint32_t i = 0; i < 600; i++) {
-    TEST_Check(EEPROM_Write(&eeprom, i % 4 + 1, i) == OK, "write:%u", i);
-  }
-  power_up();
-  for(uint32_t key = 1; key <= 4; key++) {
-    TEST_Check(EEPROM_Read(&eeprom, key, ABSENT) == 595 + key, "key:%u", key);
-  }
+  writes_get_through();
 }
 
 // A store whose marker aged unreadable goes on: no source stands behind it to take its place
@@ -365,14 +362,14 @@ static void write_survives_an_unstable_cut(void) { sweep_survives(FLASH_Cut_Unst
 static void write_survives_a_late_cut(void) { sweep_survives(FLASH_Cut_Late); }
 
 // Power-up over the flash `FLASH_HostSave` kept, cut at every cycle of its recovery,
-// anywhere in the cycle: the power-up after each keeps the keys
+// anywhere in the cycle: the power-up after each keeps the keys.
 static void recovery_cut_everywhere(uint32_t cut, uint32_t done)
 {
   uint32_t before = FLASH_HostCycles();
   power_up();
   uint32_t recovery = FLASH_HostCycles() - before;
   for(uint32_t again = 0; again < recovery; again++) {
-    for(FLASH_Cut_t where = FLASH_Cut_Before; where <= FLASH_Cut_Corrected; where++) {
+    for(FLASH_Cut_t where = FLASH_Cut_Before; where <= FLASH_Cut_Late; where++) {
       FLASH_HostRestore();
       FLASH_HostCut((int32_t)again, where, power_up);
       power_up();
@@ -387,7 +384,7 @@ static void recovery_survives_a_cut(void)
 {
   uint32_t total = sweep_cycles();
   for(uint32_t cut = 0; cut <= total; cut++) {
-    for(FLASH_Cut_t where = FLASH_Cut_Before; where <= FLASH_Cut_Corrected; where++) {
+    for(FLASH_Cut_t where = FLASH_Cut_Before; where <= FLASH_Cut_Late; where++) {
       FLASH_HostBlank();
       power_up();
       FLASH_HostCut((int32_t)cut, where, sweep_writes);

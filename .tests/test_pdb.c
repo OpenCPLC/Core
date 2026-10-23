@@ -1,4 +1,5 @@
 // .tests/test_pdb.c
+
 // Database `PDB_t` of format `1` on the host flash, a ring and `no_wrap`.
 // A page opens with its header, its records numbered from `1` and sealed by a CRC-32,
 // byte for byte as the format lays them out, and they come back in the order of their numbers,
@@ -102,6 +103,7 @@ static void holds(uint32_t oldest, uint32_t newest)
   }
 }
 
+// Slot as the format lays it out: the header of 16B, then 16B a record
 static uint32_t slot_at(uint16_t page, uint16_t slot) {
   return FLASH_GetAddress(page, 16 + 16 * slot);
 }
@@ -217,19 +219,19 @@ static void init_refuses_a_bad_config(void)
   FLASH_HostBlank();
   ring();
   PDB_t bad[] = { layout, layout, layout, layout, layout, layout };
-  bad[0].record_size = 20;
-  bad[1].record_size = 8;
-  bad[2].record_size = PDB_RECORD_LIMIT + 8;
-  bad[3].page_count = 1;
-  bad[4].page_count = 0;
-  bad[5].page_start = FLASH_PAGES - PAGES + 1;
+  bad[0].record_size = 20; // not a multiple of 8
+  bad[1].record_size = 8; // under 16
+  bad[2].record_size = PDB_RECORD_LIMIT + 8; // past the limit
+  bad[3].page_count = 1; // a ring of one page
+  bad[4].page_count = 0; // no page
+  bad[5].page_start = FLASH_PAGES - PAGES + 1; // past the end of the chip
   for(uint8_t i = 0; i < array_len(bad); i++) TEST_Check(PDB_Init(&bad[i]) == ERR, "config %u", i);
   no_wrap(1);
   pdb = layout;
   TEST_Check(PDB_Init(&pdb) == OK, "one page without the ring");
 }
 
-//-------------------------------------------------------------------------------------- No wrap
+//----------------------------------------------------------------------------------------- No wrap
 
 // Without the ring a full base refuses a record and erases nothing; its records stay
 static void no_wrap_refuses_when_full(void)
@@ -269,7 +271,10 @@ static void no_wrap_pays_a_slot_a_power_up(void)
   }
   holds(1, n);
   entry_t record = given(n + 1);
-  while(PDB_Insert(&pdb, &record) == OK) record = given(++n + 1);
+  while(PDB_Insert(&pdb, &record) == OK) {
+    n++;
+    record = given(n + 1);
+  }
   TEST_Equal(n, PER_PAGE - 9, "records a page takes after nine zeroed slots");
   holds(1, n);
 }
@@ -464,6 +469,37 @@ static void page_without_a_header_holds_nothing(void)
   holds(1, 1);
 }
 
+// A header sealed right but numbering its page from `0` is no header: the format never numbers `0`
+static void header_from_number_zero_holds_nothing(void)
+{
+  FLASH_HostBlank();
+  header_put(PAGE, MARK, KIND, 16, 0);
+  record_put(PAGE, 0, sealed(1));
+  ring();
+  power_up();
+  TEST_Equal(walk(PDB_Desc), 0, "no records");
+  insert_numbers(1, 2);
+  holds(1, 1);
+}
+
+static void erase_first_page(void) { FLASH_EraseFull(PAGE); }
+
+// A delete erases every page whole, also one an erase cut late left reading blank:
+// the header it writes there holds, and so do the records after it.
+static void delete_erases_every_page_whole(void)
+{
+  FLASH_HostBlank();
+  ring();
+  power_up();
+  insert_numbers(1, 4);
+  FLASH_HostCut(0, FLASH_Cut_Late, erase_first_page);
+  power_up();
+  TEST_Check(PDB_Delete(&pdb) == OK, "delete");
+  insert_numbers(1, 4);
+  power_up();
+  holds(1, 3);
+}
+
 // A page a programmer filled with ones reads blank, but takes records only once erased whole
 static void ones_from_a_programmer_take_a_full_erase(void)
 {
@@ -600,71 +636,75 @@ static void ring_sweep(FLASH_Cut_t where)
   }
 }
 
-static uint32_t fill_done; // records acknowledged since the board
+#define FILL_FROM 5 // records on the page before a fill
+
+static uint32_t fill_done; // records of a fill acknowledged before the cut
 
 static void fill_inserts(void)
 {
   for(fill_done = 0; ; fill_done++) {
-    entry_t record = given(5 + fill_done + 1);
+    entry_t record = given(FILL_FROM + fill_done + 1);
     if(PDB_Insert(&pdb, &record)) return;
   }
 }
 
-// One page without the ring, records 1 to 5 on it, then records until it is full:
+// One page without the ring, records 1 to `FILL_FROM` on it, then records until it is full:
 // a cut anywhere loses no record acknowledged before it.
 static void no_wrap_sweep(FLASH_Cut_t where)
 {
   no_wrap(1);
   FLASH_HostBlank();
   power_up();
-  insert_numbers(1, 6);
+  insert_numbers(1, FILL_FROM + 1);
   uint32_t before = FLASH_HostCycles();
   fill_inserts();
   uint32_t total = FLASH_HostCycles() - before;
   for(uint32_t cut = 0; cut <= total; cut++) {
     FLASH_HostBlank();
     power_up();
-    insert_numbers(1, 6);
+    insert_numbers(1, FILL_FROM + 1);
     FLASH_HostCut((int32_t)cut, where, fill_inserts);
     power_up();
     uint32_t newest;
-    uint32_t count = newest_run("no_wrap", cut, 5 + fill_done, &newest);
+    uint32_t count = newest_run("no_wrap", cut, FILL_FROM + fill_done, &newest);
     TEST_Check(count == newest, "no_wrap cut:%u holds %u of %u", cut, count, newest);
   }
 }
 
+#define START_WITH 10 // records before the power-up of an after-start sweep
+
 static void three_inserts(void)
 {
   for(done = 0; done < 3; done++) {
-    entry_t record = given(10 + done + 1);
+    entry_t record = given(START_WITH + done + 1);
     if(PDB_Insert(&pdb, &record)) return;
   }
 }
 
-// Records 1 to 10, then a power-up
-static void board_after_start(void)
+// Records 1 to `START_WITH`, then a power-up
+static void records_then_power_up(void)
 {
   FLASH_HostBlank();
   power_up();
-  insert_numbers(1, 11);
+  insert_numbers(1, START_WITH + 1);
   power_up();
 }
 
 // Three records after the power-up:
-// a cut anywhere in them, the zeroing included, loses none of the ten.
+// a cut anywhere in them, the zeroing included, loses none of the ones before.
 static void after_start_sweep(FLASH_Cut_t where)
 {
   ring();
-  board_after_start();
+  records_then_power_up();
   uint32_t before = FLASH_HostCycles();
   three_inserts();
   uint32_t total = FLASH_HostCycles() - before;
   for(uint32_t cut = 0; cut <= total; cut++) {
-    board_after_start();
+    records_then_power_up();
     FLASH_HostCut((int32_t)cut, where, three_inserts);
     power_up();
     uint32_t newest;
-    uint32_t count = newest_run("after start", cut, 10 + done, &newest);
+    uint32_t count = newest_run("after start", cut, START_WITH + done, &newest);
     TEST_Check(count == newest, "after start cut:%u holds %u of %u", cut, count, newest);
     base_goes_on("after start", cut, newest);
   }
@@ -723,14 +763,18 @@ static void random_cuts_keep_the_run(void)
     seed = xorshift(seed);
     next = newest + 1;
     refused = false;
-    FLASH_HostCut((int32_t)(seed % 48), (FLASH_Cut_t)((seed >> 8) % 5), endless_inserts);
+    int32_t cycle = (int32_t)(seed % 48); // within a few inserts, a page move among them
+    FLASH_Cut_t kind = (FLASH_Cut_t)((seed >> 8) % (FLASH_Cut_Late + 1));
+    FLASH_HostCut(cycle, kind, endless_inserts);
     TEST_Check(!refused, "round:%u insert:%u refused", round, next);
     power_up();
     uint32_t was = oldest;
     uint32_t count = newest_run("random", round, next - 1, &newest);
     oldest = count ? newest - count + 1 : 0;
-    if(was) TEST_Check(oldest >= was && oldest <= was + PER_PAGE, "round:%u oldest %u, was %u",
-      round, oldest, was);
+    if(was) {
+      TEST_Check(oldest >= was && oldest <= was + PER_PAGE, "round:%u oldest %u, was %u",
+        round, oldest, was);
+    }
   }
 }
 
@@ -753,6 +797,8 @@ void TEST_Cases(void)
   TEST(page_left_without_a_valid_record_keeps_the_order);
   TEST(ring_without_a_page_to_move_on_refuses);
   TEST(page_without_a_header_holds_nothing);
+  TEST(header_from_number_zero_holds_nothing);
+  TEST(delete_erases_every_page_whole);
   TEST(ones_from_a_programmer_take_a_full_erase);
   TEST(numbers_outside_the_page_are_not_valid);
   TEST(golden_page_reads);

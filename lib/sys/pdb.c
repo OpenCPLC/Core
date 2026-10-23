@@ -44,7 +44,7 @@ static uint16_t slots(const PDB_t *pdb) { return (FLASH_PAGE_SIZE - PDB_HEAD) / 
 
 static uint32_t slot_addr(const PDB_t *pdb, uint16_t page, uint16_t slot)
 {
-  return FLASH_GetAddress(page, (int16_t)(PDB_HEAD + (uint32_t)slot * pdb->record_size));
+  return FLASH_GetAddress(page, (int16_t)(PDB_HEAD + slot * pdb->record_size));
 }
 
 // CRC-32 of a record, every word but its last
@@ -111,7 +111,8 @@ static status_t page_mark(PDB_t *pdb, uint16_t page)
   PDB_Head_t head = { .mark = PDB_MARK, .kind = pdb->kind, .record_size = pdb->record_size,
     .first = pdb->_next };
   head.crc = CRC_Run(&crc32_iso, &head, offsetof(PDB_Head_t, crc));
-  const uint32_t *word = (const uint32_t *)&head;
+  uint32_t word[4];
+  memcpy(word, &head, sizeof(word));
   uint32_t addr = FLASH_GetAddress(page, 0);
   if(FLASH_Write(addr, word[0], word[1]) || FLASH_Write(addr + 8, word[2], word[3])) return ERR;
   pdb->_page = page;
@@ -121,8 +122,8 @@ static status_t page_mark(PDB_t *pdb, uint16_t page)
   return OK;
 }
 
-// Base on to its next page, erased whole and given its header.
-// A page an erase cut late left reading blank holds no record until then.
+// Base on to its next page, erased whole and given its header:
+// an erase cut late leaves a page reading blank that holds no program until erased whole.
 // The page left behind may hold no valid record: the new one still numbers past its first,
 // so no two headers share a first number.
 static status_t page_open(PDB_t *pdb)
@@ -156,9 +157,9 @@ static status_t slot_take(PDB_t *pdb)
   }
   if(!pdb->_fresh) return OK;
   pdb->_fresh = false;
-  status_t zeroed = slot_zero(pdb);
+  status_t err = slot_zero(pdb);
   pdb->_slot++;
-  if(zeroed) return ERR;
+  if(err) return ERR;
   return pdb->_slot < slots(pdb) ? OK : page_open(pdb);
 }
 
@@ -181,6 +182,31 @@ static status_t slot_write(const PDB_t *pdb, const uint32_t *record)
 
 //-------------------------------------------------------------------------------------------- Init
 
+// Newest own page into `_page`, the number of its first record into `_first`
+static void page_newest(PDB_t *pdb)
+{
+  for(uint16_t page = pdb->page_start; page < pdb->page_start + pdb->page_count; page++) {
+    uint32_t first;
+    if(page_head(pdb, page, &first) != PDB_Page_Own) continue;
+    if(pdb->_page != PDB_NONE && first <= pdb->_first) continue;
+    pdb->_page = page;
+    pdb->_first = first;
+  }
+}
+
+// Cursor past the last slot of `_page` not free, the next number past the highest valid one
+static void cursor_find(PDB_t *pdb)
+{
+  uint32_t record[PDB_RECORD_LIMIT / 4];
+  pdb->_next = pdb->_first;
+  for(uint16_t slot = 0; slot < slots(pdb); slot++) {
+    PDB_Slot_t state = slot_load(pdb, pdb->_page, pdb->_first, slot, record);
+    if(state == PDB_Slot_Free) continue;
+    pdb->_slot = slot + 1;
+    if(state == PDB_Slot_Valid && record[0] >= pdb->_next) pdb->_next = record[0] + 1;
+  }
+}
+
 status_t PDB_Init(PDB_t *pdb)
 {
   if(pdb->page_count < (pdb->no_wrap ? 1 : 2)) return ERR;
@@ -193,27 +219,12 @@ status_t PDB_Init(PDB_t *pdb)
   pdb->_first = 1;
   pdb->_next = 1;
   pdb->_fresh = false;
-  for(uint16_t page = pdb->page_start; page < pdb->page_start + pdb->page_count; page++) {
-    uint32_t first;
-    if(page_head(pdb, page, &first) != PDB_Page_Own) continue;
-    if(pdb->_page != PDB_NONE && first <= pdb->_first) continue;
-    pdb->_page = page;
-    pdb->_first = first;
-  }
+  page_newest(pdb);
   if(pdb->_page == PDB_NONE) {
     PDB_LOG("Init empty");
     return OK;
   }
-  // Cursor past the last slot not free, the next number past the highest valid one
-  uint64_t buffer[PDB_RECORD_LIMIT / 8];
-  uint32_t *record = (uint32_t *)buffer;
-  pdb->_next = pdb->_first;
-  for(uint16_t slot = 0; slot < slots(pdb); slot++) {
-    PDB_Slot_t state = slot_load(pdb, pdb->_page, pdb->_first, slot, record);
-    if(state == PDB_Slot_Free) continue;
-    pdb->_slot = slot + 1;
-    if(state == PDB_Slot_Valid && record[0] >= pdb->_next) pdb->_next = record[0] + 1;
-  }
+  cursor_find(pdb);
   pdb->_fresh = true;
   PDB_LOG("Init page:%u slot:%u next:%u", pdb->_page, pdb->_slot, pdb->_next);
   return OK;
@@ -223,19 +234,18 @@ status_t PDB_Init(PDB_t *pdb)
 
 status_t PDB_Insert(PDB_t *pdb, const void *record)
 {
-  uint64_t buffer[PDB_RECORD_LIMIT / 8];
-  uint32_t *sealed = (uint32_t *)buffer;
+  uint32_t sealed[PDB_RECORD_LIMIT / 4];
   uint16_t words = pdb->record_size / 4;
-  memcpy(buffer, record, pdb->record_size);
+  memcpy(sealed, record, pdb->record_size);
   for(uint8_t attempt = 0; attempt < 2; attempt++) {
     if(slot_take(pdb)) return ERR;
     sealed[0] = pdb->_next;
     sealed[words - 1] = record_crc(pdb, sealed);
-    status_t written = slot_write(pdb, sealed);
+    status_t err = slot_write(pdb, sealed);
     PDB_LOG("Insert page:%u slot:%u number:%u%s",
-      pdb->_page, pdb->_slot, pdb->_next, written ? " read back wrong" : "");
+      pdb->_page, pdb->_slot, pdb->_next, err ? " read back wrong" : "");
     pdb->_slot++;
-    if(!written) {
+    if(!err) {
       pdb->_next++;
       return OK;
     }
@@ -364,9 +374,7 @@ uint32_t PDB_Select(PDB_t *pdb, const PDB_Query_t *query, void *out, uint32_t ma
   if(q.limit == 0 || q.limit > max) q.limit = max;
   PDB_IterInit(pdb, &iter, &q);
   uint8_t *ptr = (uint8_t *)out;
-  while(PDB_IterNext(&iter, ptr) == OK) {
-    ptr += pdb->record_size;
-  }
+  while(!PDB_IterNext(&iter, ptr)) ptr += pdb->record_size;
   return iter.count;
 }
 
@@ -374,7 +382,7 @@ uint32_t PDB_Count(PDB_t *pdb, const PDB_Query_t *query)
 {
   PDB_Iter_t iter;
   PDB_IterInit(pdb, &iter, query);
-  while(PDB_IterNext(&iter, NULL) == OK);
+  while(!PDB_IterNext(&iter, NULL));
   return iter.count;
 }
 

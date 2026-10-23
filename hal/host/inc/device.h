@@ -35,9 +35,17 @@ typedef struct { volatile uint32_t ISR; } DMA_TypeDef;
 typedef struct { volatile uint32_t CCR; } DMA_Channel_TypeDef;
 typedef struct { volatile uint32_t CCR; } DMAMUX_Channel_TypeDef;
 
+// Buses a board file names and no host driver reaches: one register makes each a type of its own
+typedef struct { volatile uint32_t CR1; } I2C_TypeDef;
+typedef struct { volatile uint32_t CR1; } SPI_TypeDef;
+typedef struct { volatile uint32_t CR1; } USART_TypeDef;
+
 extern GPIO_TypeDef HostGpio[HOST_GPIO_PORTS];
 extern TIM_TypeDef HostTim[HOST_TIM_COUNT];
 extern ADC_TypeDef HostAdc;
+extern I2C_TypeDef HostI2c[3];
+extern SPI_TypeDef HostSpi[3];
+extern USART_TypeDef HostUsart[8];
 
 #define GPIOA (&HostGpio[0])
 #define GPIOB (&HostGpio[1])
@@ -56,6 +64,23 @@ extern ADC_TypeDef HostAdc;
 #define TIM16 (&HostTim[7])
 #define TIM17 (&HostTim[8])
 #define ADC1  (&HostAdc)
+
+#define I2C1 (&HostI2c[0])
+#define I2C2 (&HostI2c[1])
+#define I2C3 (&HostI2c[2])
+
+#define SPI1 (&HostSpi[0])
+#define SPI2 (&HostSpi[1])
+#define SPI3 (&HostSpi[2])
+
+#define USART1  (&HostUsart[0])
+#define USART2  (&HostUsart[1])
+#define USART3  (&HostUsart[2])
+#define USART4  (&HostUsart[3])
+#define USART5  (&HostUsart[4])
+#define USART6  (&HostUsart[5])
+#define LPUART1 (&HostUsart[6])
+#define LPUART2 (&HostUsart[7])
 
 // Bit positions follow the silicon, so code reaching a register reads what it expects
 #define TIM_CR1_CEN      (1u << 0)

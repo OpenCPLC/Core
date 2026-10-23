@@ -41,6 +41,8 @@ static bool bus_write(SHT4X_t *sht4x, uint8_t *data, uint16_t len)
 
 static bool bus_read(SHT4X_t *sht4x, uint8_t *data, uint16_t len)
 {
+  // The conversion before the read gives another device on the bus its turn
+  if(timeout(21 + len, WAIT_&I2C_Master_IsFree, sht4x->i2c)) return false;
   // A refused start leaves `_busy` untouched, and the wait below would read it as ours
   if(I2C_Master_Read(sht4x->i2c, address_of(sht4x), data, len)) return false;
   if(timeout(21 + len, WAIT_&I2C_Master_IsFree, sht4x->i2c)) return false;

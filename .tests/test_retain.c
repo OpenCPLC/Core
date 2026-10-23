@@ -1,4 +1,5 @@
 // .tests/test_retain.c
+
 // Retained state of `DIN_t` and `DOUT_t` in EEPROM, under keys from the channel name:
 // djb2 of the name and one round more for the field, the same in every build.
 // The keys of every store of the Uno board stay apart and clear of the reserved ones,
@@ -52,6 +53,19 @@ static void keys_of_dins(const char *const *names, uint8_t count)
   }
 }
 
+// Relay `name` on pin `pin` of `GPIOA`, its state retained in the store
+static DOUT_t relay(const char *name, uint8_t pin)
+{
+  return (DOUT_t){ .name = name, .relay = true, .gpio = { .port = GPIOA, .pin = pin },
+    .eeprom = &eeprom };
+}
+
+// Input `name` on `PA6`, its times retained in the store
+static DIN_t input(const char *name)
+{
+  return (DIN_t){ .name = name, .gpio = { .port = GPIOA, .pin = 6 }, .eeprom = &eeprom };
+}
+
 // Every key gathered for one store apart from the others and below the reserved ones
 static void keys_apart(const char *what)
 {
@@ -92,24 +106,38 @@ static void relay_comes_back(void)
 {
   FLASH_HostBlank();
   power_up();
-  DOUT_t ro = { .name = "RO1", .relay = true, .gpio = { .port = GPIOA, .pin = 1 },
-    .eeprom = &eeprom };
+  DOUT_t ro = relay("RO1", 1);
   DOUT_Init(&ro);
   DOUT_SaveValue(&ro, true);
   DOUT_Set(&ro);
   relay_cycles_inc(&ro);
   relay_cycles_inc(&ro);
   power_up();
-  DOUT_t again = { .name = "RO1", .relay = true, .gpio = { .port = GPIOA, .pin = 1 },
-    .eeprom = &eeprom };
+  DOUT_t again = relay("RO1", 1);
   DOUT_Init(&again);
   TEST_Check(again.save, "retain choice");
   TEST_Check(again.value, "value");
   TEST_Equal(again.cycles, 2, "cycles");
-  DOUT_t other = { .name = "RO2", .relay = true, .gpio = { .port = GPIOA, .pin = 2 },
-    .eeprom = &eeprom };
+  DOUT_t other = relay("RO2", 2);
   DOUT_Init(&other);
   TEST_Check(!other.save && !other.value && !other.cycles, "another channel, nothing");
+}
+
+// Retaining turned off: the value stored while it was on stays behind after a power-up
+static void value_left_behind_once_retaining_is_off(void)
+{
+  FLASH_HostBlank();
+  power_up();
+  DOUT_t ro = relay("RO1", 1);
+  DOUT_Init(&ro);
+  DOUT_SaveValue(&ro, true);
+  DOUT_Set(&ro);
+  DOUT_SaveValue(&ro, false);
+  power_up();
+  DOUT_t again = relay("RO1", 1);
+  DOUT_Init(&again);
+  TEST_Check(!again.save, "retaining off");
+  TEST_Check(!again.value, "value left behind");
 }
 
 // A time set through the API comes back after a power-up, one the board sets wins
@@ -117,15 +145,15 @@ static void input_time_comes_back(void)
 {
   FLASH_HostBlank();
   power_up();
-  DIN_t di = { .name = "DI1", .gpio = { .port = GPIOA, .pin = 6 }, .eeprom = &eeprom };
+  DIN_t di = input("DI1");
   DIN_Init(&di);
   TEST_Equal(DIN_Time(&di, DIN_Time_Ton, 123), 123, "set");
   power_up();
-  DIN_t again = { .name = "DI1", .gpio = { .port = GPIOA, .pin = 6 }, .eeprom = &eeprom };
+  DIN_t again = input("DI1");
   DIN_Init(&again);
   TEST_Equal(again.gpif.ton_ms, 123, "stored time");
-  DIN_t board = { .name = "DI1", .gpio = { .port = GPIOA, .pin = 6 },
-    .gpif = { .ton_ms = 50 }, .eeprom = &eeprom };
+  DIN_t board = input("DI1");
+  board.gpif.ton_ms = 50;
   DIN_Init(&board);
   TEST_Equal(board.gpif.ton_ms, 50, "time of the board");
 }
@@ -135,13 +163,13 @@ static void nameless_channel_keeps_nothing(void)
 {
   FLASH_HostBlank();
   power_up();
-  DOUT_t out = { .relay = true, .gpio = { .port = GPIOA, .pin = 1 }, .eeprom = &eeprom,
-    .save = true };
+  DOUT_t out = relay(NULL, 1);
+  out.save = true;
   DOUT_Init(&out);
   DOUT_Set(&out);
   relay_cycles_inc(&out);
   DOUT_SaveValue(&out, false);
-  DIN_t in = { .gpio = { .port = GPIOA, .pin = 6 }, .eeprom = &eeprom };
+  DIN_t in = input(NULL);
   DIN_Init(&in);
   TEST_Equal(DIN_Time(&in, DIN_Time_Ton, 77), 77, "time in RAM");
   TEST_Check(eeprom._cursor == eeprom._addr_start[eeprom._active], "nothing written");
@@ -154,6 +182,7 @@ void TEST_Cases(void)
   TEST(keys_stay_the_same);
   TEST(uno_keys_stay_apart);
   TEST(relay_comes_back);
+  TEST(value_left_behind_once_retaining_is_off);
   TEST(input_time_comes_back);
   TEST(nameless_channel_keeps_nothing);
 }

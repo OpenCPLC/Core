@@ -1,10 +1,11 @@
 // .tests/test_flash.c
+
 // Records of `FLASH_Save` over the host flash model, the code the chip runs:
 // a record loads back whole, over one page or several, and a shorter one replaces a longer.
 // After a power cut at any flash cycle of a save, before it or halfway through it,
 // the page holds the old record, no record or the new one, never a mix of them.
 // `FLASH_Copy` takes what ECC passes, and a doubleword ECC cannot read fails it.
-// A page an erase cut late left reading blank holds writes only after `FLASH_EraseFull`,
+// An erase cut late leaves a page reading blank that holds writes only after `FLASH_EraseFull`,
 // and zeros go over a doubleword a cut tore, which then reads them clean.
 
 // A G081: 128kB of flash in pages of 2kB
@@ -199,7 +200,7 @@ static void late_erase_cut_takes_a_full_erase(void)
   TEST_Equal(FLASH_HostCycles(), cycles, "spared, it reads blank");
   FLASH_HostSave();
   TEST_Check(FLASH_Write(addr, 3, 4) == ERR, "no program holds");
-  TEST_Check(FLASH_Copy(addr, word, 8, NULL) == ERR, "the program it took");
+  TEST_Check(FLASH_Copy(addr, word, 8, NULL) == ERR, "the write it took fails ECC");
   FLASH_HostRestore();
   TEST_Check(FLASH_EraseFull(PAGE) == OK);
   TEST_Check(FLASH_Write(addr, 3, 4) == OK, "write after the full erase");
@@ -208,7 +209,7 @@ static void late_erase_cut_takes_a_full_erase(void)
 
 static void write_doubleword(void) { FLASH_Write(FLASH_GetAddress(PAGE, 0), 5, 6); }
 
-// A program cut so leaves its doubleword reading erased and failing ECC by turns, erased first:
+// An unstable cut leaves the doubleword of a program erased and unreadable by turns, erased first:
 // a write over it is refused, zeros go over it and it reads them clean.
 static void unstable_cut_reads_by_turns(void)
 {

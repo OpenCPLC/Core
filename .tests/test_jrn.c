@@ -1,4 +1,5 @@
 // .tests/test_jrn.c
+
 // Journal `JRN_t` over PDB on the host flash: a record of 16B, byte for byte as it goes out,
 // little-endian number, time, code, data and CRC-32 last.
 // Its time comes from RTC, `0` while the clock is not set.

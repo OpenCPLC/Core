@@ -1,10 +1,20 @@
 // hal/host/itf/uart.h
 
+// Contract of the UART a host build compiles against: the console of a program,
+// in a test the bytes it sends, kept for `UART_HostSent` and handed to the device on the line.
+// The fields of the chip are kept, so a board file builds as it is;
+// `reg`, the pins, `dma`, `irq_priority` and `tim` stay unused.
+
 #ifndef UART_H_
 #define UART_H_
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "device.h"
+#include "gpio.h"
+#include "tim.h"
+#include "irq.h"
+#include "dma.h"
 #include "xdef.h"
 #include "buff.h"
 #include "main.h"
@@ -50,20 +60,72 @@ typedef enum {
   UART_StopBits_1_5 = 3
 } UART_StopBits_t;
 
+#if defined(HOST_TEST)
+/**
+ * @brief Device on the line, taking the bytes of every transfer as they go out.
+ * @param[in] ctx Context given to `UART_HostAttach`
+ * @param[in] data Bytes on the line
+ * @param[in] len Number of bytes
+ */
+typedef void (*UART_HostLine_t)(void *ctx, const uint8_t *data, uint16_t len);
+#endif
+
+//---------------------------------------------------------------------------------- Family include
+
+// Pin names of the family of the chip the build stands for
+#if defined(STM32WB55xx)
+  #include "../../stm32wb/itf/uart_wb.h"
+#else
+  #include "../../stm32g0/itf/uart_g0.h"
+#endif
+
 //--------------------------------------------------------------------------------------- Structure
 
+/**
+ * @brief UART over the console, or over the bytes a test reads.
+ * @param[in] reg USART peripheral registers
+ * @param[in] tx TX pin mapping
+ * @param[in] rx RX pin mapping
+ * @param[in] dma TX DMA channel
+ * @param[in] irq_priority Interrupt priority for UART, DMA and the timeout timer
+ * @param[in] baud Baud rate [bit/s]
+ * @param[in] parity Parity
+ * @param[in] stop_bits Stop bits
+ * @param[in] timeout Receiver timeout closing a frame [bit times], `0` = off
+ * @param[in] dir RS485 direction GPIO, `NULL` = none
+ * @param[in] tim Timeout timer for a port without the hardware receiver timeout
+ * @param[in] buff Receive ring
+ * @param[in] prefix Address byte sent ahead of every transfer, `0` = none
+ * Internal:
+ * @param _tx_busy Transfer in progress
+ * @param _init Initialization completed flag
+ * @param _sent Bytes put on the line since `UART_HostSent` took them, in a test
+ * @param _sent_len Number of bytes in `_sent`
+ * @param _Line Device on the line, in a test, `NULL` = none
+ * @param _ctx Context of `_Line`
+ */
 typedef struct {
+  USART_TypeDef *reg;
+  UART_TX_t tx;
+  UART_RX_t rx;
+  DMA_CHx_t dma;
+  IRQ_Priority_t irq_priority;
   uint32_t baud;
   UART_Parity_t parity;
   UART_StopBits_t stop_bits;
   uint16_t timeout;
+  GPIO_t *dir;
+  TIM_t *tim;
   BUFF_t *buff;
+  uint8_t prefix;
   // internal
   volatile bool _tx_busy;
   bool _init;
   #if defined(HOST_TEST)
-  uint8_t _sent[256]; // bytes put on the line since `UART_HostSent` took them
+  uint8_t _sent[256];
   uint16_t _sent_len;
+  UART_HostLine_t _Line;
+  void *_ctx;
   #endif
 } UART_t;
 
@@ -100,6 +162,14 @@ uint32_t UART_CalcTime_ms(UART_t *uart, uint16_t len);
  * @return Byte count
  */
 uint16_t UART_HostSent(UART_t *uart, uint8_t *data);
+
+/**
+ * @brief Put a device on the line.
+ * @param[in,out] uart Port
+ * @param[in] Line Handler taking the bytes of every transfer, `NULL` takes the device away
+ * @param[in] ctx Context passed to `Line`
+ */
+void UART_HostAttach(UART_t *uart, UART_HostLine_t Line, void *ctx);
 
 #endif
 //------------------------------------------------------------------------------------------ Device

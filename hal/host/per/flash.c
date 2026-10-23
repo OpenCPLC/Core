@@ -170,6 +170,14 @@ static bool cycle(void)
   return false;
 }
 
+// Flags a cycle cut halfway leaves on the doublewords it touched, by the kind of the cut
+static bool *cut_flags(void)
+{
+  if(cut_at == FLASH_Cut_Corrected) return chip.corrected;
+  if(cut_at == FLASH_Cut_Unstable) return chip.unstable;
+  return chip.damaged;
+}
+
 // Erase cycle, blank or not.
 // A cut halfway erases nothing whole: every doubleword the page holds written stays,
 // unreadable to ECC, corrected by it to a wrong value, or read erased and unreadable by turns,
@@ -183,12 +191,9 @@ static void erase(uint16_t page)
     for(uint32_t i = cell; i < cell + FLASH_PAGE_SIZE / 8; i++) {
       if(!chip.written[i]) continue;
       chip.torn[i] = true;
-      if(cut_at == FLASH_Cut_Unreadable) chip.damaged[i] = true;
-      else if(cut_at == FLASH_Cut_Unstable) chip.unstable[i] = true;
-      else {
-        chip.corrected[i] = true;
-        memset(chip.memory + 8 * i + 4, 0xFF, 4); // the upper word on its way to erased
-      }
+      cut_flags()[i] = true;
+      // Corrected to what it reads: the upper word on its way to erased
+      if(cut_at == FLASH_Cut_Corrected) memset(chip.memory + 8 * i + 4, 0xFF, 4);
     }
     store(page);
     longjmp(power_loss, 1);
@@ -212,17 +217,16 @@ static void program(uint32_t at, const void *data, uint32_t size)
   bool torn = cut && cut_at != FLASH_Cut_Late;
   uint32_t first = at / 8, cells = (size + 7) / 8;
   if(torn) {
-    bool *ecc = cut_at == FLASH_Cut_Corrected ? chip.corrected :
-      cut_at == FLASH_Cut_Unstable ? chip.unstable : chip.damaged;
-    memset(ecc + first, true, cells);
+    memset(cut_flags() + first, true, cells);
     memset(chip.torn + first, true, cells);
     size /= 2;
   }
   memcpy(chip.memory + at, data, size);
   memset(chip.written + first, true, (size + 7) / 8);
   if(!torn) {
+    bool weak = chip.weak[at / FLASH_PAGE_SIZE];
     for(uint32_t i = first; i < first + cells; i++) {
-      if(chip.weak[at / FLASH_PAGE_SIZE]) chip.damaged[i] = true;
+      if(weak) chip.damaged[i] = true;
       else if(zeros(chip.memory + 8 * i, 8)) cell_zeroed(i);
     }
   }

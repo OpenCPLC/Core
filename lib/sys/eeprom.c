@@ -102,7 +102,7 @@ static status_t _read_key(EEPROM_t *e, uint32_t key, uint32_t *out)
 }
 
 // Every page erased whole, blank or not:
-// an erase cut late leaves a page that reads blank and holds no write until then.
+// an erase cut late leaves a page reading blank that holds no program until erased whole.
 static status_t _clear_storage(EEPROM_t *e, EEPROM_Storage_t s)
 {
   uint16_t base = e->page_start + (s == EEPROM_Storage_B ? e->_storage_pages : 0);
@@ -111,6 +111,16 @@ static status_t _clear_storage(EEPROM_t *e, EEPROM_Storage_t s)
     if(FLASH_EraseFull(base + (uint16_t)i)) return ERR;
   }
   return OK;
+}
+
+// Key among the slots from `start` to `end` of a rewrite target.
+// The target holds only what the rewrite wrote and read back, so it reads plainly.
+static bool _target_has(uint32_t start, uint32_t end, uint32_t key)
+{
+  for(uint32_t addr = start; addr < end; addr += 8) {
+    if(FLASH_Read(addr) == key) return true;
+  }
+  return false;
 }
 
 static status_t _write_marker(EEPROM_t *e, EEPROM_Storage_t s, uint16_t gen)
@@ -147,12 +157,7 @@ static status_t _rewrite(EEPROM_t *e, EEPROM_Storage_t src_s, uint32_t skip)
     uint64_t slot = _slot(src);
     uint32_t key = (uint32_t)slot;
     if(key >= EEPROM_DAMAGED_KEY) continue; // erased, marker, BEGIN or damaged
-    // The target holds only what this rewrite wrote and read back, so it reads plainly
-    bool dup = false;
-    for(uint32_t d = dst_start + 8; d < dst_cursor; d += 8) {
-      if(FLASH_Read(d) == key) { dup = true; break; }
-    }
-    if(dup) continue;
+    if(_target_has(dst_start + 8, dst_cursor, key)) continue;
     // One data slot stays free for the write that triggered the rewrite
     if(dst_cursor + 8 >= dst_marker) break;
     if(FLASH_Write(dst_cursor, key, (uint32_t)(slot >> 32))) return ERR;
@@ -321,6 +326,13 @@ status_t EEPROM_Init(EEPROM_t *e)
   return OK;
 }
 
+// A cursor at the marker: the half is full, rewritten into the other before the next write
+static status_t _make_room(EEPROM_t *e)
+{
+  if(e->_cursor < _marker_addr(e, e->_active)) return OK;
+  return _rewrite(e, e->_active, 0);
+}
+
 // A failed `FLASH_Write` skips the slot and retries once on the next;
 // the cursor moves past a broken slot either way, so the next call never lands on it again.
 static status_t _store_kv(EEPROM_t *e, uint32_t key, uint32_t value)
@@ -330,24 +342,17 @@ static status_t _store_kv(EEPROM_t *e, uint32_t key, uint32_t value)
     if(_clear_storage(e, e->_active)) return ERR;
     e->_blank = false;
   }
-  if(e->_cursor >= _marker_addr(e, e->_active)) {
-    if(_rewrite(e, e->_active, 0)) return ERR;
-  }
+  if(_make_room(e)) return ERR;
   if(FLASH_Write(e->_cursor, key, value)) {
     e->_cursor += 8;
-    if(e->_cursor >= _marker_addr(e, e->_active)) {
-      if(_rewrite(e, e->_active, 0)) return ERR;
-    }
+    if(_make_room(e)) return ERR;
     if(FLASH_Write(e->_cursor, key, value)) {
       e->_cursor += 8;
       return ERR;
     }
   }
   e->_cursor += 8;
-  if(e->_cursor >= _marker_addr(e, e->_active)) {
-    if(_rewrite(e, e->_active, 0)) return ERR;
-  }
-  return OK;
+  return _make_room(e);
 }
 
 status_t EEPROM_Write(EEPROM_t *e, uint32_t key, uint32_t value)
