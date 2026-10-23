@@ -1,8 +1,13 @@
 // lib/sys/jrn.c
 
 #include "jrn.h"
+
 #include "rtc.h"
-#include "vrts.h"
+
+//------------------------------------------------------------------------------------------ Config
+
+// Earliest time a set clock shows, 2020-01-01: an RTC starts at 2000-01-01 [s from 1970 UTC]
+#define JRN_CLOCK_MIN_ts 1577836800u
 
 //---------------------------------------------------------------------------------------- Internal
 
@@ -13,14 +18,12 @@ static bool code_filter(const void *record, void *ctx)
   return ((const JRN_t *)record)->code == *(uint16_t *)ctx;
 }
 
-// Current time as journal sort key: RTC unix timestamp, fallback to boot tick
+// RTC unix timestamp, `0` while the clock is not set: a tick restarts from zero at every boot
 static uint32_t time_now(void)
 {
-  if(RtcInit) {
-    RTC_Datetime_t dt = RTC_Datetime();
-    return (uint32_t)RTC_DatetimeToUnix(&dt);
-  }
-  return (uint32_t)tick_keep(0);
+  if(!RtcInit) return 0;
+  uint64_t now = RTC_Timestamp();
+  return now < JRN_CLOCK_MIN_ts ? 0 : (uint32_t)now;
 }
 
 //--------------------------------------------------------------------------------------------- API
@@ -32,16 +35,16 @@ status_t JRN_Init(PDB_t *pdb)
     return ERR;
   }
   jrn = pdb;
-  jrn->payload_size = sizeof(JRN_t);
+  jrn->record_size = sizeof(JRN_t);
   status_t st = PDB_Init(jrn);
   if(st) JRN_LOG("Init fault: underlying PDB failed");
   return st;
 }
 
-status_t JRN_Insert(uint16_t code)
+status_t JRN_Insert(uint16_t code, uint16_t data)
 {
-  JRN_t record = { .time = time_now(), .code = code };
-  JRN_LOG("Insert code:%u", code);
+  JRN_t record = { .time = time_now(), .code = code, .data = data };
+  JRN_LOG("Insert code:%u data:%u", code, data);
   return PDB_Insert(jrn, &record);
 }
 

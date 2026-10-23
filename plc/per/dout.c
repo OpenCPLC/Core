@@ -6,15 +6,41 @@
 
 //---------------------------------------------------------------------------------------- Internal
 
+// Retained fields, each under a key of its own
+typedef enum {
+  DOUT_Field_Save,
+  DOUT_Field_Value,
+  DOUT_Field_Cycles
+} DOUT_Field_t;
+
+// Key of a retained field: djb2 of the channel name, one round more for the field,
+// the same in every build.
+static uint32_t dout_key(const DOUT_t *dout, DOUT_Field_t field)
+{
+  return hash_djb2(dout->name) * 33u + field;
+}
+
+// Field into the store, nothing without a store or a name
+static void dout_retain(DOUT_t *dout, DOUT_Field_t field, uint32_t value)
+{
+  if(dout->eeprom && dout->name) EEPROM_Write(dout->eeprom, dout_key(dout, field), value);
+}
+
+// Stored value of a field into `*var`, left as it is when absent
+static void dout_restore(DOUT_t *dout, DOUT_Field_t field, uint32_t *var)
+{
+  *var = EEPROM_Read(dout->eeprom, dout_key(dout, field), *var);
+}
+
 static void relay_cycles_inc(DOUT_t *dout)
 {
   dout->cycles++;
-  if(dout->eeprom) EEPROM_Save(dout->eeprom, &dout->cycles);
+  dout_retain(dout, DOUT_Field_Cycles, dout->cycles);
 }
 
 static void save_value(DOUT_t *dout)
 {
-  if(dout->eeprom && dout->save) EEPROM_Save(dout->eeprom, &dout->value);
+  if(dout->save) dout_retain(dout, DOUT_Field_Value, dout->value);
 }
 
 // Shared by `DOUT_Pulse` and `DOUT_PulseFreeze`, `_pulse` counts half-periods
@@ -35,11 +61,11 @@ static bool pulse_start(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t t
 
 void DOUT_Init(DOUT_t *dout)
 {
-  if(dout->eeprom) {
+  if(dout->eeprom && dout->name) {
     EEPROM_Init(dout->eeprom);
-    if(!dout->save) EEPROM_Load(dout->eeprom, &dout->save);
-    if(dout->save) EEPROM_Load(dout->eeprom, &dout->value);
-    if(dout->relay) EEPROM_Load(dout->eeprom, &dout->cycles);
+    if(!dout->save) dout_restore(dout, DOUT_Field_Save, &dout->save);
+    if(dout->save) dout_restore(dout, DOUT_Field_Value, &dout->value);
+    if(dout->relay) dout_restore(dout, DOUT_Field_Cycles, &dout->cycles);
   }
   if(!dout->pwm) {
     dout->gpio.mode = GPIO_Mode_Output;
@@ -190,7 +216,7 @@ void DOUT_SaveValue(DOUT_t *dout, bool save)
 {
   if(dout->eeprom && save != dout->save) {
     dout->save = save;
-    EEPROM_Save(dout->eeprom, &dout->save);
+    dout_retain(dout, DOUT_Field_Save, dout->save);
   }
 }
 

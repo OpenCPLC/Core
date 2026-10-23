@@ -52,6 +52,7 @@ typedef enum {
  * @param _active Half taking writes
  * @param _cursor Next slot to write
  * @param _generation Generation of the active half
+ * @param _blank Active half read empty at init, erased whole before its first write
  * @param _init Initialization completed flag
  */
 typedef struct {
@@ -64,6 +65,7 @@ typedef struct {
   EEPROM_Storage_t _active;
   uint32_t _cursor;
   uint16_t _generation;
+  bool _blank;
   bool _init;
 } EEPROM_t;
 
@@ -101,56 +103,6 @@ status_t EEPROM_Write(EEPROM_t *eeprom, uint32_t key, uint32_t value);
  */
 uint32_t EEPROM_Read(EEPROM_t *eeprom, uint32_t key, uint32_t default_value);
 
-/**
- * @brief Store a variable under its own address, on the host its low 32 bits.
- * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @param[in] var Variable
- * @return `OK` on success, `ERR` on a flash error
- */
-status_t EEPROM_Save(EEPROM_t *eeprom, uint32_t *var);
-
-/**
- * @brief Restore a variable stored under its own address.
- * @param[in] eeprom Pointer to `EEPROM_t` instance
- * @param[out] var Variable, written only when found
- * @return `OK` when found, `ERR` when absent
- */
-status_t EEPROM_Load(EEPROM_t *eeprom, uint32_t *var);
-
-/**
- * @brief Store variables from a `NULL`-terminated list.
- * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @param[in] var First variable, the rest follow as arguments, `NULL` last
- * @return `OK` when every one was stored, `ERR` when any failed
- */
-status_t EEPROM_SaveList(EEPROM_t *eeprom, uint32_t *var, ...);
-
-/**
- * @brief Restore variables from a `NULL`-terminated list.
- * @param[in] eeprom Pointer to `EEPROM_t` instance
- * @param[out] var First variable, the rest follow as arguments, `NULL` last
- * @return `OK` when every one was found, `ERR` when any is absent
- */
-status_t EEPROM_LoadList(EEPROM_t *eeprom, uint32_t *var, ...);
-
-/**
- * @brief Store a 64-bit variable as two entries keyed by `var` and `var + 4`.
- *   Not atomic: a power loss between the two writes leaves halves of different ages,
- *   which `EEPROM_Load64` cannot tell apart from a whole value.
- * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @param[in] var Variable
- * @return `OK` on success, `ERR` on a flash error
- */
-status_t EEPROM_Save64(EEPROM_t *eeprom, uint64_t *var);
-
-/**
- * @brief Restore a 64-bit variable, written only when both halves are found.
- * @param[in] eeprom Pointer to `EEPROM_t` instance
- * @param[out] var Variable
- * @return `OK` when found, `ERR` when either half is absent
- */
-status_t EEPROM_Load64(EEPROM_t *eeprom, uint64_t *var);
-
 // Float stored and read back as its raw bits
 status_t EEPROM_WriteF32(EEPROM_t *eeprom, uint32_t key, float value);
 float EEPROM_ReadF32(EEPROM_t *eeprom, uint32_t key, float default_value);
@@ -163,12 +115,6 @@ status_t CACHE_Init(EEPROM_t *eeprom);
 status_t CACHE_Clear(void);
 status_t CACHE_Write(uint32_t key, uint32_t value);
 uint32_t CACHE_Read(uint32_t key, uint32_t default_value);
-status_t CACHE_Save(uint32_t *var);
-status_t CACHE_Load(uint32_t *var);
-status_t CACHE_SaveList(uint32_t *var, ...);
-status_t CACHE_LoadList(uint32_t *var, ...);
-status_t CACHE_Save64(uint64_t *var);
-status_t CACHE_Load64(uint64_t *var);
 status_t CACHE_WriteF32(uint32_t key, float value);
 float CACHE_ReadF32(uint32_t key, float default_value);
 

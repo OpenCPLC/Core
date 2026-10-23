@@ -19,6 +19,8 @@
   #include "test.h"
 #endif
 
+USART_TypeDef HostUsart[8];
+
 //----------------------------------------------------------------------------------- Console setup
 #if defined(HOST_TEST)
 
@@ -107,6 +109,10 @@ static void console_drain(UART_t *uart)
 status_t UART_Init(UART_t *uart)
 {
   if(!uart->buff) return ERR;
+  if(uart->dir) {
+    uart->dir->mode = GPIO_Mode_Output;
+    GPIO_Init(uart->dir);
+  }
   BUFF_Init(uart->buff);
   console_init();
   uart->_init = true;
@@ -137,21 +143,33 @@ bool UART_IsFree(UART_t *uart) { return !uart->_tx_busy; }
 
 //-------------------------------------------------------------------------------------------- Send
 
-status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len)
+// Bytes on the line: kept for the test and handed to its device, or out on the console
+static void line_put(UART_t *uart, const uint8_t *data, uint16_t len)
 {
-  if(!uart->_init) return ERR;
-  if(uart->_tx_busy) return BUSY;
-  uart->_tx_busy = true;
   #ifdef HOST_TEST
   uint16_t room = sizeof(uart->_sent) - uart->_sent_len;
   uint16_t kept = len < room ? len : room;
   memcpy(uart->_sent + uart->_sent_len, data, kept);
   uart->_sent_len += kept;
+  if(uart->_Line) uart->_Line(uart->_ctx, data, len);
   _TEST_Output(uart, data, len);
   #else
   fwrite(data, 1, len, stdout);
   fflush(stdout);
   #endif
+}
+
+// As on the chip: nothing to send is refused, `dir` set for the bytes, `prefix` ahead of them
+status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len)
+{
+  if(!uart->_init) return ERR;
+  if(uart->_tx_busy) return BUSY;
+  if(!len) return ERR;
+  uart->_tx_busy = true;
+  if(uart->dir) GPIO_Set(uart->dir);
+  if(uart->prefix) line_put(uart, &uart->prefix, 1);
+  line_put(uart, data, len);
+  if(uart->dir) GPIO_Rst(uart->dir);
   uart->_tx_busy = false;
   return OK;
 }
@@ -207,6 +225,12 @@ uint16_t UART_HostSent(UART_t *uart, uint8_t *data)
   if(data) memcpy(data, uart->_sent, len);
   uart->_sent_len = 0;
   return len;
+}
+
+void UART_HostAttach(UART_t *uart, UART_HostLine_t Line, void *ctx)
+{
+  uart->_Line = Line;
+  uart->_ctx = ctx;
 }
 
 #endif

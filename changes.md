@@ -2,6 +2,13 @@
 
 Release history of **OpenCPLC Core**, newest first.
 
+### `0.6.1` PDB + M24x
+
+- **PDB** format `1` with page headers, older bases read as none
+- EEPROM only by key, values saved by address read as none
+- **JRN** record with event data
+- **M24x** driver, I2C master on host
+
 ### `0.6.0` Tests
 
 - **Tests** on computer with `make test`, chip flash modeled in `hal/host`

@@ -37,6 +37,14 @@
 status_t FLASH_Erase(uint16_t page);
 
 /**
+ * @brief Erase a page through a whole cycle, also one reading blank:
+ *   after an erase cut late it reads blank but holds no program until erased whole.
+ * @param[in] page Page index
+ * @return `OK` on success, `ERR` on a flash error or a page still holding data
+ */
+status_t FLASH_EraseFull(uint16_t page);
+
+/**
  * @brief Address of a byte inside a page.
  * @param[in] page Page index
  * @param[in] offset Byte offset inside the page

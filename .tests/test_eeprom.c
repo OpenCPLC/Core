@@ -1,8 +1,10 @@
 // .tests/test_eeprom.c
+
 // EEPROM emulation on the host flash: the newest value of a key wins,
 // through rewrites of the halves and power cycles alike.
-// After a power cut at any flash cycle of a write, before it or halfway through it,
+// After a power cut at any flash cycle of a write, wherever in it,
 // every other key reads as it was and the key in flight its old value or the new one.
+// A rewrite erases its target whole, also a page an erase cut late left reading blank.
 
 // A G081: 128kB of flash in pages of 2kB
 #define FLASH_PAGE_SIZE 2048
@@ -83,26 +85,13 @@ static void reserved_keys_refused(void)
   }
 }
 
-// Variables keyed by their own address: a load writes only what it found,
-// a list reports the one missing, 64-bit and float values come back bit for bit.
-static void variables_come_back_by_address(void)
+// A float comes back bit for bit, one never written as its default
+static void floats_come_back_bit_for_bit(void)
 {
   FLASH_HostBlank();
   power_up();
-  static uint32_t speed = 1500, limit = 80, unsaved = 7;
-  static uint64_t energy = 0x0123456789ABCDEFull;
-  TEST_Check(EEPROM_SaveList(&eeprom, &speed, &limit, NULL) == OK);
-  TEST_Check(EEPROM_Save64(&eeprom, &energy) == OK);
   TEST_Check(EEPROM_WriteF32(&eeprom, 5, -0.15625f) == OK);
-  speed = limit = 0;
-  energy = 0;
   power_up();
-  TEST_Check(EEPROM_LoadList(&eeprom, &speed, &limit, &unsaved, NULL) == ERR, "one never saved");
-  TEST_Equal(speed, 1500, "first of the list");
-  TEST_Equal(limit, 80, "second of the list");
-  TEST_Equal(unsaved, 7, "variable never saved keeps its value");
-  TEST_Check(EEPROM_Load64(&eeprom, &energy) == OK);
-  TEST_Equal(energy, 0x0123456789ABCDEFull, "both halves of a 64-bit variable");
   TEST_Equal(EEPROM_ReadF32(&eeprom, 5, 0.0f), -0.15625f, "float");
   TEST_Equal(EEPROM_ReadF32(&eeprom, 6, 2.5f), 2.5f, "float never written, the default");
 }
@@ -119,6 +108,47 @@ static void clear_forgets_everything(void)
   power_up();
   TEST_Equal(EEPROM_Read(&eeprom, 1, ABSENT), ABSENT, "cleared after a power cycle");
   TEST_Equal(EEPROM_Read(&eeprom, 2, ABSENT), 42, "write after the clear");
+}
+
+// 600 writes over keys 1 to 4, rewrites among them, then a power-up:
+// every key reads the last of its writes.
+static void writes_get_through(void)
+{
+  for(uint32_t i = 0; i < 600; i++) {
+    TEST_Check(EEPROM_Write(&eeprom, i % 4 + 1, i) == OK, "write:%u", i);
+  }
+  power_up();
+  for(uint32_t key = 1; key <= 4; key++) {
+    TEST_Check(EEPROM_Read(&eeprom, key, ABSENT) == 595 + key, "key:%u", key);
+  }
+}
+
+static void erase_page_a(void) { FLASH_EraseFull(FLASH_PAGES - pages); }
+
+// A clear erases its pages whole, also one an erase cut late left reading blank
+static void clear_erases_every_page_whole(void)
+{
+  FLASH_HostBlank();
+  power_up();
+  FLASH_HostCut(0, FLASH_Cut_Late, erase_page_a);
+  power_up();
+  TEST_Check(EEPROM_Clear(&eeprom) == OK);
+  writes_get_through();
+}
+
+static void clear_store(void) { EEPROM_Clear(&eeprom); }
+
+// A clear cut late leaves A reading blank beside an empty B, as a fresh store:
+// its keys are gone, and the first write erases A whole before it lands.
+static void store_cleared_late_takes_writes(void)
+{
+  FLASH_HostBlank();
+  power_up();
+  for(uint32_t i = 0; i < 10; i++) TEST_Check(EEPROM_Write(&eeprom, i % 4 + 1, i) == OK);
+  FLASH_HostCut(0, FLASH_Cut_Late, clear_store);
+  power_up();
+  TEST_Equal(EEPROM_Read(&eeprom, 1, ABSENT), ABSENT, "cleared");
+  writes_get_through();
 }
 
 // A slot that refuses its write is skipped: the value lands one slot on
@@ -194,6 +224,23 @@ static void rewrite_clears_its_target(void)
   }
   power_up();
   TEST_Equal(EEPROM_Read(&eeprom, 4, ABSENT), 599, "newest write, past the rewrite");
+}
+
+// First page of the half a rewrite goes to: the one not taking writes
+static void erase_target_page(void)
+{
+  FLASH_EraseFull(FLASH_PAGES - pages + (eeprom._active == EEPROM_Storage_A ? pages / 2 : 0));
+}
+
+// A target an erase cut late left reading blank, short of a full erase:
+// the rewrite erases it whole before it writes there, and every key gets through.
+static void rewrite_erases_its_target_whole(void)
+{
+  FLASH_HostBlank();
+  power_up();
+  FLASH_HostCut(0, FLASH_Cut_Late, erase_target_page);
+  power_up();
+  writes_get_through();
 }
 
 // A store whose marker aged unreadable goes on: no source stands behind it to take its place
@@ -311,16 +358,18 @@ static void sweep_survives(FLASH_Cut_t where)
 static void write_survives_a_cut(void) { sweep_survives(FLASH_Cut_Before); }
 static void write_survives_a_torn_cut(void) { sweep_survives(FLASH_Cut_Unreadable); }
 static void write_survives_a_miscorrected_cut(void) { sweep_survives(FLASH_Cut_Corrected); }
+static void write_survives_an_unstable_cut(void) { sweep_survives(FLASH_Cut_Unstable); }
+static void write_survives_a_late_cut(void) { sweep_survives(FLASH_Cut_Late); }
 
 // Power-up over the flash `FLASH_HostSave` kept, cut at every cycle of its recovery,
-// anywhere in the cycle: the power-up after each keeps the keys
+// anywhere in the cycle: the power-up after each keeps the keys.
 static void recovery_cut_everywhere(uint32_t cut, uint32_t done)
 {
   uint32_t before = FLASH_HostCycles();
   power_up();
   uint32_t recovery = FLASH_HostCycles() - before;
   for(uint32_t again = 0; again < recovery; again++) {
-    for(FLASH_Cut_t where = FLASH_Cut_Before; where <= FLASH_Cut_Corrected; where++) {
+    for(FLASH_Cut_t where = FLASH_Cut_Before; where <= FLASH_Cut_Late; where++) {
       FLASH_HostRestore();
       FLASH_HostCut((int32_t)again, where, power_up);
       power_up();
@@ -335,7 +384,7 @@ static void recovery_survives_a_cut(void)
 {
   uint32_t total = sweep_cycles();
   for(uint32_t cut = 0; cut <= total; cut++) {
-    for(FLASH_Cut_t where = FLASH_Cut_Before; where <= FLASH_Cut_Corrected; where++) {
+    for(FLASH_Cut_t where = FLASH_Cut_Before; where <= FLASH_Cut_Late; where++) {
       FLASH_HostBlank();
       power_up();
       FLASH_HostCut((int32_t)cut, where, sweep_writes);
@@ -376,15 +425,19 @@ static void cleared_target_spares_the_log(void)
   }
 }
 
-// Halves of one page each, as ectra and Ediphor run the store: the BEGIN tag and the marker
-// of a rewrite target share a page, and a cut clear of it can take one without the other
+// Halves of one page each, as ectra and Ediphor run the store:
+// the BEGIN tag and the marker of a rewrite target share a page,
+// and a cut clear of it can take one without the other.
 static void one_page_halves_survive_cuts(void)
 {
   pages = 2;
   aged_marker_taken_over();
+  rewrite_erases_its_target_whole();
   write_survives_a_cut();
   write_survives_a_torn_cut();
   write_survives_a_miscorrected_cut();
+  write_survives_an_unstable_cut();
+  write_survives_a_late_cut();
   recovery_survives_a_cut();
   cleared_target_spares_the_log();
   pages = 4;
@@ -397,17 +450,22 @@ void TEST_Cases(void)
   TEST(newest_value_wins);
   TEST(rewrites_keep_every_key);
   TEST(reserved_keys_refused);
-  TEST(variables_come_back_by_address);
+  TEST(floats_come_back_bit_for_bit);
   TEST(clear_forgets_everything);
+  TEST(clear_erases_every_page_whole);
+  TEST(store_cleared_late_takes_writes);
   TEST(refused_slot_skipped);
   TEST(aged_slot_kept);
   TEST(corrected_newest_slot_dropped);
   TEST(unreadable_newest_slot_dropped);
   TEST(rewrite_clears_its_target);
+  TEST(rewrite_erases_its_target_whole);
   TEST(aged_marker_taken_over);
   TEST(write_survives_a_cut);
   TEST(write_survives_a_torn_cut);
   TEST(write_survives_a_miscorrected_cut);
+  TEST(write_survives_an_unstable_cut);
+  TEST(write_survives_a_late_cut);
   TEST(recovery_survives_a_cut);
   TEST(cleared_target_spares_the_log);
   TEST(one_page_halves_survive_cuts); // last: a miss there leaves `pages` at two
