@@ -1,7 +1,7 @@
 // lib/std/xdef.h
 
-#define ON  1 // Enabled
-#define OFF 0 // Disabled
+#define ON  1  // Enabled
+#define OFF 0  // Disabled
 
 #ifndef XDEF_H_
 #define XDEF_H_
@@ -10,20 +10,21 @@
 #include <math.h>
 #include "main.h"
 
-// Linker script and makefile come from Forge; this Core needs those of 0.4.8 or newer
-#if !defined(FORGE_VERSION) || FORGE_VERSION < 408
-  #error "Core needs Forge 0.4.8 or newer: opencplc -u, then opencplc <project>"
+// Linker script and makefile come from Forge; this Core needs those of 0.5.1 or newer:
+// the 16 bytes of the bootloader report in RAM and the bootloader built under the image.
+#if !defined(FORGE_VERSION) || FORGE_VERSION < 501
+  #error "Core needs Forge 0.5.1 or newer: opencplc -u, then opencplc <project>"
 #endif
 
 //------------------------------------------------------------------------------------------ Status
 
 // `OK`, `FREE` and `IDLE` share value `0`: a function reports the one that fits
 typedef enum {
-  OK   = 0, // Operation finished
-  FREE = 0, // Resource available
-  IDLE = 0, // Nothing to do
-  ERR  = 1, // Error occurred
-  BUSY = 2  // Resource busy
+  OK   = 0,  // Operation finished
+  FREE = 0,  // Resource available
+  IDLE = 0,  // Nothing to do
+  ERR  = 1,  // Error occurred
+  BUSY = 2   // Resource busy
 } status_t;
 
 //------------------------------------------------------------------------------------------- Float
@@ -189,7 +190,7 @@ typedef enum {
 
 // Absolute value for any arithmetic type. Signed integers saturate at the type minimum
 // (`INT_MIN` gives `INT_MAX`), so the negation never overflows.
-// Typed helpers behind the dispatch: the compiler checks the unselected branches too
+// Typed helpers behind the dispatch: the compiler checks the unselected branches too.
 static inline signed char _absv_sc(signed char v)
 {
   return v == SCHAR_MIN ? SCHAR_MAX : (v < 0 ? -v : v);
@@ -289,7 +290,7 @@ static inline unsigned long long _absv_ull(unsigned long long v) { return v; }
   { (err) = (fn); if(err) { log_fn(msg); (err) = (code); break; } }
 
 // Break out of a `do { } while(0)` chain on failure: `(err, fn)` keeps the status,
-// `(err, fn, code)` overrides it with `code`, `(err, fn, code, log_fn, msg)` logs first
+// `(err, fn, code)` overrides it with `code`, `(err, fn, code, log_fn, msg)` logs first.
 #define try_break(...) _args5(__VA_ARGS__, _try5, _try3, _try3, _try2)(__VA_ARGS__)
 
 //-------------------------------------------------------------------------------------------------

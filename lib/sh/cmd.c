@@ -7,7 +7,7 @@
 #include "rtc.h"
 #include "xstring.h"
 #if(CMD_BOOT)
-  #include "boot.h"
+  #include "bld.h"
 #endif
 
 //------------------------------------------------------------------------------------------- State
@@ -74,8 +74,7 @@ void CMD_SetActivity(void (*Activity)(void)) { cmd.Activity = Activity; }
 
 //------------------------------------------------------------------------------------------ Errors
 
-static void wrong_command(const char *name)
-{
+static void wrong_command(const char *name) {
   LOG_Warning("Wrong " ANSI_ORANGE "%s" ANSI_END " command usage", name);
 }
 
@@ -131,10 +130,7 @@ static MBB_t *mbb_find(const char *name)
   return NULL;
 }
 
-static void mbb_denied(void)
-{
-  LOG_Warning("MBB %s access denied", CmdMbb->name);
-}
+static void mbb_denied(void) { LOG_Warning("MBB %s access denied", CmdMbb->name); }
 
 // Arm a binary transfer of `packages` frames into the active buffer
 static void mbb_receive(STREAM_t *stream, uint16_t packages, const char *verb)
@@ -483,7 +479,7 @@ bool CMD_Step(STREAM_t *stream)
     case HASH_Rtc: cmd_rtc(argv, argc); return true;
     case HASH_Alarm: cmd_alarm(argv, argc); return true;
     #if(CMD_BOOT)
-    case HASH_Boot: BOOT_Bash(argv, argc); return true;
+    case HASH_Boot: BLD_Bash(argv, argc); return true;
     #endif
     #if(STREAM_ADDRESS)
     case HASH_Addr: cmd_addr(argv, argc, stream); return true;

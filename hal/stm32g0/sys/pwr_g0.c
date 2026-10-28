@@ -3,17 +3,13 @@
 #include "pwr.h"
 
 #include "adc.h"
+#include "flash.h"
 
 //--------------------------------------------------------------------------------------- Constants
 
 #define IWDG_KEY_REFRESH 0xAAAAu
 #define IWDG_KEY_ACCESS  0x5555u
 #define IWDG_KEY_START   0xCCCCu
-
-#define FLASH_KEY1    0x45670123u
-#define FLASH_KEY2    0xCDEF89ABu
-#define FLASH_OPTKEY1 0x08192A3Bu
-#define FLASH_OPTKEY2 0x4C5D6E7Fu
 
 //------------------------------------------------------------------------------------------- Remap
 
@@ -113,7 +109,7 @@ void RCC_EnableRNG(void) { RCC->AHBENR |= RCC_AHBENR_RNGEN; }
 #ifdef USB_DRD_FS
 void RCC_EnableUSB(void)
 {
-  // `CRS_CFGR` reset selects USB SOF with `48 MHz` reload.
+  // `CRS_CFGR` reset selects USB SOF with `48 MHz` reload
   RCC->CR |= RCC_CR_HSI48ON;
   while(!(RCC->CR & RCC_CR_HSI48RDY));
   RCC->CCIPR2 &= ~RCC_CCIPR2_USBSEL; // `00` = `HSI48`
@@ -128,7 +124,7 @@ void RCC_EnableUSB(void)
 uint32_t RCC_GetClock(void) { return SystemCoreClock; }
 
 // Wait-state count, not a bit mask: the header's `FLASH_ACR_LATENCY_0/1/2` are masks.
-// Raised before the clock and lowered after it
+// Raised before the clock and lowered after it.
 static void set_flash_latency(uint32_t freq_Hz)
 {
   uint32_t latency;
@@ -198,7 +194,7 @@ uint32_t RCC_2MHz(void)
   RCC->APBENR1 |= RCC_APBENR1_PWREN;
   set_hsi(3);
   set_flash_latency(2000000);
-  // Low-power run comes last, it caps the frequency further still.
+  // Low-power run comes last, it caps the frequency further still
   PWR->CR1 |= PWR_CR1_LPR;
   while(!(PWR->SR2 & PWR_SR2_REGLPF));
   return SystemCoreClock;
@@ -319,7 +315,7 @@ void IWDG_Init_ms(uint32_t timeout_ms)
 }
 
 // `RMVF` clears every reset flag at once: latched on the first read, so `IWDG_WasReset`
-// and `BOR_WasReset` do not clobber each other
+// and `BOR_WasReset` do not clobber each other.
 static uint32_t rst_csr;
 static bool rst_latched;
 
@@ -340,7 +336,7 @@ bool IWDG_WasReset(void) { return (rst_flags() & RCC_CSR_IWDGRSTF) != 0; }
 BOR_Level_t BOR_GetLevel(void)
 {
   // `BOR_EN` plus 2-bit rising and falling level fields: the portable level is the
-  // register level plus one when enabled, `BOR_Level_1V7` otherwise
+  // register level plus one when enabled, `BOR_Level_1V7` otherwise.
   if(!(FLASH->OPTR & FLASH_OPTR_BOR_EN)) return BOR_Level_1V7;
   uint32_t lv = (FLASH->OPTR & FLASH_OPTR_BORR_LEV) >> FLASH_OPTR_BORR_LEV_Pos;
   return (BOR_Level_t)(lv + 1);
@@ -350,17 +346,6 @@ status_t BOR_SetLevel(BOR_Level_t level)
 {
   if(level > BOR_Level_2V8) level = BOR_Level_2V8;
   if(BOR_GetLevel() == level) return OK; // no flash wear, no reset
-  while(FLASH->SR & FLASH_SR_BSY1) __DSB();
-  if(FLASH->CR & FLASH_CR_LOCK) {
-    FLASH->KEYR = FLASH_KEY1;
-    FLASH->KEYR = FLASH_KEY2;
-    if(FLASH->CR & FLASH_CR_LOCK) return ERR;
-  }
-  if(FLASH->CR & FLASH_CR_OPTLOCK) {
-    FLASH->OPTKEYR = FLASH_OPTKEY1;
-    FLASH->OPTKEYR = FLASH_OPTKEY2;
-    if(FLASH->CR & FLASH_CR_OPTLOCK) return ERR;
-  }
   uint32_t optr = FLASH->OPTR;
   optr &= ~(FLASH_OPTR_BOR_EN | FLASH_OPTR_BORR_LEV | FLASH_OPTR_BORF_LEV);
   if(level != BOR_Level_1V7) {
@@ -368,11 +353,7 @@ status_t BOR_SetLevel(BOR_Level_t level)
     optr |= FLASH_OPTR_BOR_EN;
     optr |= (lv << FLASH_OPTR_BORR_LEV_Pos) | (lv << FLASH_OPTR_BORF_LEV_Pos);
   }
-  FLASH->OPTR = optr;
-  FLASH->CR |= FLASH_CR_OPTSTRT;
-  while(FLASH->SR & FLASH_SR_BSY1) __DSB();
-  FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads the option bytes, a system reset
-  while(1) __DSB();
+  return FLASH_OptionWrite(&FLASH->OPTR, optr);
 }
 
 // No dedicated BOR flag on this family, a brown-out reports as `PWRRSTF`

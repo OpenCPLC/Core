@@ -2,6 +2,14 @@
 
 Release history of **OpenCPLC Core**, newest first.
 
+### `0.6.2` One bootloader
+
+- **Bootloader** built by Forge with each image, from its `boot.h`
+- Keys, power hold and board variant in `boot.h`
+- **BLD** driver in place of `boot`, settings stay `BOOT_`
+- Folders renamed to `drv/`, `bin/` and `plc/io/`
+- Projects need Forge 0.5.1
+
 ### `0.6.1` PDB + M24x
 
 - **PDB** format `1` with page headers, older bases read as none

@@ -17,6 +17,8 @@
 #define FLASH_START_ADDR 0x08000000u
 #define FLASH_KEY1 0x45670123u
 #define FLASH_KEY2 0xCDEF89ABu
+#define FLASH_OPTKEY1 0x08192A3Bu
+#define FLASH_OPTKEY2 0x4C5D6E7Fu
 
 // `CFGBSY` holds while the control register is being taken over, a write during it is lost.
 // The second bank of the dual-bank parts reports on `BSY2`, its pages start at 128.
@@ -37,17 +39,20 @@
 #endif
 
 // Busy bit and page-number field move between families, the error set does not.
-// `PROGERR` reports a write into a location that was not erased
+// `PROGERR` reports a write into a location that was not erased.
 #define FLASH_ERR_FLAGS (FLASH_SR_OPERR | FLASH_SR_PROGERR | FLASH_SR_WRPERR | \
   FLASH_SR_PGAERR | FLASH_SR_SIZERR | FLASH_SR_PGSERR | \
   FLASH_SR_MISERR | FLASH_SR_FASTERR | FLASH_SR_RDERR)
 #define FLASH_CLR_FLAGS (FLASH_SR_EOP | FLASH_ERR_FLAGS)
 
+// Start and end page of a WRP area, as wide as the pages of a bank need
+#define FLASH_WRP_FIELDS (FLASH_WRP1BR_WRP1B_STRT_Msk | FLASH_WRP1BR_WRP1B_END_Msk)
+
 //---------------------------------------------------------------------------------------- Internal
 
 #if defined(STM32WB)
 // The CPU2 stack stretches its radio timing around erases when told ahead; the real
-// send lives in `wpan_wb.c`, a build without the radio keeps this stub
+// send lives in `wpan_wb.c`, a build without the radio keeps this stub.
 __attribute__((weak)) void WPAN_FlashEraseActivity(bool active)
 {
   unused(active);
@@ -169,12 +174,12 @@ static volatile bool ecc_failed;
 
 // A read the current buffer or the WB data cache serves checks nothing: RM0444 and RM0434,
 // "a new read at the failing address may not generate an ECC error". So a check reads with
-// the data cache off, after this doubleword moved the current buffer off the caller's last one
+// the data cache off, after this doubleword moved the current buffer off the caller's last one.
 static const volatile uint64_t ecc_spare = 0x5A5A5A5A5A5A5A5Aull;
 
 // `flag` set in either ECC register, `ECC2R` has the flags at the bits of `ECCR`.
 // Inside the window it is the read's, whatever address the register holds: cleared just before
-// the load, and after a reset that cut a program or an erase the address can be wrong (errata)
+// the load, and after a reset that cut a program or an erase the address can be wrong (errata).
 static bool ecc_flagged(uint32_t flag)
 {
   if(FLASH->ECCR & flag) return true;
@@ -194,7 +199,7 @@ static void ecc_clear(void)
 }
 
 // Doublewords of the range read once each in the window, `data` (`NULL` = skip) taking
-// the bytes of the range from those very reads
+// the bytes of the range from those very reads.
 static status_t ecc_copy(uint32_t addr, uint8_t *data, uint32_t size, bool *corrected)
 {
   if(corrected) *corrected = false;
@@ -282,7 +287,7 @@ status_t FLASH_Write(uint32_t addr, uint32_t data1, uint32_t data2)
   FLASH->CR &= ~FLASH_CR_PG;
   if(flash_finish()) return ERR;
   // Read back through ECC: a plain read takes the line of the data cache along, and with it
-  // a neighbour a cut tore
+  // a neighbour a cut tore.
   if(FLASH_Copy(addr, word, 8, NULL)) return ERR;
   return word[0] == data1 && word[1] == data2 ? OK : ERR;
 }
@@ -323,7 +328,7 @@ status_t FLASH_WritePage(uint16_t page, const uint8_t *data)
   uint32_t addr = FLASH_GetAddress(page, 0);
   #if defined(STM32WB)
   // A row program breaks on every CPU2 fetch and ends in `MISERR`, and the radio core
-  // outlives a CPU1 reset, so the page goes in double words, the way the EEPROM writes
+  // outlives a CPU1 reset, so the page goes in double words, the way the EEPROM writes.
   for(uint32_t i = 0; i < FLASH_PAGE_SIZE; i += 8) {
     const uint32_t *d = (const uint32_t *)(data + i);
     if(FLASH_Write(addr + i, d[0], d[1])) return ERR;
@@ -334,6 +339,54 @@ status_t FLASH_WritePage(uint16_t page, const uint8_t *data)
   }
   #endif
   return OK;
+}
+
+//----------------------------------------------------------------------------------------- Options
+
+status_t FLASH_OptionWrite(volatile uint32_t *reg, uint32_t value)
+{
+  // The options are rewritten through an erase of their pages, which CPU2 hears of ahead
+  WPAN_FlashEraseActivity(true);
+  if(flash_unlock()) {
+    WPAN_FlashEraseActivity(false);
+    return ERR;
+  }
+  if(FLASH->CR & FLASH_CR_OPTLOCK) {
+    FLASH->OPTKEYR = FLASH_OPTKEY1;
+    FLASH->OPTKEYR = FLASH_OPTKEY2;
+  }
+  if(!(FLASH->CR & FLASH_CR_OPTLOCK)) {
+    FLASH->SR = FLASH_CLR_FLAGS;
+    *reg = value;
+    FLASH->CR |= FLASH_CR_OPTSTRT;
+    flash_wait();
+    // A refused write keeps the old option bytes: a reset would only start the same write again
+    if(!(FLASH->SR & FLASH_ERR_FLAGS)) {
+      FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads the option bytes, a system reset
+      while(1) __DSB();
+    }
+  }
+  flash_finish();
+  WPAN_FlashEraseActivity(false);
+  return ERR;
+}
+
+status_t FLASH_Protect(uint16_t first, uint16_t last)
+{
+  if(first > last || last >= FLASH_PAGES) return ERR;
+  volatile uint32_t *area = &FLASH->WRP1BR;
+  #if defined(STM32G0C1xx)
+  // The second bank has areas of its own, counting pages from its first one
+  if((first > 127) != (last > 127)) return ERR;
+  if(first > 127) {
+    area = &FLASH->WRP2BR;
+    first -= 128;
+    last -= 128;
+  }
+  #endif
+  uint32_t range = ((uint32_t)last << FLASH_WRP1BR_WRP1B_END_Pos) | first;
+  if((*area & FLASH_WRP_FIELDS) == range) return OK; // no flash wear, no reset
+  return FLASH_OptionWrite(area, (*area & ~FLASH_WRP_FIELDS) | range);
 }
 
 //-------------------------------------------------------------------------------------------------

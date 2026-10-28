@@ -10,7 +10,7 @@
 #include "test.h"
 #include "i2c_master.h"
 #include "task.h"
-#include "dvr/temp/sht4x.c"
+#include "drv/temp/sht4x.c"
 
 // Two samples the sensor gives in turn: 25.0°C and 56.5%RH, then 16.25°C and 25.25%RH
 static const uint8_t SAMPLES[2][6] = {

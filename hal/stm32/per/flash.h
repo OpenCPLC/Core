@@ -22,10 +22,20 @@
 #elif defined(STM32WB)
   #define FLASH_PAGE_SIZE 0x1000u // 4KB
   // Pages of CPU1: they end where the secure flash of CPU2, its radio stack and FUS, begins,
-  // at page `SFSA`, unless `FSD` turns that security off
+  // at page `SFSA`, unless `FSD` turns that security off.
   #define FLASH_PAGES ((uint16_t)(FLASH->SFR & FLASH_SFR_FSD ? \
     FLASH_SIZE / FLASH_PAGE_SIZE : FLASH->SFR & FLASH_SFR_SFSA))
 #endif
+
+// OTP: doublewords `FLASH_Write` programs once and `FLASH_Copy` reads through ECC like flash,
+// which no erase reaches, a mass erase of a readout regression included.
+// The G0 header leaves its address out, RM0444 gives it.
+#if defined(STM32G0)
+  #define FLASH_OTP_BASE 0x1FFF7000u
+#elif defined(STM32WB)
+  #define FLASH_OTP_BASE OTP_AREA_BASE
+#endif
+#define FLASH_OTP_SIZE 1024u // 128 doublewords
 
 //--------------------------------------------------------------------------------------------- API
 
@@ -148,6 +158,28 @@ status_t FLASH_Save(uint16_t page, const uint8_t *data, uint16_t size);
  * @return Record size [B], `0` when the page holds none
  */
 uint16_t FLASH_Load(uint16_t page, uint8_t *data);
+
+/**
+ * @brief Write an option register and load the option bytes, which resets the chip.
+ *   Not for RDP, whose change takes a power-on reset instead and which `opencplc --lock` sets.
+ * @param[in] reg Option register of `FLASH`, such as `&FLASH->OPTR`
+ * @param[in] value New value of the register
+ * @return `ERR` when flash or its options stay locked or the write is refused;
+ *   no return otherwise, the chip resets
+ */
+status_t FLASH_OptionWrite(volatile uint32_t *reg, uint32_t value);
+
+/**
+ * @brief Protect pages `first` to `last` against erase and write through area B of their bank,
+ *   for code and programmer alike, from the reset that loads it.
+ *   Area A stays for the bootloader, which `opencplc --lock` protects,
+ *   and `opencplc --lock 0` takes both off.
+ * @param[in] first First page
+ * @param[in] last Last page, in the bank of `first`
+ * @return `OK` when area B holds this range already, `ERR` on pages past flash or over two banks
+ *   and on a refused write; no return otherwise, the chip resets
+ */
+status_t FLASH_Protect(uint16_t first, uint16_t last);
 
 //-------------------------------------------------------------------------------------------------
 #endif

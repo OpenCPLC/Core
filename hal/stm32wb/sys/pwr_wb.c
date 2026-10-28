@@ -3,6 +3,7 @@
 #include "pwr.h"
 
 #include "adc.h"
+#include "flash.h"
 #include "hsem_wb.h"
 
 //--------------------------------------------------------------------------------------- Constants
@@ -10,11 +11,6 @@
 #define IWDG_KEY_REFRESH 0xAAAAu
 #define IWDG_KEY_ACCESS  0x5555u
 #define IWDG_KEY_START   0xCCCCu
-
-#define FLASH_KEY1    0x45670123u
-#define FLASH_KEY2    0xCDEF89ABu
-#define FLASH_OPTKEY1 0x08192A3Bu
-#define FLASH_OPTKEY2 0x4C5D6E7Fu
 
 // System clock source, the `SW` and `SWS` fields
 #define RCC_SW_MSI 0u
@@ -109,7 +105,7 @@ void RCC_EnableRNG(void) { RCC->AHB3ENR |= RCC_AHB3ENR_RNGEN; }
 void RCC_EnableUSB(void)
 {
   // The CPU2 stack stops HSI48 once its RNG runs dry; holding the CLK48 semaphore
-  // for the whole USB lifetime keeps the clock in CPU1 hands
+  // for the whole USB lifetime keeps the clock in CPU1 hands.
   HSEM_Wait(HSEM_CLK48);
   // `CRS_CFGR` reset selects USB SOF with the `48 MHz` reload
   RCC->CRRCR |= RCC_CRRCR_HSI48ON;
@@ -321,7 +317,7 @@ status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
     NVIC->ICPR[i] = 0xFFFFFFFFu;
   }
   // The thread switch and the tick are system handlers, out of reach of the controller:
-  // either one left pending turns `WFI` into a plain instruction
+  // either one left pending turns `WFI` into a plain instruction.
   SCB->ICSR = SCB_ICSR_PENDSVCLR_Msk | SCB_ICSR_PENDSTCLR_Msk;
   // Configure CPU2's reset-state selection before it is ever booted. Otherwise its
   // Stop0 reset value caps the system at Stop0 even though CPU1 asks for Shutdown.
@@ -405,7 +401,7 @@ void IWDG_Init_ms(uint32_t timeout_ms)
 }
 
 // `RMVF` clears every reset flag at once: latched on the first read, so `IWDG_WasReset`
-// and `BOR_WasReset` do not clobber each other
+// and `BOR_WasReset` do not clobber each other.
 static uint32_t rst_csr;
 static bool rst_latched;
 
@@ -433,25 +429,9 @@ status_t BOR_SetLevel(BOR_Level_t level)
 {
   if(level > BOR_Level_2V8) level = BOR_Level_2V8;
   if(BOR_GetLevel() == level) return OK; // no flash wear, no reset
-  while(FLASH->SR & (FLASH_SR_BSY | FLASH_SR_CFGBSY)) __DSB();
-  if(FLASH->SR & FLASH_SR_PESD) return ERR; // CPU2 holds the flash
-  if(FLASH->CR & FLASH_CR_LOCK) {
-    FLASH->KEYR = FLASH_KEY1;
-    FLASH->KEYR = FLASH_KEY2;
-    if(FLASH->CR & FLASH_CR_LOCK) return ERR;
-  }
-  if(FLASH->CR & FLASH_CR_OPTLOCK) {
-    FLASH->OPTKEYR = FLASH_OPTKEY1;
-    FLASH->OPTKEYR = FLASH_OPTKEY2;
-    if(FLASH->CR & FLASH_CR_OPTLOCK) return ERR;
-  }
   uint32_t optr = FLASH->OPTR & ~FLASH_OPTR_BOR_LEV;
   optr |= (uint32_t)level << FLASH_OPTR_BOR_LEV_Pos;
-  FLASH->OPTR = optr;
-  FLASH->CR |= FLASH_CR_OPTSTRT;
-  while(FLASH->SR & FLASH_SR_BSY) __DSB();
-  FLASH->CR |= FLASH_CR_OBL_LAUNCH; // reloads the option bytes, a system reset
-  while(1) __DSB();
+  return FLASH_OptionWrite(&FLASH->OPTR, optr);
 }
 
 bool BOR_WasReset(void) { return (rst_flags() & RCC_CSR_BORRSTF) != 0; }
