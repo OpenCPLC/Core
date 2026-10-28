@@ -15,7 +15,6 @@
 #define PRO_PLC true
 #define PRO_FLASH_kB 492
 #define PRO_RAM_kB 144
-#define PRO_BOOT false
 #define PRO_OPT_LEVEL "Og"
 
 #endif

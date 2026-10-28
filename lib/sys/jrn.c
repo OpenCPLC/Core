@@ -13,10 +13,11 @@
 
 static PDB_t *jrn;
 
-static bool code_filter(const void *record, void *ctx)
-{
+#if(PDB_QUERY)
+static bool code_filter(const void *record, void *ctx) {
   return ((const JRN_t *)record)->code == *(uint16_t *)ctx;
 }
+#endif
 
 // RTC unix timestamp, `0` while the clock is not set: a tick restarts from zero at every boot
 static uint32_t time_now(void)
@@ -54,6 +55,9 @@ status_t JRN_Delete(void)
   return PDB_Delete(jrn);
 }
 
+// Reading back takes the queries of PDB, which a build without them, a bootloader, leaves out
+#if(PDB_QUERY)
+
 uint32_t JRN_Select(const PDB_Query_t *query, MBB_t *mbb)
 {
   mbb->size = 0;
@@ -84,6 +88,8 @@ uint32_t JRN_Count(const PDB_Query_t *query)
 {
   return PDB_Count(jrn, query);
 }
+
+#endif
 
 void JRN_GetTimestamp(MBB_t *mbb)
 {

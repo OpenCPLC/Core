@@ -23,11 +23,11 @@ jobs:
         with:
           python-version: "3.12"
       # Forge pinned, so a red run speaks about Core
-      - run: pip install opencplc==0.5.0
+      - run: pip install opencplc==0.5.1
       - uses: actions/cache@v4
         with:
           path: ~/AppData/Local/OpenCPLC
-          key: opencplc-tools-0.5.0
+          key: opencplc-tools-0.5.1
       # make from Forge's tools, as a new console finds it
       - run: echo "$LOCALAPPDATA\OpenCPLC\make" >> "$GITHUB_PATH"
       # a folder with `main.h` is a project, any other one helps the tests

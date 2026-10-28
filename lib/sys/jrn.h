@@ -61,6 +61,8 @@ status_t JRN_Insert(uint16_t code, uint16_t data);
  */
 status_t JRN_Delete(void);
 
+#if(PDB_QUERY)
+
 /**
  * @brief Select journal records matching query into MBB buffer.
  * Caller `query.filter` is honored (not overridden).
@@ -88,6 +90,8 @@ uint32_t JRN_SelectCode(const PDB_Query_t *query, uint16_t code, MBB_t *mbb);
  * @return Number of matching records
  */
 uint32_t JRN_Count(const PDB_Query_t *query);
+
+#endif
 
 /**
  * @brief Compact buffer: extract only timestamps from journal records.

@@ -12,8 +12,8 @@
 #include "test.h"
 #include "flash.c"
 #include "eeprom.c"
-#include "plc/per/din.c"
-#include "plc/per/dout.c"
+#include "plc/io/din.c"
+#include "plc/io/dout.c"
 
 #define PAGE 56 // first of the four pages of the store
 

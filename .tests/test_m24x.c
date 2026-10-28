@@ -14,7 +14,7 @@
 #include "gpio.h"
 #include "i2c_master.h"
 #include "task.h"
-#include "dvr/mem/m24x.c"
+#include "drv/mem/m24x.c"
 
 // Part of the family: its descriptor by the preset, its datasheet values for the model
 typedef struct {

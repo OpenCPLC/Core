@@ -2,6 +2,7 @@
 
 #include "wpan_wb.h"
 
+#include <stddef.h>
 #include <string.h>
 
 #include "stm32wbxx.h"
@@ -124,7 +125,7 @@ static void mm_flush(void)
 }
 
 // The mask register is shared with the IPCC interrupts and the interrupted
-// read-modify-write of a thread would restore their stale bits
+// read-modify-write of a thread would restore their stale bits.
 static void c1mr_clear(uint32_t mask)
 {
   uint32_t primask = __get_PRIMASK();
@@ -200,7 +201,7 @@ static void ble_event(WPAN_EvtPacket_t *packet)
   }
   uint8_t next = (uint8_t)((wpan.event_head + 1) % WPAN_EVENT_LIMIT);
   if(next == wpan.event_tail) {
-    // A dropped event still goes back to the pool, a leaked one would starve the CPU2.
+    // A dropped event still goes back to the pool, a leaked one would starve the CPU2
     wpan.errors++;
     mm_release(packet);
     return;
@@ -233,7 +234,7 @@ static void tx_handler(void *arg)
   uint32_t unmasked = (~IPCC->C1MR) >> 16;
   uint32_t idle = ~IPCC->C1TOC2SR;
   if((idle & WPAN_CH_SYS) && (unmasked & WPAN_CH_SYS)) {
-    // The response overwrote the command in `sys_cmd_buffer`, no list header this time.
+    // The response overwrote the command in `sys_cmd_buffer`, no list header this time
     IPCC->C1MR |= WPAN_CH_SYS << 16;
     wpan.sys_done = true;
   }
@@ -246,7 +247,7 @@ static void tx_handler(void *arg)
 
 //-------------------------------------------------------------------------------------------- Wait
 
-// Cooperative wait shared by every command: the response comes from interrupt context.
+// Cooperative wait shared by every command: the response comes from interrupt context
 static bool wait_flag(volatile bool *flag, uint32_t timeout_ms)
 {
   uint64_t deadline = tick_keep(timeout_ms);
@@ -285,7 +286,7 @@ static status_t radio_clocks(void)
 
 status_t WPAN_Start(IRQ_Priority_t priority)
 {
-  // CPU2 finds the reference table through the `IPCCDBA` option byte.
+  // CPU2 finds the reference table through the `IPCCDBA` option byte
   uint32_t ipccdba = FLASH->IPCCBR & FLASH_IPCCBR_IPCCDBA;
   if((uint32_t)&ref_table != SRAM2A_BASE + (ipccdba << 2)) return ERR;
   if(radio_clocks()) return ERR;
@@ -388,7 +389,8 @@ uint8_t WPAN_SysCmd(uint16_t opcode, const void *param, uint8_t len)
   if(!wait_flag(&wpan.sys_done, WPAN_CMD_TIMEOUT_ms)) return 0xFF;
   // The response starts at the packet type, the list header is not rewritten
   WPAN_Evt_t *evt = (WPAN_Evt_t *)(&sys_cmd_buffer.type + 1);
-  return ((WPAN_CcEvt_t *)evt->payload)->payload[0];
+  // Status, the first return parameter, read in place: the whole event would reach past the buffer
+  return evt->payload[offsetof(WPAN_CcEvt_t, payload)];
 }
 
 uint8_t WPAN_BleStackInit(uint16_t attributes, uint16_t services, uint16_t values)

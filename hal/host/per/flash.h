@@ -23,7 +23,7 @@
 
 #ifndef FLASH_PAGES
   // Pages of CPU1, as its driver reads them: the size register on G0,
-  // on WB55 up to the radio stack, which the BLE stack of a Nucleo starts at page 208
+  // on WB55 up to the radio stack, which the BLE stack of a Nucleo starts at page 208.
   #if defined(STM32G081xx)
     #define FLASH_PAGES 64
   #elif defined(STM32WB55xx)
@@ -40,7 +40,9 @@
 
 //--------------------------------------------------------------------------------------- Constants
 
-#define FLASH_BASE 0x08000000u // where the chip maps its flash
+#define FLASH_BASE 0x08000000u      // where the chip maps its flash
+#define FLASH_OTP_BASE 0x1FFF7000u  // and its OTP, on G0 and WB alike
+#define FLASH_OTP_SIZE 1024u        // 128 doublewords, written once, never erased
 
 //--------------------------------------------------------------------------------------------- API
 
@@ -62,6 +64,8 @@
 // - an erase cut late leaves its page reading erased, its cells short of a full erase:
 //   they hold no program until the page is erased whole
 // - a bit flipped by age ECC corrects, two it cannot read, see `FLASH_HostAge`
+// - OTP takes its doublewords as flash does, once each, and no erase reaches it;
+//   a host application keeps none of it between runs
 // A host application keeps its pages in `FLASH_DIR` between runs.
 // A test owns the chip in RAM and cuts the power where it wants, see `FLASH_HostCut`.
 
@@ -203,14 +207,15 @@ typedef enum {
 
 #if defined(HOST_TEST)
 
-// Whole flash erased and nothing written, a board fresh from the factory
+// Whole flash erased and nothing written, OTP blank too: a board fresh from the factory
 void FLASH_HostBlank(void);
 
-// What a programmer does: the pages under the bytes erased, every byte written, `0xFF` too
+// What a programmer does: the pages under the bytes erased, every byte written, `0xFF` too;
+// in OTP the bytes written over what is there, as a test sets it up.
 void FLASH_HostProgram(uint32_t addr, const uint8_t *data, uint32_t len);
 
 // Bits of the written doubleword at `addr` flipped by age, until its erase:
-// ECC corrects one and the doubleword reads as written, two it cannot read
+// ECC corrects one and the doubleword reads as written, two it cannot read.
 void FLASH_HostAge(uint32_t addr, uint8_t bits);
 
 // Erase and program cycles done since the start, the points a power cut lands at
