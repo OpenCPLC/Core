@@ -2,6 +2,10 @@
 
 Release history of **OpenCPLC Core**, newest first.
 
+### `0.6.3` BACnet
+
+- **BACnet** MS/TP server and client on RS485
+
 ### `0.6.2` One bootloader
 
 - **Bootloader** built by Forge with each image, from its `boot.h`
