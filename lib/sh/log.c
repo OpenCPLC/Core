@@ -71,8 +71,7 @@ static void print_int(va_list *args, array_t *ary, uint8_t base, bool sign, bool
     return;
   }
   int64_t nbr;
-  if(base == 2) nbr = (uint8_t)va_arg(*args, int);
-  else if(long_int) nbr = va_arg(*args, int64_t);
+  if(long_int) nbr = va_arg(*args, int64_t);
   else nbr = sign ? va_arg(*args, int32_t) : (int64_t)va_arg(*args, uint32_t);
   DBG_Int(nbr, base, sign, fill_zero + (digits_only && sign && nbr < 0 ? 1 : 0), fill_space);
 }
