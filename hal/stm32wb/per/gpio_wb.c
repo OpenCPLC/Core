@@ -36,25 +36,21 @@ void GPIO_BackendWakeup(GPIO_t *gpio)
 
 //---------------------------------------------------------------------------------------- EXTI IRQ
 
+// The vector clears the pending bit of its line before calling, so no `PR1` check here
 static void exti_irq_handler(EXTI_t *exti)
 {
-  uint32_t mask = 1u << exti->pin;
-  // WB has combined pending register PR1
-  if(EXTI->PR1 & mask) {
-    EXTI->PR1 = mask; // Write 1 to clear
-    // Determine edge from current pin state
-    bool level = (exti->port->IDR >> exti->pin) & 1;
-    exti->_state = level;
-    if(level) {
-      exti->_rise_cnt++;
-      if(exti->RiseHandler) exti->RiseHandler(exti->rise_arg);
-    }
-    else {
-      exti->_fall_cnt++;
-      if(exti->FallHandler) exti->FallHandler(exti->fall_arg);
-    }
-    if(exti->oneshot) EXTI_Off(exti);
+  // Determine edge from current pin state
+  bool level = (exti->port->IDR >> exti->pin) & 1;
+  exti->_state = level;
+  if(level) {
+    exti->_rise_cnt++;
+    if(exti->RiseHandler) exti->RiseHandler(exti->rise_arg);
   }
+  else {
+    exti->_fall_cnt++;
+    if(exti->FallHandler) exti->FallHandler(exti->fall_arg);
+  }
+  if(exti->oneshot) EXTI_Off(exti);
 }
 
 //---------------------------------------------------------------------------------------- EXTI API

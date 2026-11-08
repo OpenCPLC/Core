@@ -49,6 +49,11 @@
   #define WPAN_BLE_LINKS 1
 #endif
 
+#ifndef WPAN_HSE_STARTUP
+  // Start-up time of the board HSE crystal [625/256µs], `0x148` ≈ 800µs fits the Nucleo one
+  #define WPAN_HSE_STARTUP 0x148
+#endif
+
 //------------------------------------------------------------------------------------------- Types
 
 typedef enum {
@@ -100,7 +105,7 @@ uint8_t WPAN_BleStackInit(uint16_t attributes, uint16_t services, uint16_t value
 
 /**
  * @brief Send one HCI or ACI command and wait for its response.
- *   One command at a time: call only from the thread that owns the BLE channel.
+ *   Commands from several threads wait for each other, one in flight at a time.
  * @param[in] opcode Command opcode
  * @param[in] param Command parameters, may be `NULL` when `len` is `0`
  * @param[in] len Parameter length [B]
@@ -113,9 +118,9 @@ uint8_t WPAN_BleCmd(uint16_t opcode, const uint8_t *param, uint8_t len,
   uint8_t *rsp, uint8_t limit, uint8_t *rsp_len);
 
 /**
- * @brief Take oldest pending asynchronous BLE event.
+ * @brief Take oldest pending asynchronous BLE event, release it with `WPAN_BleEventDone`.
  * @return Event bytes: `[0]` packet type, `[1]` event code, `[2]` payload length,
- *   `[3..]` payload; `NULL` when nothing is pending. Release with `WPAN_BleEventDone`.
+ *   `[3..]` payload; `NULL` when nothing is pending
  */
 uint8_t *WPAN_BleEvent(void);
 
@@ -126,8 +131,9 @@ void WPAN_BleEventDone(uint8_t *event);
 uint16_t WPAN_Errors(void);
 
 /**
- * @brief Tell the CPU2 that flash erases begin or ended, so the radio stretches
- *   its timing around them. A quiet no-op before the mailbox runs.
+ * @brief Tell the CPU2 that flash erases begin or ended,
+ *   so the radio stretches its timing around them.
+ *   A quiet no-op before the mailbox runs.
  * @param[in] active `true` ahead of the erases, `false` after the last one
  */
 void WPAN_FlashEraseActivity(bool active);

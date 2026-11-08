@@ -96,7 +96,7 @@ uint16_t CRC_Append(const CRC_t *crc, uint8_t *data, uint16_t count)
   return count;
 }
 
-status_t CRC_Error(const CRC_t *crc, uint8_t *data, uint16_t count)
+status_t CRC_Error(const CRC_t *crc, const uint8_t *data, uint16_t count)
 {
   // `count` spans the frame including its checksum, shorter would wrap the subtraction
   if(count < crc->width / 8) return ERR;

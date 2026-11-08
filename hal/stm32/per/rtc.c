@@ -252,6 +252,10 @@ status_t RTC_Init(void)
   NVIC_EnableIRQ(RTC_TAMP_IRQn);
   NVIC_SetPriority(RTC_TAMP_IRQn, RTC_IRQ_PRIORITY);
   #elif defined(STM32WB)
+  // Alarms reach the core through EXTI line 17 and the wakeup timer through line 19.
+  // Both lines stay masked after reset, so they are opened here on the rising edge.
+  EXTI->RTSR1 |= EXTI_RTSR1_RT17 | EXTI_RTSR1_RT19;
+  EXTI->IMR1 |= EXTI_IMR1_IM17 | EXTI_IMR1_IM19;
   NVIC_ClearPendingIRQ(RTC_WKUP_IRQn);
   NVIC_EnableIRQ(RTC_WKUP_IRQn);
   NVIC_SetPriority(RTC_WKUP_IRQn, RTC_IRQ_PRIORITY);
@@ -654,7 +658,7 @@ void RTC_WKUP_IRQHandler(void)
     rtc_clear_flag(RTC_ISR_WUTF);
     rtc_wakeup_flag = true;
   }
-  EXTI->PR1 = EXTI_PR1_PIF20; // Clear EXTI line 20 (RTC Wakeup)
+  EXTI->PR1 = EXTI_PR1_PIF19; // Clear EXTI line 19 (RTC Wakeup)
   NVIC_ClearPendingIRQ(RTC_WKUP_IRQn);
 }
 #endif

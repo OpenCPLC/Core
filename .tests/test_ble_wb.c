@@ -1,4 +1,5 @@
 // .tests/test_ble_wb.c
+
 // GATT library `BLE_t` against the CPU2 mailbox model `WPAN_Host*`:
 // init command sequence with sizing and UUID layout, fault reporting per step,
 // connection lifecycle, client writes with truncation guards, CCCD bits,
@@ -400,6 +401,54 @@ static void advertising_statuses_and_limits(void)
   }
 }
 
+// Fresh instance on the shared characteristics, its start-up commands already taken
+static void probe_init(BLE_t *probe)
+{
+  WPAN_HostReset();
+  *probe = (BLE_t){ .name = "OpenCPLC", .chars = chars, .count = array_len(chars) };
+  memcpy(probe->uuid, ble.uuid, sizeof(probe->uuid));
+  init_responses();
+  TEST_Check(BLE_Init(probe) == OK);
+  while(cmd()) {}
+}
+
+static void refused_restart_retries(void)
+{
+  // One refusal of the stack must not leave the device unseen until a reset
+  static BLE_t probe;
+  probe_init(&probe);
+  static const uint8_t gone[4] = { 0, 0x40, 0, 0x13 };
+  WPAN_HostRespond(0x0C, NULL, 0);
+  event(0x05, gone, sizeof(gone));
+  TEST_Check(BLE_Step() && cmd() == 0xFC83 && cmd() == 0);
+  TEST_Check(!BLE_Step() && cmd() == 0, "no second attempt before the pause");
+  TEST_Run(BLE_ADV_RETRY_ms - 1);
+  TEST_Check(!BLE_Step() && cmd() == 0, "still waiting a tick before the pause ends");
+  TEST_Run(1);
+  TEST_Check(BLE_Step() && cmd() == 0xFC83, "attempt again once the pause is over");
+  while(cmd()) {}
+  TEST_Check(probe.adv_status.start == 0);
+  TEST_Check(!BLE_Step() && cmd() == 0, "accepted restart ends the attempts");
+}
+
+static void sleep_closes_the_api(void)
+{
+  // After the radio reset the database is gone, so nothing may reach the stack any more
+  static BLE_t probe;
+  probe_init(&probe);
+  static const uint8_t connect[19] = { 0x01, 0x00, 0x40, 0x00 };
+  event(0x3E, connect, sizeof(connect));
+  TEST_Check(BLE_Step() && BLE_IsConnected(&probe));
+  BLE_Sleep(&probe);
+  TEST_Check(cmd() == 0x0C03, "HCI reset parks the radio");
+  TEST_Check(!BLE_IsConnected(&probe));
+  static const uint8_t data[2] = { 1, 2 };
+  TEST_Check(BLE_Send(&probe, &chars[CH_REG], data, sizeof(data)) == ERR);
+  static const uint8_t gone[4] = { 0, 0x40, 0, 0x13 };
+  event(0x05, gone, sizeof(gone));
+  TEST_Check(!BLE_Step() && cmd() == 0, "no advertising restart after sleep");
+}
+
 void TEST_Cases(void)
 {
   TEST(faults_name_their_step);
@@ -409,4 +458,6 @@ void TEST_Cases(void)
   TEST(notify_and_indicate);
   TEST(timeout_and_disconnect);
   TEST(advertising_statuses_and_limits);
+  TEST(refused_restart_retries);
+  TEST(sleep_closes_the_api);
 }

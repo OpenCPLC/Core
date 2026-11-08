@@ -60,7 +60,7 @@ static node_t *list_pop(node_t *head)
 //----------------------------------------------------------------------------------- Shared memory
 
 // The reference table has to land where the `IPCCDBA` option byte points,
-// which the linker guarantees by putting `MAPPING_TABLE` first in `RAM_SHARED`
+// which the linker guarantees by putting `MAPPING_TABLE` first in `RAM_SHARED`.
 shared("MAPPING_TABLE") static volatile WPAN_RefTable_t ref_table;
 
 shared("MB_MEM1") static WPAN_DeviceInfoTable_t device_info_table;
@@ -86,8 +86,8 @@ shared("MB_MEM2") static WPAN_CmdPacket_t sys_cmd_buffer;
 shared("MB_MEM2") static WPAN_CmdPacket_t ble_cmd_buffer;
 shared("MB_MEM2") static WPAN_AclPacket_t ble_acl_buffer;
 // Command status events land here, command completes reuse `ble_cmd_buffer`
-shared("MB_MEM2") static uint8_t ble_cs_buffer[sizeof(WPAN_Header_t) +
-  WPAN_EVT_SERIAL_SIZE + sizeof(WPAN_CsEvt_t)];
+shared("MB_MEM2") static uint8_t ble_cs_buffer[
+  sizeof(WPAN_Header_t) + WPAN_EVT_SERIAL_SIZE + sizeof(WPAN_CsEvt_t)];
 shared("MB_MEM2") static WPAN_EvtPacket_t ble_spare_buffer;
 shared("MB_MEM2") static uint8_t evt_pool[WPAN_POOL_SIZE];
 
@@ -96,7 +96,10 @@ shared("MB_MEM2") static uint8_t evt_pool[WPAN_POOL_SIZE];
 static struct {
   volatile WPAN_Fw_t fw;         // reported by the ready event
   volatile bool ready;
+  volatile bool sys_busy;        // system command in flight, sent from any thread
   volatile bool sys_done;        // system command response landed in `sys_cmd_buffer`
+  volatile bool sys_lost;        // that command timed out, the buffer is not ours
+  volatile bool ble_busy;        // BLE command in flight
   volatile bool ble_done;        // BLE command response parsed below
   volatile uint8_t ble_status;
   volatile uint8_t ble_rsp_len;
@@ -115,8 +118,8 @@ static node_t local_free_queue;
 
 //---------------------------------------------------------------------------------- Buffer release
 
-// The release channel flag can only be set while it is free, so a busy channel
-// defers the flush to its transmit-free interrupt.
+// The release channel flag can only be set while it is free,
+// so a busy channel defers the flush to its transmit-free interrupt.
 static void mm_flush(void)
 {
   while(!list_empty(&local_free_queue)) {
@@ -124,8 +127,8 @@ static void mm_flush(void)
   }
 }
 
-// The mask register is shared with the IPCC interrupts and the interrupted
-// read-modify-write of a thread would restore their stale bits.
+// The mask register is shared with the IPCC interrupts,
+// and the interrupted read-modify-write of a thread would restore their stale bits.
 static void c1mr_clear(uint32_t mask)
 {
   uint32_t primask = __get_PRIMASK();
@@ -134,8 +137,12 @@ static void c1mr_clear(uint32_t mask)
   __set_PRIMASK(primask);
 }
 
+// Thread and interrupt both release, so the check, the flush and the hand-over make one step:
+// split by the interrupt, the thread would append to a queue the CPU2 already owns.
 static void mm_release(WPAN_EvtPacket_t *packet)
 {
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
   list_push(&local_free_queue, (node_t *)packet);
   if(IPCC->C1TOC2SR & WPAN_CH_MM) {
     c1mr_clear(WPAN_CH_MM << 16); // flush on transmit-free
@@ -144,6 +151,7 @@ static void mm_release(WPAN_EvtPacket_t *packet)
     mm_flush();
     IPCC->C1SCR = WPAN_CH_MM << 16;
   }
+  __set_PRIMASK(primask);
 }
 
 //--------------------------------------------------------------------------------------- Interrupt
@@ -339,17 +347,23 @@ status_t WPAN_Start(IRQ_Priority_t priority)
   __SEV();
   __WFE();
   PWR->CR4 |= PWR_CR4_C2BOOT;
-  wpan.init = true;
   if(!wait_flag(&wpan.ready, WPAN_READY_TIMEOUT_ms)) return ERR;
+  // System commands wait for the CPU2 to answer, an erase before that goes without notice
+  wpan.init = true;
   if(wpan.fw == WPAN_Fw_Fus) {
-    // Any programmer contact leaves FUS engaged across resets; only the start command
-    // brings the stack back. No response comes: CPU2 restarts and reports ready again.
+    // FUS engaged by the programmer, a stack install or `-startfus`, survives resets,
+    // and only the start command brings the stack back.
+    // No response comes: CPU2 restarts and reports ready again,
+    // the channel flag stays set and the next command goes out over it.
+    wpan.sys_busy = true; // other threads wait out the restart
     wpan.ready = false;
     sys_cmd_buffer.type = WPAN_TYPE_SYS_CMD;
     sys_cmd_buffer.cmd.cmdcode = WPAN_FUS_START_WS;
     sys_cmd_buffer.cmd.plen = 0;
     IPCC->C1SCR = WPAN_CH_SYS << 16;
-    if(!wait_flag(&wpan.ready, WPAN_READY_TIMEOUT_ms)) return ERR;
+    bool restarted = wait_flag(&wpan.ready, WPAN_READY_TIMEOUT_ms);
+    wpan.sys_busy = false;
+    if(!restarted) return ERR;
   }
   return wpan.fw == WPAN_Fw_Wireless ? OK : ERR;
 }
@@ -379,6 +393,14 @@ uint16_t WPAN_Errors(void)
 uint8_t WPAN_SysCmd(uint16_t opcode, const void *param, uint8_t len)
 {
   if(!wpan.init) return 0xFF;
+  // One command at a time: the flash driver sends from whichever thread erases
+  while(wpan.sys_busy) let();
+  if(wpan.sys_lost) {
+    // The buffer belongs to the CPU2 until the late answer lands, refuse until then
+    if(IPCC->C1TOC2SR & WPAN_CH_SYS) return 0xFF;
+    wpan.sys_lost = false;
+  }
+  wpan.sys_busy = true;
   sys_cmd_buffer.type = WPAN_TYPE_SYS_CMD;
   sys_cmd_buffer.cmd.cmdcode = opcode;
   sys_cmd_buffer.cmd.plen = len;
@@ -386,11 +408,17 @@ uint8_t WPAN_SysCmd(uint16_t opcode, const void *param, uint8_t len)
   wpan.sys_done = false;
   IPCC->C1SCR = WPAN_CH_SYS << 16;
   c1mr_clear(WPAN_CH_SYS << 16);
-  if(!wait_flag(&wpan.sys_done, WPAN_CMD_TIMEOUT_ms)) return 0xFF;
-  // The response starts at the packet type, the list header is not rewritten
-  WPAN_Evt_t *evt = (WPAN_Evt_t *)(&sys_cmd_buffer.type + 1);
-  // Status, the first return parameter, read in place: the whole event would reach past the buffer
-  return evt->payload[offsetof(WPAN_CcEvt_t, payload)];
+  uint8_t status = 0xFF;
+  if(wait_flag(&wpan.sys_done, WPAN_CMD_TIMEOUT_ms)) {
+    // The response starts at the packet type, the list header is not rewritten
+    WPAN_Evt_t *evt = (WPAN_Evt_t *)(&sys_cmd_buffer.type + 1);
+    // Status, the first return parameter, read in place:
+    // the whole event would reach past the buffer.
+    status = evt->payload[offsetof(WPAN_CcEvt_t, payload)];
+  }
+  else wpan.sys_lost = true;
+  wpan.sys_busy = false;
+  return status;
 }
 
 uint8_t WPAN_BleStackInit(uint16_t attributes, uint16_t services, uint16_t values)
@@ -405,14 +433,15 @@ uint8_t WPAN_BleStackInit(uint16_t attributes, uint16_t services, uint16_t value
   // Prepare-write and memory block counts from the `ble_bufsize.h` formulas
   param.PrWriteListSize = (uint8_t)(div_ceil(WPAN_BLE_ATT_MTU, 23 - 5) * 2);
   param.MblockCount = (uint8_t)(param.PrWriteListSize +
-    div_ceil(WPAN_BLE_ATT_MTU + 4u, 32) + 1 + WPAN_BLE_LINKS +
+    div_ceil(WPAN_BLE_ATT_MTU + 4u, 32) + 1 +
+    WPAN_BLE_LINKS +
     (div_ceil(WPAN_BLE_ATT_MTU + 4u, 32) + 2) * WPAN_BLE_LINKS + 1);
   param.AttMtu = WPAN_BLE_ATT_MTU;
   param.PeripheralSca = 500;
   param.CentralSca = 0;
   param.LsSource = 0; // no calibration, SoC device, LSE
   param.MaxConnEventLength = 0xFFFFFFFFu;
-  param.HsStartupTime = 0x148; // ~800us, the Nucleo crystal
+  param.HsStartupTime = WPAN_HSE_STARTUP;
   param.ViterbiEnable = 1;
   param.Options = 0; // LL with host, service-change descriptor, name RW, no extended adv
   param.min_tx_power = -40;
@@ -435,11 +464,14 @@ uint8_t WPAN_BleCmd(uint16_t opcode, const uint8_t *param, uint8_t len,
 {
   if(rsp_len) *rsp_len = 0;
   if(!wpan.init) return 0xFF;
+  // One command at a time: `BLE_Sleep` sends from the application thread
+  while(wpan.ble_busy) let();
   if(wpan.ble_lost) {
     // The buffer belongs to the CPU2 until the late answer lands, refuse until then
     if(!wpan.ble_done) return 0xFF;
     wpan.ble_lost = false;
   }
+  wpan.ble_busy = true;
   ble_cmd_buffer.type = WPAN_TYPE_BLE_CMD;
   ble_cmd_buffer.cmd.cmdcode = opcode;
   ble_cmd_buffer.cmd.plen = len;
@@ -447,14 +479,16 @@ uint8_t WPAN_BleCmd(uint16_t opcode, const uint8_t *param, uint8_t len,
   wpan.ble_opcode = opcode;
   wpan.ble_done = false;
   IPCC->C1SCR = WPAN_CH_BLE << 16;
-  if(!wait_flag(&wpan.ble_done, WPAN_CMD_TIMEOUT_ms)) {
-    wpan.ble_lost = true;
-    return 0xFF;
+  uint8_t status = 0xFF;
+  if(wait_flag(&wpan.ble_done, WPAN_CMD_TIMEOUT_ms)) {
+    uint8_t copy = wpan.ble_rsp_len < limit ? wpan.ble_rsp_len : limit;
+    if(rsp && copy) memcpy(rsp, wpan.ble_rsp, copy);
+    if(rsp_len) *rsp_len = copy;
+    status = wpan.ble_status;
   }
-  uint8_t copy = wpan.ble_rsp_len < limit ? wpan.ble_rsp_len : limit;
-  if(rsp && copy) memcpy(rsp, wpan.ble_rsp, copy);
-  if(rsp_len) *rsp_len = copy;
-  return wpan.ble_status;
+  else wpan.ble_lost = true;
+  wpan.ble_busy = false;
+  return status;
 }
 
 uint8_t *WPAN_BleEvent(void)

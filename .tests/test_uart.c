@@ -3,6 +3,7 @@
 // UART of a test build: the bytes it sends go on the line as the chip puts them there,
 // kept for `UART_HostSent` and handed to the device on the line,
 // `prefix` ahead of every transfer, `dir` set while the bytes go and released after.
+// `UART_Receiving` counts the bytes of a frame the receiver timeout has not closed yet.
 
 #include "test.h"
 #include "uart.h"
@@ -62,10 +63,29 @@ static void dir_set_for_the_bytes(void)
   UART_HostSent(&port, NULL);
 }
 
+// Bytes of a frame count until the receiver timeout closes it, on a 76800 8N1 port
+static void receiving_counts_until_the_timeout(void)
+{
+  UART_t port = { .UART_76800, .buff = &rx };
+  TEST_Check(port.baud == 76800 && port.parity == UART_Parity_None &&
+    port.stop_bits == UART_StopBits_1, "preset 76800 8N1");
+  TEST_Check(!UART_Init(&port), "init");
+  TEST_Equal(UART_Receiving(&port), 0, "line quiet");
+  BUFF_Push(&rx, 0x55);
+  BUFF_Push(&rx, 0xFF);
+  TEST_Equal(UART_Receiving(&port), 2, "two bytes of a frame");
+  TEST_Equal(UART_Size(&port), 0, "frame still open");
+  BUFF_Break(&rx); // the receiver timeout
+  TEST_Equal(UART_Receiving(&port), 0, "timeout closed it");
+  TEST_Equal(UART_Size(&port), 2, "frame to read");
+  UART_Clear(&port);
+}
+
 //-------------------------------------------------------------------------------------------------
 
 void TEST_Cases(void)
 {
   TEST(prefix_goes_ahead_of_every_transfer);
   TEST(dir_set_for_the_bytes);
+  TEST(receiving_counts_until_the_timeout);
 }

@@ -68,6 +68,7 @@ static void integers_follow_printf(void)
   TEST_Equal(printed("%6.3d", 7), "   007", "width and precision");
   TEST_Equal(printed("%X|%04X", 0xBEEFu, 0xAu), "BEEF|000A", "hexadecimal");
   TEST_Equal(printed("%b|%08b", 5, 5), "101|00000101", "binary");
+  TEST_Equal(printed("%016b", 0xCAF0u), "1100101011110000", "binary past one byte");
   TEST_Equal(printed("%lld|%llu", INT64_MIN, UINT64_MAX),
     "-9223372036854775808|18446744073709551615", "64-bit");
   TEST_Equal(printed("%.3d", -7), "-007", "precision counts the digits, the sign comes on top");

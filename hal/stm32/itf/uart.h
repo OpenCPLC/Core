@@ -18,6 +18,7 @@
 #define UART_460800 baud = 460800, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_230400 baud = 230400, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_115200 baud = 115200, .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
+#define UART_76800  baud = 76800,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_57600  baud = 57600,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_38400  baud = 38400,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
 #define UART_19200  baud = 19200,  .parity = UART_Parity_None, .stop_bits = UART_StopBits_1
@@ -153,6 +154,9 @@ uint16_t UART_Read(UART_t *uart, uint8_t *data);
 char *UART_ReadString(UART_t *uart);
 bool UART_Skip(UART_t *uart);
 void UART_Clear(UART_t *uart);
+
+// Bytes of the frame still coming in, before the receiver timeout closes it
+uint16_t UART_Receiving(UART_t *uart);
 
 /**
  * @brief Time on the wire of a frame of `len` bytes plus the receiver timeout.

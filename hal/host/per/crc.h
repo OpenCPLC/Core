@@ -87,7 +87,7 @@ uint16_t CRC_Append(const CRC_t *crc, uint8_t *data, uint16_t count);
  * @param[in] count Total length including CRC bytes
  * @return `ERR` if mismatch, `OK` if valid
  */
-status_t CRC_Error(const CRC_t *crc, uint8_t *data, uint16_t count);
+status_t CRC_Error(const CRC_t *crc, const uint8_t *data, uint16_t count);
 
 /**
  * @brief Verify CRC at end of data.

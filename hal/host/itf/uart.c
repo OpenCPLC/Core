@@ -202,6 +202,12 @@ bool UART_Skip(UART_t *uart)
 
 void UART_Clear(UART_t *uart) { BUFF_Clear(uart->buff); }
 
+uint16_t UART_Receiving(UART_t *uart)
+{
+  console_drain(uart);
+  return uart->buff->_msg_counter;
+}
+
 // Frames waiting in the RX queue, the count `MODBUS_Loop` polls
 uint16_t UART_MessageCount(UART_t *uart) { return BUFF_MessageCount(uart->buff); }
 

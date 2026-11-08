@@ -258,6 +258,7 @@ uint16_t UART_Read(UART_t *uart, uint8_t *data) { return BUFF_Read(uart->buff, d
 char *UART_ReadString(UART_t *uart) { return BUFF_ReadString(uart->buff); }
 bool UART_Skip(UART_t *uart) { return BUFF_Skip(uart->buff); }
 void UART_Clear(UART_t *uart) { BUFF_Clear(uart->buff); }
+uint16_t UART_Receiving(UART_t *uart) { return uart->buff->_msg_counter; }
 
 //------------------------------------------------------------------------------------------- Utils
 
