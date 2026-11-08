@@ -38,6 +38,7 @@ typedef enum {
   BACNET_Unit_Amperes = 3,
   BACNET_Unit_Ohms = 4,
   BACNET_Unit_Volts = 5,
+  BACNET_Unit_VoltAmperes = 8,
   BACNET_Unit_KilowattHours = 19,
   BACNET_Unit_Hertz = 27,
   BACNET_Unit_PercentRelativeHumidity = 29,
@@ -94,6 +95,7 @@ typedef struct {
  * @param[in] version `Application_Software_Version`
  * @param[in] objects Object table
  * @param[in] object_count Objects in the table
+ * @param[out] requests Confirmed requests answered, the sign of a client talking to the device
  * Internal:
  * @param _revision `Database_Revision`, a CRC of the table
  * @param _asking A request of this device waits for its answer
@@ -114,6 +116,7 @@ typedef struct {
   const char *version;
   BACNET_Object_t *objects;
   uint16_t object_count;
+  uint32_t requests;
   // internal
   uint32_t _revision;
   bool _asking;

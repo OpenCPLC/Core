@@ -34,9 +34,19 @@ uint32_t RNG_Run(void)
 {
   #if defined(STM32WB)
   HSEM_Wait(HSEM_RNG); // the CPU2 wireless stack shares the peripheral
+  RNG->CR |= RNG_CR_RNGEN; // the CPU2 may leave the generator off after its turn
   #endif
-  while(!(RNG->SR & RNG_SR_DRDY)) __NOP();
-  uint32_t value = RNG->DR;
+  uint32_t value;
+  do {
+    // Seed error recovery from the reference manual:
+    // clear the flag, then discard the 12 words already in the pipeline.
+    if(RNG->SR & RNG_SR_SEIS) {
+      RNG->SR = ~RNG_SR_SEIS;
+      for(uint8_t i = 0; i < 12; i++) (void)RNG->DR;
+    }
+    while(!(RNG->SR & (RNG_SR_DRDY | RNG_SR_SEIS))) __NOP();
+    value = RNG->DR;
+  } while(RNG->SR & RNG_SR_SEIS); // a word read beside a seed error is not used
   #if defined(STM32WB)
   HSEM_Give(HSEM_RNG);
   #endif

@@ -5,6 +5,8 @@ Release history of **OpenCPLC Core**, newest first.
 ### `0.6.3` BACnet
 
 - **BACnet** MS/TP server and client on RS485
+- **BLE** pairing with PIN and encrypted link, `BLE_PIN_ENABLE`
+- BLE retries advertising after a refusal
 
 ### `0.6.2` One bootloader
 

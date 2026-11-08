@@ -689,6 +689,7 @@ static void confirmed(BACNET_t *bacnet, BACNET_Request_t *request, const BACNET_
   }
   MSTP_Reply(bacnet->mstp, buffer, out.len);
   heap_free(buffer);
+  bacnet->requests++;
 }
 
 // One frame from the link: a request to serve or an answer to a request of this device.

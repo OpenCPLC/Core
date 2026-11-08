@@ -242,6 +242,7 @@ static void examples_of_annex_f(void)
   answered(bytes_len("\x01\x00\x20\x59\x0F"), "SimpleACK");
   TEST_Check(objects[OBJ_Setpoint].value == 180.0f, "Setpoint 180");
   TEST_Check(objects[OBJ_Setpoint].update, "update raised");
+  TEST_Equal(device.requests, 2, "two requests answered");
 }
 
 //------------------------------------------------------------------------------------------ Who-Is
@@ -290,6 +291,7 @@ static void who_is_answered_at_the_token(void)
     }
     sent(MSTP_Type_Token, 6, NULL, 0, cases[i].what);
   }
+  TEST_Equal(device.requests, 0, "Who-Is is no confirmed request");
 }
 
 //-------------------------------------------------------------------------------------------- Read
@@ -635,6 +637,7 @@ static void confirmed_by_broadcast_unanswered(void)
   sent(MSTP_Type_ReplyPostponed, 1, NULL, 0, "to every network: the link postpones");
   TEST_Check(objects[OBJ_Setpoint].value == 55 && !objects[OBJ_Setpoint].update,
     "Setpoint untouched");
+  TEST_Equal(device.requests, 0, "requests left unanswered not counted");
 }
 
 //------------------------------------------------------------------------------------------ Client
