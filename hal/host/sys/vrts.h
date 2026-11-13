@@ -68,6 +68,8 @@ void sleep(uint32_t ms);
 
 /**
  * @brief Yield until a predicate holds or the time runs out.
+ * @note The predicate is read once more past the deadline,
+ * so one met while another thread held the processor is no timeout.
  * @param[in] ms Time limit [ms]
  * @param[in] Free Predicate, `true` when the wait is over
  * @param[in] subject Argument of `Free`

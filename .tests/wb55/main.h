@@ -2,13 +2,16 @@
 
 /**
  * @name  Project: .tests/wb55
- * @brief Compile test of Core for STM32WB55: every file the chip pulls in has to build and link.
+ * @brief Test of Core for STM32WB55 behind the bootloader of Core:
+ *        CI builds every file the chip pulls in, the board runs the cases of `main.c`.
  * @date  2026-10-08
  */
 #ifndef MAIN_H_
 #define MAIN_H_
 
 #include <xdef.h>
+
+#include "boot.h"
 
 #define PRO_BOARD_None
 #define PRO_CHIP_STM32WB55
@@ -22,3 +25,4 @@
 // Framework settings this project overrides, applied on every include
 #define LOG_LEVEL LOG_LEVEL_INF
 #define SYS_CLOCK_FREQ 16000000
+#define CMD_BOOT ON

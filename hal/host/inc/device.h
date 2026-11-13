@@ -8,9 +8,23 @@
 //-------------------------------------------------------------------------------------------------
 
 /**
- * Register blocks a host build compiles against. Only the fields the headers and the
- * drivers actually reach are here: a block is plain memory that reads back what was
- * written, which is all a peripheral can offer without silicon behind it.
+ * `hal/host` is the chip of a test build: a model answers as the hardware does,
+ * and a test checks the state it keeps, never the calls a module made.
+ * What a test reaches past the driver API is named like `FLASH_HostCut` and `UART_HostSent`.
+ * Logic of `hal/stm32*` sits in a file of its own beside the registers,
+ * and the twin here includes that file:
+ * logic written again for the host is a copy, and a test of a copy says nothing of the firmware,
+ * so a module moves its logic out at its next change.
+ * A thread loop and an interrupt get no model of VRTS or timers:
+ * the loop body is a step function, the handler a plain one, and a test calls both directly,
+ * which gives what fibers would at a fraction of the cost.
+ */
+
+/**
+ * Register blocks a host build compiles against.
+ * Only the fields the headers and the drivers reach are here:
+ * a block is plain memory that reads back what was written,
+ * which is all a peripheral can offer without silicon behind it.
  */
 
 #ifndef HOST_GPIO_PORTS

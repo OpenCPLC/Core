@@ -17,7 +17,10 @@
 
 //--------------------------------------------------------------------------------------------- API
 
-// Cases of a test program in run order, one `TEST(name)` each; the program defines it
+// The macros here are the whole set: a new one comes with a test that cannot be written without it
+
+// Cases of a test program in run order, one `TEST(name)` each; the program defines it.
+// A list and no constructors: GCC promises no order of them, and MinGW 16.1 runs them backwards.
 void TEST_Cases(void);
 
 /**
@@ -36,8 +39,9 @@ uint32_t TEST_Suite(void (*Cases)(void));
  * @brief Verdict: a miss prints the message with the condition, or the condition alone,
  *   and ends the case.
  * @param[in] cond Condition that has to hold
- * @param[in] ... Optional message: a format literal and its arguments, read by `printf`
- *   on the computer and by `print` on the chip, so `%d %u %x %s %c` mean the same on both
+ * @param[in] ... Optional message: a format literal and its arguments,
+ *   read by `printf` on the computer and by `print` on the chip,
+ *   so `%d %u %x %s %c` mean the same on both
  */
 #define TEST_Check(cond, ...) \
   _TEST_Check((cond), __FILE__, __LINE__, #cond, "" __VA_ARGS__)
@@ -83,6 +87,9 @@ uint32_t TEST_Suite(void (*Cases)(void));
 
 //-------------------------------------------------------------------------------------------- Host
 #if defined(HOST_TEST)
+
+// `HOST_TEST` is read by `hal/host` and this harness alone:
+// a test branch anywhere else in Core or in a project would check other code than the chip runs.
 
 // Firmware logged a line holding `text` since the case began or since the previous `TEST_Logged`
 #define TEST_Logged(text) _TEST_Logged((text), __FILE__, __LINE__)

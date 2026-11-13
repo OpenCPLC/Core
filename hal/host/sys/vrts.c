@@ -319,7 +319,8 @@ bool timeout(uint32_t ms, bool (*Free)(void *), void *subject)
     if(Free(subject)) return false;
     let();
   }
-  return true;
+  // Once more past the deadline: a condition met while another thread held the processor
+  return !Free(subject);
 }
 
 void delay_until(uint64_t *tick)

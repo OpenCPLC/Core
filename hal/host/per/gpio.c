@@ -6,10 +6,12 @@
 //-------------------------------------------------------------------------------------------------
 
 /**
- * A pin is one bit in `ODR` of its port, written by `GPIO_Set` and read by `GPIO_In`.
- * That much is kept because a pin that forgets its level is not a pin. Everything else
- * silicon gives a pad is accepted and dropped: no slew rate, no alternate function, and
- * no vector for an edge to arrive on, so a handler is never called.
+ * A pin is one bit in `ODR` of its port, written by `GPIO_Set` and read by `GPIO_In`,
+ * and `set` holds the level asked for, as the driver keeps it.
+ * That much is kept because a pin that forgets its level is not a pin.
+ * Everything else silicon gives a pad is accepted and dropped:
+ * no slew rate, no alternate function, and no vector for an edge to arrive on,
+ * so a handler is never called.
  */
 
 GPIO_TypeDef HostGpio[HOST_GPIO_PORTS];
@@ -52,12 +54,22 @@ void GPIO_Mode(GPIO_t *gpio, GPIO_Mode_t mode) { gpio->mode = mode; }
 void GPIO_ModeInput(GPIO_t *gpio) { gpio->mode = GPIO_Mode_Input; }
 void GPIO_ModeOutput(GPIO_t *gpio) { gpio->mode = GPIO_Mode_Output; }
 
-void GPIO_Set(GPIO_t *gpio) { level(gpio->port, gpio->pin, !gpio->reverse); }
-void GPIO_Rst(GPIO_t *gpio) { level(gpio->port, gpio->pin, gpio->reverse); }
+void GPIO_Set(GPIO_t *gpio)
+{
+  gpio->set = true;
+  level(gpio->port, gpio->pin, !gpio->reverse);
+}
+
+void GPIO_Rst(GPIO_t *gpio)
+{
+  gpio->set = false;
+  level(gpio->port, gpio->pin, gpio->reverse);
+}
 
 void GPIO_Tgl(GPIO_t *gpio)
 {
-  if(gpio->port) gpio->port->ODR ^= bit(gpio->pin);
+  if(gpio->set) GPIO_Rst(gpio);
+  else GPIO_Set(gpio);
 }
 
 bool GPIO_In(GPIO_t *gpio)

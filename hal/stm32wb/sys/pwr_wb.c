@@ -104,10 +104,10 @@ void RCC_EnableRNG(void) { RCC->AHB3ENR |= RCC_AHB3ENR_RNGEN; }
 
 void RCC_EnableUSB(void)
 {
-  // The CPU2 stack stops HSI48 once its RNG runs dry; holding the CLK48 semaphore
-  // for the whole USB lifetime keeps the clock in CPU1 hands.
+  // The CPU2 stack stops HSI48 once its RNG runs dry;
+  // holding the `HSEM_CLK48` semaphore for the whole USB lifetime keeps the clock in CPU1 hands.
   HSEM_Wait(HSEM_CLK48);
-  // `CRS_CFGR` reset selects USB SOF with the `48 MHz` reload
+  // `CRS_CFGR` reset selects USB SOF with the 48MHz reload
   RCC->CRRCR |= RCC_CRRCR_HSI48ON;
   while(!(RCC->CRRCR & RCC_CRRCR_HSI48RDY));
   RCC->CCIPR &= ~RCC_CCIPR_CLK48SEL; // `00` = `HSI48`
@@ -151,6 +151,8 @@ static void set_cpu2_prescaler(uint32_t freq_Hz)
 
 static uint32_t set_hsi16(void)
 {
+  // Range 1 ahead of the clock: range 2, left by `RCC_2MHz`, needs two wait states at 16MHz
+  set_voltage_scale(16000000);
   RCC->CR |= RCC_CR_HSION;
   while(!(RCC->CR & RCC_CR_HSIRDY));
   RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | (RCC_SW_HSI << RCC_CFGR_SW_Pos);
@@ -212,11 +214,11 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
   set_flash_latency(freq_Hz);
   RCC->CR &= ~RCC_CR_PLLON;
   while(RCC->CR & RCC_CR_PLLRDY);
-  RCC->PLLCFGR = ((m - 1) << RCC_PLLCFGR_PLLM_Pos) |
-    (n << RCC_PLLCFGR_PLLN_Pos) |
-    ((r - 1) << RCC_PLLCFGR_PLLR_Pos) |
-    RCC_PLLCFGR_PLLREN |
-    ((hse_Hz ? RCC_PLLSRC_HSE : RCC_PLLSRC_HSI) << RCC_PLLCFGR_PLLSRC_Pos);
+  RCC->PLLCFGR = ((m - 1) << RCC_PLLCFGR_PLLM_Pos)
+    | (n << RCC_PLLCFGR_PLLN_Pos)
+    | ((r - 1) << RCC_PLLCFGR_PLLR_Pos)
+    | RCC_PLLCFGR_PLLREN
+    | ((hse_Hz ? RCC_PLLSRC_HSE : RCC_PLLSRC_HSI) << RCC_PLLCFGR_PLLSRC_Pos);
   RCC->CR |= RCC_CR_PLLON;
   while(!(RCC->CR & RCC_CR_PLLRDY));
   set_cpu2_prescaler(freq_Hz); // the source above runs at 32MHz at most, the halving goes first
@@ -238,8 +240,6 @@ uint32_t RCC_2MHz(void)
 
 uint32_t RCC_16MHz(void)
 {
-  // Range 1 as after reset, raised ahead of the clock when it comes from 2MHz
-  set_voltage_scale(16000000);
   uint32_t freq_Hz = set_hsi16();
   set_cpu2_prescaler(freq_Hz);
   set_flash_latency(16000000);
@@ -303,12 +303,13 @@ void PWR_SetWakeup(PWR_WakeupPin_t pin, PWR_Edge_t edge)
 
 status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
 {
-  // AN5289 gives ownership of C2CR1 to CPU2 once C2BOOT is set. HCI reset only stops
-  // radio activity; it does not stop CPU2, whose Stop mode would keep LSI/IWDG alive.
+  // AN5289 gives ownership of `C2CR1` to CPU2 once `C2BOOT` is set.
+  // HCI reset only stops radio activity;
+  // it does not stop CPU2, whose Stop mode would keep LSI/IWDG alive.
   // The caller must reset first and arrive here while CPU2 is still held.
   if(PWR->CR4 & PWR_CR4_C2BOOT) return ERR;
-  // nRST_SHDW=0 deliberately converts Shutdown entry into a low-power security
-  // reset. Refuse it here so the boot hand-off cannot become a reset loop.
+  // `nRST_SHDW` at `0` deliberately converts Shutdown entry into a low-power security reset.
+  // Refuse it here so the boot hand-off cannot become a reset loop.
   if(!(FLASH->OPTR & FLASH_OPTR_nRST_SHDW)) return ERR;
   __disable_irq();
   SysTick->CTRL = 0;
@@ -319,23 +320,24 @@ status_t PWR_Shutdown(uint8_t wakeup_mask, uint8_t falling_mask)
   // The thread switch and the tick are system handlers, out of reach of the controller:
   // either one left pending turns `WFI` into a plain instruction.
   SCB->ICSR = SCB_ICSR_PENDSVCLR_Msk | SCB_ICSR_PENDSTCLR_Msk;
-  // Configure CPU2's reset-state selection before it is ever booted. Otherwise its
-  // Stop0 reset value caps the system at Stop0 even though CPU1 asks for Shutdown.
+  // Configure CPU2's reset-state selection before it is ever booted.
+  // Otherwise its Stop0 reset value caps the system at Stop0 even though CPU1 asks for Shutdown.
   PWR->C2CR1 = (PWR->C2CR1 & ~PWR_C2CR1_LPMS) | PWR_C2CR1_LPMS_2;
-  // Disable first and clear on both sides of the polarity/enable update. This avoids
-  // carrying a wake flag raised while the pin configuration was changing.
+  // Disable first and clear on both sides of the polarity/enable update.
+  // This avoids carrying a wake flag raised while the pin configuration was changing.
   PWR->CR3 &= ~PWR_CR3_EWUP;
   PWR->SCR = PWR_SCR_CWUF;
   PWR->CR4 = (PWR->CR4 & ~0x1Fu) | (falling_mask & 0x1Fu);
   PWR->CR3 = (PWR->CR3 & ~PWR_CR3_EWUP) | (wakeup_mask & 0x1Fu);
   PWR->SCR = PWR_SCR_CWUF;
-  // A probe may have left low-power debug enabled. On STM32WB that keeps enough of
-  // the domain alive for IWDG to run, producing the misleading "Shutdown then reset".
+  // A probe may have left low-power debug enabled.
+  // On STM32WB that keeps enough of the domain alive for IWDG to run,
+  // producing the misleading "Shutdown then reset".
   DBGMCU->CR &= ~(DBGMCU_CR_DBG_SLEEP | DBGMCU_CR_DBG_STOP | DBGMCU_CR_DBG_STANDBY);
   PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | PWR_CR1_LPMS_2;
   SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
-  // WFI is allowed to act as a NOP on a simultaneous debug/wakeup request. Shutdown
-  // is terminal, so never fall through into half-torn-down application code.
+  // `WFI` is allowed to act as a `NOP` on a simultaneous debug/wakeup request.
+  // Shutdown is terminal, so never fall through into half-torn-down application code.
   while(1) {
     __DSB();
     __WFI();
@@ -400,8 +402,8 @@ void IWDG_Init_ms(uint32_t timeout_ms)
   IWDG_Init((IWDG_Time_t)time, (uint16_t)reload);
 }
 
-// `RMVF` clears every reset flag at once: latched on the first read, so `IWDG_WasReset`
-// and `BOR_WasReset` do not clobber each other.
+// `RMVF` clears every reset flag at once:
+// latched on the first read, so `IWDG_WasReset` and `BOR_WasReset` do not clobber each other.
 static uint32_t rst_csr;
 static bool rst_latched;
 

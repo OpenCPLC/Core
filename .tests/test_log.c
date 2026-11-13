@@ -1,4 +1,5 @@
 // .tests/test_log.c
+
 // Log gate: a level under `LOG_LEVEL` folds the call away, arguments included,
 // a level at or above it prints the line once, critical and panic ones through the port.
 // Format of `print`: flags, widths and precisions as in `printf`, the extensions it lists,
@@ -69,6 +70,7 @@ static void integers_follow_printf(void)
   TEST_Equal(printed("%X|%04X", 0xBEEFu, 0xAu), "BEEF|000A", "hexadecimal");
   TEST_Equal(printed("%b|%08b", 5, 5), "101|00000101", "binary");
   TEST_Equal(printed("%016b", 0xCAF0u), "1100101011110000", "binary past one byte");
+  TEST_Equal(printed("%d|%u", INT32_MIN, UINT32_MAX), "-2147483648|4294967295", "32-bit limits");
   TEST_Equal(printed("%lld|%llu", INT64_MIN, UINT64_MAX),
     "-9223372036854775808|18446744073709551615", "64-bit");
   TEST_Equal(printed("%.3d", -7), "-007", "precision counts the digits, the sign comes on top");
@@ -82,6 +84,8 @@ static void floats_take_width_and_precision(void)
   TEST_Equal(printed("%7.2f", -3.14159), "  -3.14", "width");
   TEST_Equal(printed("%5.0f", 5.0), "    5", "width, no places");
   TEST_Equal(printed("%07.2f", -3.14159), "-003.14", "zero flag");
+  TEST_Equal(printed("%.1f|%.1f", 2.25, -2.25), "2.3|-2.3", "a half rounds away from zero");
+  TEST_Equal(printed("%f|%f", NaN, 1e30), "-|-", "beyond 64-bit integers, a dash");
 }
 
 // Characters, strings, booleans, a table entry and a pointer

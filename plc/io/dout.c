@@ -163,7 +163,6 @@ void DOUT_Rst(DOUT_t *dout)
   else {
     if(!dout->value) return;
     dout->value = false;
-    if(dout->relay) dout->_stun = tick_keep(DOUT_RELAY_STUN_ms);
   }
   save_value(dout);
 }
