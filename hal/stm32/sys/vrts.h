@@ -106,6 +106,8 @@ void sleep(uint32_t ms);
 
 /**
  * @brief Yield until the condition holds or `ms` pass.
+ * @note The condition is read once more past the deadline,
+ * so one met while another thread held the processor is no timeout.
  * @param[in] ms Timeout [ms]
  * @param[in] Free Callback returning `true` when the condition is met
  * @param[in] subject Pointer passed to `Free`

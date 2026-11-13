@@ -2,7 +2,15 @@
 
 Release history of **OpenCPLC Core**, newest first.
 
-### `0.6.3` BACnet
+### `0.6.4` Clocks
+
+- Fixed VRTS tick up to 20% fast
+- Fixed clock switch from `RCC_2MHz` on STM32G0 and STM32WB
+- Fixed relay release delayed by `DOUT_RELAY_STUN_ms`
+- Fixed `UART_ReInit` stalling after a finished send
+- Fixed `timeout` failing a wait met while another thread held the processor
+
+### `0.6.3` BACnet + PIN
 
 - **BACnet** MS/TP server and client on RS485
 - **BLE** pairing with PIN and encrypted link, `BLE_PIN_ENABLE`

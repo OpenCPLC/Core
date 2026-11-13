@@ -22,16 +22,16 @@ volatile VRTS_Task_t *vrts_next_thread;
 #if(VRTS_SWITCHING)
 
 #if(VRTS_THREAD_TIMEOUT_MS)
-  static uint32_t hold_timeout;         // longest hold [ticks]
-  static volatile uint32_t hold_ticker; // ticks left before `vrts_panic`
+  static uint32_t hold_timeout;          // longest hold [ticks]
+  static volatile uint32_t hold_ticker;  // ticks left before `vrts_panic`
 #endif
 
 typedef struct {
   VRTS_Task_t threads[VRTS_THREAD_LIMIT];
-  uint32_t i;            // active thread index
-  uint32_t count;        // thread count
-  volatile bool enabled; // switching enabled
-  volatile bool init;    // `vrts_init` done
+  uint32_t i;             // active thread index
+  uint32_t count;         // thread count
+  volatile bool enabled;  // switching enabled
+  volatile bool init;     // `vrts_init` done
 } VRTS_t;
 
 static VRTS_t vrts;
@@ -49,8 +49,8 @@ bool vrts_thread(void (*handler)(void), uint32_t *stack, uint16_t size)
   thread->handler = handler;
   #if defined(STM32WB)
   // M4 with FPU: 17 words = 8 hardware + 1 `EXC_RETURN` + 8 software-saved (r4-r11).
-  // `EXC_RETURN` 0xFFFFFFFD: thread mode, PSP, no FPU context (FPCA bit 4 clear).
-  // PendSV checks bit 4 to decide if lazy FPU state must be stacked on the next switch
+  // `EXC_RETURN` `0xFFFFFFFD`: thread mode, PSP, no FPU context (bit 4 set).
+  // PendSV checks bit 4 to decide if lazy FPU state must be stacked on the next switch.
   thread->stack = (uint32_t)(stack + size - 17);
   stack[size - 1] = (1 << 24); // XPSR: Thumb bit
   stack[size - 2] = (uint32_t)handler;
@@ -112,7 +112,9 @@ void let(void)
   #if(VRTS_THREAD_TIMEOUT_MS)
   hold_ticker = hold_timeout;
   #endif
-  SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+  // A plain write: `ICSR` reads back a pending SysTick,
+  // which `|=` would set pending again after the handler took it, so one tick would count twice.
+  SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
   __DSB();
 }
 
@@ -203,7 +205,8 @@ bool timeout(uint32_t ms, bool (*Free)(void *), void *subject)
     if(Free(subject)) return false;
     let();
   }
-  return true;
+  // Once more past the deadline: a condition met while another thread held the processor
+  return !Free(subject);
 }
 
 void delay_until(uint64_t *tick)

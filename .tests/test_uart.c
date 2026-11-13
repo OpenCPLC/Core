@@ -50,7 +50,7 @@ static void dir_set_for_the_bytes(void)
 {
   UART_t port = { .UART_9600, .buff = &rx, .dir = &dir, .prefix = 0x55 };
   dir.mode = GPIO_Mode_Input;
-  GPIO_Set(&dir);
+  dir.port->ODR |= 1u << dir.pin; // a pull-up holds the line high until init
   TEST_Check(UART_Init(&port) == OK, "init");
   TEST_Check(dir.mode == GPIO_Mode_Output && !GPIO_In(&dir), "output, released after init");
   line.len = 0;
@@ -67,8 +67,8 @@ static void dir_set_for_the_bytes(void)
 static void receiving_counts_until_the_timeout(void)
 {
   UART_t port = { .UART_76800, .buff = &rx };
-  TEST_Check(port.baud == 76800 && port.parity == UART_Parity_None &&
-    port.stop_bits == UART_StopBits_1, "preset 76800 8N1");
+  TEST_Check(port.baud == 76800 && port.parity == UART_Parity_None
+    && port.stop_bits == UART_StopBits_1, "preset 76800 8N1");
   TEST_Check(!UART_Init(&port), "init");
   TEST_Equal(UART_Receiving(&port), 0, "line quiet");
   BUFF_Push(&rx, 0x55);

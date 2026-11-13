@@ -2,7 +2,8 @@
 
 /**
  * @name  Project: .tests/g081
- * @brief Compile test of Core for STM32G081: every file the chip pulls in has to build and link.
+ * @brief Test of Core for STM32G081:
+ *        CI builds every file the chip pulls in, the board runs the cases of `main.c`.
  * @date  2026-10-08
  */
 #ifndef MAIN_H_

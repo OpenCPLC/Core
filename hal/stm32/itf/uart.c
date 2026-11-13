@@ -170,7 +170,7 @@ void UART_ReInit(UART_t *uart)
   uart->reg->CR1 &= ~(USART_CR1_TCIE | USART_CR1_RXNEIE_RXFNEIE | USART_CR1_RTOIE);
   uart->reg->CR2 &= ~USART_CR2_RTOEN;
   // A transfer in flight finishes first; the guards count iterations, not time
-  if(uart->_tc_pending || (uart->_dma.cha->CCR & DMA_CCR_EN)) {
+  if(uart->_tc_pending) {
     uint32_t guard = 1000000;
     while(!(uart->reg->ISR & USART_ISR_TC) && guard) {
       guard--;

@@ -109,7 +109,7 @@ void RCC_EnableRNG(void) { RCC->AHBENR |= RCC_AHBENR_RNGEN; }
 #ifdef USB_DRD_FS
 void RCC_EnableUSB(void)
 {
-  // `CRS_CFGR` reset selects USB SOF with `48 MHz` reload
+  // `CRS_CFGR` reset selects USB SOF with 48MHz reload
   RCC->CR |= RCC_CR_HSI48ON;
   while(!(RCC->CR & RCC_CR_HSI48RDY));
   RCC->CCIPR2 &= ~RCC_CCIPR2_USBSEL; // `00` = `HSI48`
@@ -136,8 +136,17 @@ static void set_flash_latency(uint32_t freq_Hz)
   while((FLASH->ACR & FLASH_ACR_LATENCY) != latency);
 }
 
+// Low-power run caps the clock at 2MHz, so it ends before any switch; `RCC_2MHz` enters it again
+static void lpr_exit(void)
+{
+  if(!(PWR->CR1 & PWR_CR1_LPR)) return;
+  PWR->CR1 &= ~PWR_CR1_LPR;
+  while(PWR->SR2 & PWR_SR2_REGLPF);
+}
+
 static uint32_t set_hsi(uint8_t div)
 {
+  lpr_exit();
   if(div > 7) div = 7;
   RCC->CR = (RCC->CR & ~RCC_CR_HSIDIV) | (div << RCC_CR_HSIDIV_Pos) | RCC_CR_HSION;
   while(!(RCC->CR & RCC_CR_HSIRDY));
@@ -150,6 +159,7 @@ static uint32_t set_hsi(uint8_t div)
 
 uint32_t RCC_SetHSE(uint32_t xtal_Hz)
 {
+  lpr_exit();
   RCC->CR |= RCC_CR_HSEON;
   while(!(RCC->CR & RCC_CR_HSERDY));
   RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_0;
@@ -176,11 +186,11 @@ uint32_t RCC_SetPLL(uint32_t hse_Hz, uint8_t m, uint8_t n, uint8_t r)
   set_flash_latency(freq_Hz);
   RCC->CR &= ~RCC_CR_PLLON;
   while(RCC->CR & RCC_CR_PLLRDY);
-  RCC->PLLCFGR = ((m - 1) << RCC_PLLCFGR_PLLM_Pos) |
-    (n << RCC_PLLCFGR_PLLN_Pos) |
-    (((r / 2) - 1) << RCC_PLLCFGR_PLLR_Pos) |
-    RCC_PLLCFGR_PLLREN |
-    (hse_Hz ? RCC_PLLCFGR_PLLSRC_HSE : RCC_PLLCFGR_PLLSRC_HSI);
+  RCC->PLLCFGR = ((m - 1) << RCC_PLLCFGR_PLLM_Pos)
+    | (n << RCC_PLLCFGR_PLLN_Pos)
+    | (((r / 2) - 1) << RCC_PLLCFGR_PLLR_Pos)
+    | RCC_PLLCFGR_PLLREN
+    | (hse_Hz ? RCC_PLLCFGR_PLLSRC_HSE : RCC_PLLCFGR_PLLSRC_HSI);
   RCC->CR |= RCC_CR_PLLON;
   while(!(RCC->CR & RCC_CR_PLLRDY));
   RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_1;
@@ -314,8 +324,8 @@ void IWDG_Init_ms(uint32_t timeout_ms)
   IWDG_Init((IWDG_Time_t)time, (uint16_t)reload);
 }
 
-// `RMVF` clears every reset flag at once: latched on the first read, so `IWDG_WasReset`
-// and `BOR_WasReset` do not clobber each other.
+// `RMVF` clears every reset flag at once:
+// latched on the first read, so `IWDG_WasReset` and `BOR_WasReset` do not clobber each other.
 static uint32_t rst_csr;
 static bool rst_latched;
 
@@ -335,8 +345,8 @@ bool IWDG_WasReset(void) { return (rst_flags() & RCC_CSR_IWDGRSTF) != 0; }
 
 BOR_Level_t BOR_GetLevel(void)
 {
-  // `BOR_EN` plus 2-bit rising and falling level fields: the portable level is the
-  // register level plus one when enabled, `BOR_Level_1V7` otherwise.
+  // `BOR_EN` plus 2-bit rising and falling level fields:
+  // the portable level is the register level plus one when enabled, `BOR_Level_1V7` otherwise.
   if(!(FLASH->OPTR & FLASH_OPTR_BOR_EN)) return BOR_Level_1V7;
   uint32_t lv = (FLASH->OPTR & FLASH_OPTR_BORR_LEV) >> FLASH_OPTR_BORR_LEV_Pos;
   return (BOR_Level_t)(lv + 1);
