@@ -31,10 +31,9 @@
 
 //----------------------------------------------------------------------------------------- Globals
 
-extern UART_t *DbgUart;       // console port
-extern MBB_t *DbgFile;        // output sink every printer writes to
-extern volatile bool DbgReset; // reset requested, taken once the output drains
-extern bool DbgEcho;
+extern UART_t *DbgUart;         // console port
+extern MBB_t *DbgFile;          // output sink every printer writes to
+extern volatile bool DbgReset;  // reset requested, taken once the output drains
 
 #ifdef HOST
   // Host build: let the pending output out, then end the process
@@ -57,8 +56,12 @@ void DBG_Wait(void);
 void DBG_WaitBlock(void);
 
 // Send what the printers left and wait for the port, blocking.
-// Fit for the console thread itself and for the last lines before a halt.
+// Fit for a thread, the console thread too: the wait ends in an interrupt of the port.
 void DBG_Flush(void);
+
+// As `DBG_Flush` with interrupts off and every byte polled out,
+// so a panic or a fault gets its last lines out from any interrupt.
+void DBG_FlushPolled(void);
 
 /**
  * @brief Send bytes straight to the port, waiting before and after.

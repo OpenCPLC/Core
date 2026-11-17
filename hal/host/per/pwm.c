@@ -64,6 +64,14 @@ uint32_t PWM_GetValue(PWM_t *pwm, TIM_Channel_t channel)
   return ccr ? *ccr : 0;
 }
 
+uint32_t PWM_GetPosition(const PWM_t *pwm)
+{
+  uint32_t value = TIM_Is32bit(pwm->reg) ? pwm->reg->CNT : (pwm->reg->CNT & 0xFFFFu);
+  // Counting down, the climb to the crest is behind: twice the top less the way left
+  if(pwm->align && (pwm->reg->CR1 & TIM_CR1_DIR)) return 2u * pwm->reg->ARR - value;
+  return value;
+}
+
 float PWM_GetFrequency(const PWM_t *pwm) { unused(pwm); return 0.0f; }
 
 float PWM_Frequency(PWM_t *pwm, float frequency)

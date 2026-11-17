@@ -57,7 +57,9 @@
  * @param _count Periods accumulated so far for the active channel
  * @param _inc Next channel to arm
  * @param _chan Channel being measured right now
- * @param _timeout_tick Deadline for the next edge
+ * @param _edges Triggers the timer interrupt has stepped on
+ * @param _edges_seen Value of `_edges` the last `PWMI_Loop` saw
+ * @param _timeout_tick Deadline of the active channel, moved on by each edge
  */
 typedef struct {
   TIM_TypeDef *reg;
@@ -83,18 +85,20 @@ typedef struct {
   // internal
   bool _init;
   #if(PWMI_USED_TIM2)
-  uint64_t _reload[4];
-  uint64_t _value[4];
+  volatile uint64_t _reload[4];
+  volatile uint64_t _value[4];
   #else
-  uint32_t _reload[4];
-  uint32_t _value[4];
+  volatile uint32_t _reload[4];
+  volatile uint32_t _value[4];
   #endif
   #if(PWMI_AUTO_OVERSAMPLING)
-  uint16_t _oversampling[4];
+  volatile uint16_t _oversampling[4];
   #endif
-  uint16_t _count;
-  uint8_t _inc;
-  uint8_t _chan;
+  volatile uint16_t _count;
+  volatile uint8_t _inc;
+  volatile uint8_t _chan;
+  volatile uint32_t _edges;
+  uint32_t _edges_seen;
   uint64_t _timeout_tick;
 } PWMI_t;
 

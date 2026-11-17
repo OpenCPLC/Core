@@ -9,7 +9,7 @@
 
 //--------------------------------------------------------------------------------------------- dbg
 
-UART_t dbg_uart = {
+static UART_t dbg_uart = {
   .reg = USART1,
   .tx = UART1_TX_PC4,
   .rx = UART1_RX_PC5,
@@ -20,13 +20,13 @@ UART_t dbg_uart = {
 
 //--------------------------------------------------------------------------------------------- app
 
-GPIO_t led = { // Nucleo-G0B1RE green `LD2`
+static GPIO_t led = { // green `LD2` of Nucleo-G0B1RE
   .port = GPIOA,
   .pin = 5,
   .mode = GPIO_Mode_Output
 };
 
-void loop(void)
+static void loop(void)
 {
   GPIO_Init(&led);
   while(1) {

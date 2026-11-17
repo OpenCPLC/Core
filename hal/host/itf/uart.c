@@ -159,18 +159,32 @@ static void line_put(UART_t *uart, const uint8_t *data, uint16_t len)
   #endif
 }
 
-// As on the chip: nothing to send is refused, `dir` set for the bytes, `prefix` ahead of them
+// As on the chip: `dir` set for the bytes, `prefix` ahead of them
+static void transmit(UART_t *uart, const uint8_t *data, uint16_t len)
+{
+  if(uart->dir) GPIO_Set(uart->dir);
+  if(uart->prefix) line_put(uart, &uart->prefix, 1);
+  line_put(uart, data, len);
+  if(uart->dir) GPIO_Rst(uart->dir);
+}
+
+// As on the chip: nothing to send is refused
 status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len)
 {
   if(!uart->_init) return ERR;
   if(uart->_tx_busy) return BUSY;
   if(!len) return ERR;
   uart->_tx_busy = true;
-  if(uart->dir) GPIO_Set(uart->dir);
-  if(uart->prefix) line_put(uart, &uart->prefix, 1);
-  line_put(uart, data, len);
-  if(uart->dir) GPIO_Rst(uart->dir);
+  transmit(uart, data, len);
   uart->_tx_busy = false;
+  return OK;
+}
+
+// As on the chip, with no transfer in flight to wait for: every send ends inside its call
+status_t UART_SendPolled(UART_t *uart, const uint8_t *data, uint16_t len)
+{
+  if(!uart->_init || !len) return ERR;
+  transmit(uart, data, len);
   return OK;
 }
 

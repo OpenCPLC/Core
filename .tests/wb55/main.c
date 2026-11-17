@@ -17,7 +17,7 @@
 
 //--------------------------------------------------------------------------------------------- dbg
 
-UART_t dbg_uart = {
+static UART_t dbg_uart = {
   .reg = USART1,
   .tx = UART1_TX_PB6,
   .rx = UART1_RX_PB7,
@@ -94,7 +94,7 @@ void TEST_Cases(void)
   TEST(clocks_fit_their_range);
 }
 
-GPIO_t led = { // green `LD2` of Nucleo-WB55RG
+static GPIO_t led = { // green `LD2` of Nucleo-WB55RG
   .port = GPIOB,
   .pin = 0,
   .mode = GPIO_Mode_Output

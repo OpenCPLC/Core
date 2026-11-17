@@ -1,4 +1,5 @@
 // .tests/test_gpif.c
+
 // Input filter `GPIF_t`, sampled every millisecond of virtual time:
 // a level shows once it held for its debounce time, a shorter glitch never does,
 // every edge raises its flag once, a level held past its long time raises the long flag,

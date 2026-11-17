@@ -146,6 +146,16 @@ bool UART_IsFree(UART_t *uart);
  */
 status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len);
 
+/**
+ * @brief Send with interrupts off, every byte polled out, for a panic or a fault.
+ * @param[in,out] uart Pointer to UART structure
+ * @param[in] data Bytes to send
+ * @param[in] len Number of bytes, `0` is refused
+ * @return `OK` once the last bit left the pin, `ERR` if not initialized, empty or stalled
+ * @note A DMA transfer in flight goes out first, and interrupts come back as they were.
+ */
+status_t UART_SendPolled(UART_t *uart, const uint8_t *data, uint16_t len);
+
 // Received frames, one at a time: bytes of the current one, frames waiting,
 // copy out, as a heap string, skip, or drop them all
 uint16_t UART_Size(UART_t *uart);

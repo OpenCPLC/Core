@@ -1,0 +1,53 @@
+# What `make lint` of Forge has to know of this code: roles of its API, code of others, exceptions.
+# A project may keep a `lint.yaml` of its own beside `main.h`.
+# There it adds names to the lists of `roles`, names its own `vendor` code,
+# turns rules on under `rules` and writes its own `except`.
+
+# Roles of the API, by name, `*` matching any characters
+roles:
+  yield: [let, delay, delay_until, timeout]  # hand the core over, never in an interrupt
+  hold: [sleep, sleep_until]                 # wait and keep the core, never in a thread
+  heap:
+    # The whole heap, never in an interrupt
+    any: [heap_alloc, heap_reloc, heap_free, heap_new, heap_clear]
+    new: heap_new      # block owned by the calling thread
+    clear: heap_clear  # frees every such block of the calling thread
+  thread: vrts_thread  # starts a thread on a function and a stack
+  irq:
+    handler: [IRQHandler, _Handler]  # name endings of handlers in the vector table
+    start: [IRQ_Enable*]             # calls registering an interrupt handler
+    # Fields holding a callback a driver calls in its interrupt
+    field: [Callback, HalfCallback, CompleteCallback, UpdateCallback, RiseHandler, FallHandler, Overflow]
+  frame: # words a thread switch leaves on its stack, by `-mcpu`
+    cortex-m0plus: 16
+    cortex-m4: 51
+  # Write to the console buffer, never in an interrupt
+  log: [_LOG_*, LOG_*, DBG_*, print, print_*, vprint, vprintf]
+  panic: [panic, vrts_panic]  # end the program, so an interrupt may log through them
+  status: status_t            # type of an error code the caller has to read
+  # Write raw bytes into a buffer of the caller, where an enum may take any value
+  load: ["*_Load", "*_Copy", "*_Read", "*_ReadReg", "*_WriteRead", "*_Peek", "*_OnlyRead", "*_Transfer", "*_StructGet"]
+
+# Code taken from others: rules of files, cppcheck and the analyzer skip it
+vendor: [lib/ext/*, hal/arm/*, hal/stm32g0/inc/*, hal/stm32wb/inc/*, hal/svd/*]
+
+# Exceptions by rule: a place, then why the finding there is right.
+# A place is a path from this folder, a pattern as in `.gitignore`, and `:function` narrows it.
+# An exception without a reason is refused, and one that silences nothing is reported.
+except:
+  recursion:
+    lib/ext/nanopb/*: Recursion goes as deep as messages nest in `.proto` schema, which bounds it
+  extern-in-c:
+    hal/*/sys/startup.c: Linker script symbols and newlib entries, which no header declares
+    hal/stm32/sys/bld.c: Sections placed by linker script for bootloader
+  comparePointers:
+    hal/*/sys/startup.c: Startup walks `.data` and `.bss` between linker script symbols
+  Wanalyzer-overlapping-buffers:
+    lib/col/ary.c:ary_remove: Neighbouring slots of one ring, one element apart
+  Wanalyzer-malloc-leak:
+    lib/sys/heap.c:heap_alloc: Allocator itself, whose attributes describe caller side only
+  Wanalyzer-use-after-free:
+    lib/sys/heap.c:heap_free: Allocator itself, whose attributes describe caller side only
+  Wanalyzer-use-of-uninitialized-value:
+    hal/stm32/per/flash.c:FLASH_Write: Doubleword filled by `ecc_copy` through volatile loads, which analyzer does not follow
+    hal/stm32/sys/bld.c:stage: Every caller fills its bytes, trailer first by `memset`

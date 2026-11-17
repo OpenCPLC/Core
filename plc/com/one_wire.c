@@ -100,9 +100,9 @@ bool WIRE_Search(WIRE_t *onewire, uint8_t *addr)
 {
   uint8_t id_bit_i = 1, id_bit, id_bit_comp;
   uint8_t rom_i = 0, last_zero = 0;
-  bool res = false; // Search result
+  bool res = false; // search result
   uint8_t mask = 1; // ROM byte mask
-  uint8_t dir; // Search direction
+  uint8_t dir; // search direction
   if(!onewire->_last_dev_flag) {
     if(!WIRE_Reset(onewire)) {
       onewire->_last = 0;
@@ -110,7 +110,7 @@ bool WIRE_Search(WIRE_t *onewire, uint8_t *addr)
       onewire->_last_family = 0;
       return false;
     }
-    WIRE_Write(onewire, ONEWIRE_CMD_SEARCH_ROM); // Normal search
+    WIRE_Write(onewire, ONEWIRE_CMD_SEARCH_ROM); // normal search
     do {
       id_bit = read_bit(onewire);
       id_bit_comp = read_bit(onewire);

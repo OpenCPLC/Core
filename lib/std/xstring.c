@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+//------------------------------------------------------------------------------------------ Config
+
+// Longest number in front of a unit suffix, its terminator included [B]
+#define STR_NUMBER_SIZE 32
+
 //----------------------------------------------------------------------------------------- Globals
 
 char StrTempMem[256];
@@ -247,25 +252,31 @@ static const char *str_unit(const char *str)
   return p;
 }
 
+// Number in front of the unit copied into `nbr`, `NULL` when it runs past `STR_NUMBER_SIZE`
+static const char *str_number(const char *str, char *nbr)
+{
+  const char *unit = str_unit(str);
+  if(unit - str >= STR_NUMBER_SIZE) return NULL;
+  memcpy(nbr, str, unit - str);
+  nbr[unit - str] = '\0';
+  return unit;
+}
+
 bool str_is_uf32(const char *str)
 {
   if(!str || !*str) return false;
   if(str_is_special(str)) return true;
-  const char *unit = str_unit(str);
-  char nbr[unit - str + 1];
-  memcpy(nbr, str, unit - str);
-  nbr[unit - str] = '\0';
-  return str_is_f32(nbr);
+  char nbr[STR_NUMBER_SIZE];
+  return str_number(str, nbr) && str_is_f32(nbr);
 }
 
 float str_to_uf32(const char *str)
 {
   if(!str || !*str) return 0.0f;
   if(str_is_special(str)) return str_to_f32(str);
-  const char *unit = str_unit(str);
-  char nbr[unit - str + 1];
-  memcpy(nbr, str, unit - str);
-  nbr[unit - str] = '\0';
+  char nbr[STR_NUMBER_SIZE];
+  const char *unit = str_number(str, nbr);
+  if(!unit) return NaN;
   float value = str_to_f32(nbr);
   switch(*unit) {
     case 't': value *= 1e12f; break;
@@ -309,7 +320,6 @@ char *str_from_int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint
 {
   uint8_t len = itoa_encode(nbr, StrTempMem, base, sign, fill_zero, fill_space);
   char *string = heap_new(len + 1);
-  if(!string) return NULL;
   for(uint8_t i = 0; i < len; i++) string[i] = StrTempMem[len - 1 - i];
   string[len] = '\0';
   return string;
@@ -332,7 +342,6 @@ char *str_copy(const char *str)
   if(!str) return NULL;
   size_t size = strlen(str) + 1;
   char *cp = heap_new(size);
-  if(!cp) return NULL;
   memcpy(cp, str, size);
   return cp;
 }
@@ -350,7 +359,6 @@ char *str_join(uint32_t count, const char *str, ...)
   }
   va_end(args);
   char *out = heap_new(total_size);
-  if(!out) return NULL;
   char *dst = out;
   va_start(args, str);
   tmp = str;
@@ -386,7 +394,6 @@ char *str_sub(const char *str, int32_t start, int32_t len)
 {
   if(!sub_range(str, &start, &len)) return NULL;
   char *out = heap_new((size_t)len + 1);
-  if(!out) return NULL;
   memcpy(out, str + start, len);
   out[len] = '\0';
   return out;
@@ -549,7 +556,6 @@ char *str_replace(const char *str, const char *pattern, const char *replacement)
   size_t count = 0;
   for(const char *pos = strstr(str, pattern); pos; pos = strstr(pos + plen, pattern)) count++;
   char *out = heap_new(strlen(str) + count * (rlen - plen) + 1);
-  if(!out) return NULL;
   char *dst = out;
   const char *scan = str;
   for(const char *pos = strstr(scan, pattern); pos; pos = strstr(scan, pattern)) {
@@ -579,7 +585,6 @@ char *str_split(const char *str, char delimiter, int index)
   if(index > 0) return NULL;
   size_t len = (size_t)(str - start);
   char *out = heap_new(len + 1);
-  if(!out) return NULL;
   memcpy(out, start, len);
   out[len] = '\0';
   return out;
@@ -594,7 +599,6 @@ int str_explode(char ***arr_ptr, const char *str, char delimiter)
   }
   // Pointer array first, the parts follow it in the same block
   char **arr = heap_new(count * sizeof(char *) + strlen(str) + 1);
-  if(!arr) return -1;
   char *dst = (char *)(arr + count);
   const char *src = str;
   for(int i = 0; i < count; i++) {

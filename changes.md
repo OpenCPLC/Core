@@ -2,6 +2,14 @@
 
 Release history of **OpenCPLC Core**, newest first.
 
+### `0.6.5` Lint
+
+- `make lint` of Forge 0.5.3 passes, new `ary_*_static`, `QUEUE_NewStatic` and `MBB_InitStatic`
+- **CAP** edge capture with filter, `PWM_GetPosition`
+- Panic works in interrupt and full console, hard fault gives faulting address
+- Fix: stuck UART, I2C after NACK, short PWMI periods, masked EXTI firing
+- Fix: heap misuse in Modbus master and I2C, `str_to_uf32` overflow, `MBB_Init` with more than two arguments
+
 ### `0.6.4` Clocks
 
 - Fixed VRTS tick up to 20% fast

@@ -114,10 +114,11 @@ void DOUT_Preset(DOUT_t *dout, bool value);
  * @param[in] count Pulses, at most `127`
  * @param[in] ton_ms On time [ms]
  * @param[in] toff_ms Off time [ms]
- * @param[in] freeze_ms Extra off time after the last pulse [ms]
  * @return `true` when started, `false` while a sequence runs or the arguments are refused
  */
 bool DOUT_Pulse(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms);
+
+// `DOUT_Pulse` with `freeze_ms` of extra off time after the last pulse
 bool DOUT_PulseFreeze(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t toff_ms,
   uint16_t freeze_ms);
 

@@ -14,11 +14,11 @@
 // What a storage half holds, the recovery decision of `EEPROM_Init` reads it
 typedef enum {
   EEPROM_State_None,
-  EEPROM_State_Empty,      // every slot erased
-  EEPROM_State_Filled,     // data, no marker, no BEGIN: the active half mid-write
-  EEPROM_State_InProgress, // BEGIN at slot 0 or a marker not whole: a rewrite cut
-  EEPROM_State_Full,       // every data slot written, marker erased, no BEGIN
-  EEPROM_State_Complete    // marker present: a rewritten half carrying its generation
+  EEPROM_State_Empty,       // every slot erased
+  EEPROM_State_Filled,      // data, no marker, no BEGIN: the active half mid-write
+  EEPROM_State_InProgress,  // BEGIN at slot 0 or a marker not whole: a rewrite cut
+  EEPROM_State_Full,        // every data slot written, marker erased, no BEGIN
+  EEPROM_State_Complete     // marker present: a rewritten half carrying its generation
 } EEPROM_State_t;
 
 typedef enum {

@@ -249,8 +249,8 @@ static void no_token(MSTP_t *mstp)
 {
   uint32_t silence = silence_ms(mstp);
   uint32_t slot = MSTP_NO_TOKEN_ms + MSTP_SLOT_ms * mstp->address;
-  bool missed = silence >= slot + MSTP_SLOT_ms &&
-    silence <= MSTP_NO_TOKEN_ms + MSTP_SLOT_ms * (MSTP_MAX_MASTER + 1);
+  bool missed = silence >= slot + MSTP_SLOT_ms
+    && silence <= MSTP_NO_TOKEN_ms + MSTP_SLOT_ms * (MSTP_MAX_MASTER + 1);
   if(silence < slot || missed) {
     if(line_used(mstp)) mstp->_state = MSTP_State_Idle;
     return;

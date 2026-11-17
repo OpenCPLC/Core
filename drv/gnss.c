@@ -8,8 +8,8 @@
 #include "xdef.h"
 #include "xstring.h"
 
-#define GNSS_BOOT_ms 200 // Module up after power on
-#define GNSS_OFF_ms 500  // Module without power in a power cycle
+#define GNSS_BOOT_ms 200  // module up after power on
+#define GNSS_OFF_ms 500   // module without power in a power cycle
 
 //---------------------------------------------------------------------------------------- Internal
 

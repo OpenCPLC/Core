@@ -88,8 +88,8 @@ typedef struct WPAN_PACKED {
 } WPAN_AclPacket_t;
 
 // Prefix sizes inside an event: serialized front and the command-complete front
-#define WPAN_EVT_SERIAL_SIZE 3 // type, evtcode, plen
-#define WPAN_CC_SIZE 3         // numcmd, cmdcode
+#define WPAN_EVT_SERIAL_SIZE 3  // type, evtcode, plen
+#define WPAN_CC_SIZE 3          // numcmd, cmdcode
 
 //------------------------------------------------------------------------------------------ Tables
 
@@ -200,8 +200,8 @@ typedef struct {
 
 // `SHCI_C2_BLE_INIT` parameters; the comments in the ST `shci.h` describe each field
 typedef struct WPAN_PACKED {
-  uint8_t *pBleBufferAddress; // unused, zero
-  uint32_t BleBufferSize;     // unused, zero
+  uint8_t *pBleBufferAddress;  // unused, zero
+  uint32_t BleBufferSize;      // unused, zero
   uint16_t NumAttrRecord;
   uint16_t NumAttrServ;
   uint16_t AttrValueArrSize;

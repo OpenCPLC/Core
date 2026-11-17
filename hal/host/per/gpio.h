@@ -87,7 +87,7 @@ typedef struct {
   GPIO_WakeupPull_t wakeup_pull;
   #endif
   uint8_t alternate;
-  bool set;
+  volatile bool set;
 } GPIO_t;
 
 /**
@@ -213,7 +213,7 @@ typedef struct {
   GPIO_Pull_t pull;
   bool rise_detect;
   bool fall_detect;
-  bool irq_enable;
+  volatile bool irq_enable;
   IRQ_Priority_t irq_priority;
   bool oneshot;
   EXTI_Handler_t RiseHandler;
@@ -223,7 +223,7 @@ typedef struct {
   // internal
   volatile uint16_t _rise_cnt;
   volatile uint16_t _fall_cnt;
-  bool _state;
+  volatile bool _state;
 } EXTI_t;
 
 //---------------------------------------------------------------------------------------- EXTI API

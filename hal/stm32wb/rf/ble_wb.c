@@ -4,7 +4,7 @@
 
 #include <string.h>
 
-#include "stm32wbxx.h"
+#include <stm32wbxx.h>
 #include "vrts.h"
 #include "log.h"
 

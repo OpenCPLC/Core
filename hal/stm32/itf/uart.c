@@ -2,6 +2,11 @@
 
 #include "uart.h"
 
+//------------------------------------------------------------------------------------------ Config
+
+// Loop turns a polled wait gives one byte: enough for 300 baud at 64MHz
+#define UART_POLL_GUARD 1000000u
+
 //---------------------------------------------------------------------------------------- Handlers
 
 static void dma_handler(UART_t *uart)
@@ -244,10 +249,58 @@ status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len)
   uart->_dma.cha->CMAR = (uint32_t)data;
   uart->_dma.cha->CNDTR = len;
   if(uart->prefix) uart->reg->TDR = uart->prefix;
-  uart->_dma.cha->CCR |= DMA_CCR_EN;
+  // Flags first: a short transfer can end in its interrupt before the line after the start
   uart->_tx_busy = true;
   uart->_tc_pending = true;
+  uart->_dma.cha->CCR |= DMA_CCR_EN;
   return OK;
+}
+
+// Flag of `ISR` polled until it sets, `false` when the port never raises it
+static bool wait_flag(UART_t *uart, uint32_t flag)
+{
+  for(uint32_t guard = UART_POLL_GUARD; guard; guard--) {
+    if(uart->reg->ISR & flag) return true;
+  }
+  return false;
+}
+
+// Byte into `TDR` once it empties, no interrupt involved
+static bool put_byte(UART_t *uart, uint8_t value)
+{
+  if(!wait_flag(uart, USART_ISR_TXE_TXFNF)) return false;
+  uart->reg->TDR = value;
+  return true;
+}
+
+// A transfer the DMA is still making goes out first, `CNDTR` counts down with no handler.
+// Each byte it moves gives the guard back, so only a stalled transfer runs it out.
+static bool dma_drain(UART_t *uart)
+{
+  uint32_t left = uart->_dma.cha->CNDTR;
+  for(uint32_t guard = UART_POLL_GUARD; guard; guard--) {
+    if(!(uart->_dma.cha->CCR & DMA_CCR_EN) || !uart->_dma.cha->CNDTR) return true;
+    if(uart->_dma.cha->CNDTR == left) continue;
+    left = uart->_dma.cha->CNDTR;
+    guard = UART_POLL_GUARD;
+  }
+  return false;
+}
+
+status_t UART_SendPolled(UART_t *uart, const uint8_t *data, uint16_t len)
+{
+  if(!uart->_init || !len) return ERR;
+  // The handlers of the port would clear the flags polled here
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  bool sent = dma_drain(uart);
+  if(uart->dir) GPIO_Set(uart->dir);
+  if(sent && uart->prefix) sent = put_byte(uart, uart->prefix);
+  for(uint16_t i = 0; sent && i < len; i++) sent = put_byte(uart, data[i]);
+  if(sent) sent = wait_flag(uart, USART_ISR_TC);
+  if(uart->dir) GPIO_Rst(uart->dir);
+  __set_PRIMASK(primask);
+  return sent ? OK : ERR;
 }
 
 //----------------------------------------------------------------------------------------- Receive

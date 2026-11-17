@@ -4,8 +4,8 @@
 #define STARTUP_H_
 
 #include <stdint.h>
-#include "system_stm32wbxx.h"
-#include "stm32wbxx.h"
+#include <system_stm32wbxx.h>
+#include <stm32wbxx.h>
 #include "xdef.h"
 
 // Default handler, an application definition of the same name replaces it

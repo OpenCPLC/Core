@@ -63,7 +63,8 @@ uint8_t str_split_int(const char *str, char sep, uint8_t base, uint32_t *parts,
 bool str_is_f32(const char *str);
 float str_to_f32(const char *str);
 
-// Float with a unit suffix: `t`, `g`, `meg`, `k`, `%`, `m`, `u`, `n`, `p`
+// Float with a unit suffix: `t`, `g`, `meg`, `k`, `%`, `m`, `u`, `n`, `p`.
+// A number over 31 characters before its unit is none: `false`, and `NaN` from the parse.
 bool str_is_uf32(const char *str);
 float str_to_uf32(const char *str);
 
@@ -83,7 +84,7 @@ uint8_t itoa_encode(int64_t nbr, char *str, uint8_t base, bool sign,
 
 /**
  * @brief Integer as a new heap string, parameters as in `itoa_encode`.
- * @return Terminated string owned by the garbage collector, `NULL` when the heap is full
+ * @return Terminated string owned by the garbage collector
  */
 char *str_from_int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero,
   uint8_t fill_space);

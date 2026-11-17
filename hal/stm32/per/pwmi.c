@@ -10,10 +10,18 @@
 
 static void run(PWMI_t *pwmi);
 
+// Every step of a pass runs here, so no two of them ever nest
 static void irq_handler(PWMI_t *pwmi)
 {
-  if(pwmi->reg->SR & TIM_SR_TIF) run(pwmi);
+  if(!(pwmi->reg->SR & TIM_SR_TIF)) return;
+  pwmi->_edges++; // what `PWMI_Loop` watches for a silent channel
+  run(pwmi);
 }
+
+// CH3 and CH4 drive no slave trigger, so their edge restarts the counter and its prescaler
+// here, as the slave controller does for CH1 and CH2, and pends the timer interrupt,
+// whatever priority a shared EXTI vector got
+static void trigger(PWMI_t *pwmi) { pwmi->reg->EGR = TIM_EGR_UG | TIM_EGR_TG; }
 
 // Longest period the counter can still express, which is the point where waiting any
 // longer tells us nothing new. Taken from `ARR` so it follows the configured span
@@ -45,7 +53,7 @@ static void begin(PWMI_t *pwmi)
     pwmi->trig3->rise_detect = true;
     pwmi->trig3->fall_detect = false;
     pwmi->trig3->irq_priority = pwmi->irq_priority;
-    pwmi->trig3->RiseHandler = (EXTI_Handler_t)run;
+    pwmi->trig3->RiseHandler = (EXTI_Handler_t)trigger;
     pwmi->trig3->rise_arg = pwmi;
     EXTI_Init(pwmi->trig3);
   }
@@ -55,7 +63,7 @@ static void begin(PWMI_t *pwmi)
     pwmi->trig4->rise_detect = true;
     pwmi->trig4->fall_detect = false;
     pwmi->trig4->irq_priority = pwmi->irq_priority;
-    pwmi->trig4->RiseHandler = (EXTI_Handler_t)run;
+    pwmi->trig4->RiseHandler = (EXTI_Handler_t)trigger;
     pwmi->trig4->rise_arg = pwmi;
     EXTI_Init(pwmi->trig4);
   }
@@ -92,9 +100,10 @@ static void reset(PWMI_t *pwmi)
   pwmi->reg->DIER |= TIM_DIER_TIE;
 }
 
+// The counter restarts at the edge itself, so this step leaves it alone:
+// a reset here would come late by the latency of the interrupt and shorten the next period
 static void run(PWMI_t *pwmi)
 {
-  pwmi->_timeout_tick = tick_keep(pwmi->timeout_ms);
   // `_inc` already points at the next candidate,
   // so the samples arriving now belong to `_chan`.
   // Both the accumulator slot and the register roles follow the active channel
@@ -117,7 +126,6 @@ static void run(PWMI_t *pwmi)
       default: break;
     }
   }
-  pwmi->reg->CNT = 0;
   #if(PWMI_AUTO_OVERSAMPLING)
   if(pwmi->_count != PWMI_CONFIG_NOT_READY && pwmi->_reload[chan] < pwmi->threshold)
     pwmi->_count++;
@@ -134,16 +142,20 @@ static void run(PWMI_t *pwmi)
     switch(pwmi->_inc) {
       case TIM_CH1:
         pwmi->reg->CCER = 0;
-        pwmi->reg->CCMR1 = TIM_CCMR1_CC1S_0 | TIM_CCMR1_CC2S_1 |
-          (pwmi->filter << TIM_CCMR1_IC1F_Pos) | (pwmi->filter << TIM_CCMR1_IC2F_Pos);
+        pwmi->reg->CCMR1 = TIM_CCMR1_CC1S_0
+          | TIM_CCMR1_CC2S_1
+          | (pwmi->filter << TIM_CCMR1_IC1F_Pos)
+          | (pwmi->filter << TIM_CCMR1_IC2F_Pos);
         pwmi->reg->CCMR2 = 0;
         pwmi->reg->CCER = TIM_CCER_CC2P | TIM_CCER_CC1E | TIM_CCER_CC2E;
         pwmi->reg->SMCR = TIM_SMCR_TS_2 | TIM_SMCR_TS_0 | TIM_SMCR_SMS_2;
         break;
       case TIM_CH2:
         pwmi->reg->CCER = 0;
-        pwmi->reg->CCMR1 = TIM_CCMR1_CC1S_1 | TIM_CCMR1_CC2S_0 |
-          (pwmi->filter << TIM_CCMR1_IC1F_Pos) | (pwmi->filter << TIM_CCMR1_IC2F_Pos);
+        pwmi->reg->CCMR1 = TIM_CCMR1_CC1S_1
+          | TIM_CCMR1_CC2S_0
+          | (pwmi->filter << TIM_CCMR1_IC1F_Pos)
+          | (pwmi->filter << TIM_CCMR1_IC2F_Pos);
         pwmi->reg->CCMR2 = 0;
         pwmi->reg->CCER = TIM_CCER_CC1P | TIM_CCER_CC1E | TIM_CCER_CC2E;
         pwmi->reg->SMCR = TIM_SMCR_TS_2 | TIM_SMCR_TS_1 | TIM_SMCR_SMS_2;
@@ -151,13 +163,15 @@ static void run(PWMI_t *pwmi)
       case TIM_CH3:
         pwmi->reg->CCER = 0;
         // CH3 and CH4 cannot drive the slave trigger,
-        // so the counter is restarted from the EXTI handler instead.
+        // so the counter is restarted by `trigger` instead.
         // The reset from TI1 or TI2 has to go:
         // a signal still present on the CH1 or CH2 pin keeps zeroing the counter here
         pwmi->reg->SMCR = 0;
         pwmi->reg->CCMR1 = 0;
-        pwmi->reg->CCMR2 = TIM_CCMR2_CC3S_0 | TIM_CCMR2_CC4S_1 |
-          (pwmi->filter << TIM_CCMR2_IC3F_Pos) | (pwmi->filter << TIM_CCMR2_IC4F_Pos);
+        pwmi->reg->CCMR2 = TIM_CCMR2_CC3S_0
+          | TIM_CCMR2_CC4S_1
+          | (pwmi->filter << TIM_CCMR2_IC3F_Pos)
+          | (pwmi->filter << TIM_CCMR2_IC4F_Pos);
         pwmi->reg->CCER = TIM_CCER_CC4P | TIM_CCER_CC3E | TIM_CCER_CC4E;
         if(pwmi->trig3) EXTI_On(pwmi->trig3);
         break;
@@ -166,8 +180,10 @@ static void run(PWMI_t *pwmi)
         pwmi->reg->CCER = 0;
         pwmi->reg->SMCR = 0;
         pwmi->reg->CCMR1 = 0;
-        pwmi->reg->CCMR2 = TIM_CCMR2_CC3S_1 | TIM_CCMR2_CC4S_0 |
-          (pwmi->filter << TIM_CCMR2_IC3F_Pos) | (pwmi->filter << TIM_CCMR2_IC4F_Pos);
+        pwmi->reg->CCMR2 = TIM_CCMR2_CC3S_1
+          | TIM_CCMR2_CC4S_0
+          | (pwmi->filter << TIM_CCMR2_IC3F_Pos)
+          | (pwmi->filter << TIM_CCMR2_IC4F_Pos);
         pwmi->reg->CCER = TIM_CCER_CC3P | TIM_CCER_CC3E | TIM_CCER_CC4E;
         if(pwmi->trig4) EXTI_On(pwmi->trig4);
         break;
@@ -239,21 +255,30 @@ void PWMI_Init(PWMI_t *pwmi)
   reset(pwmi);
   run(pwmi);
   __set_PRIMASK(primask);
+  pwmi->_timeout_tick = tick_keep(pwmi->timeout_ms);
   pwmi->_init = true;
 }
 
 bool PWMI_Loop(PWMI_t *pwmi)
 {
   if(!pwmi->_init) return false;
-  // `run` is owned by the interrupts for the whole pass, so the thread-side steps
-  // mask them to keep a trigger from landing mid-step. The publish loop stays outside:
+  // An edge moves the deadline on, so a channel gone silent runs it out
+  uint32_t edges = pwmi->_edges;
+  if(edges != pwmi->_edges_seen) {
+    pwmi->_edges_seen = edges;
+    pwmi->_timeout_tick = tick_keep(pwmi->timeout_ms);
+  }
+  // `run` belongs to the timer interrupt for the whole pass, so the steps of the thread
+  // mask interrupts to keep a trigger from landing mid-step. The publish loop stays outside:
   // the pass is over by then and nothing mutates the state it reads
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
   // Only a sequence still in progress can stall: once it ends there is nothing to skip
-  if(is_running(pwmi) && tick_over(&pwmi->_timeout_tick)) skip(pwmi);
+  bool stalled = is_running(pwmi) && tick_over(&pwmi->_timeout_tick);
+  if(stalled) skip(pwmi);
   bool done = !is_running(pwmi);
   __set_PRIMASK(primask);
+  if(stalled) pwmi->_timeout_tick = tick_keep(pwmi->timeout_ms);
   if(!done) return false;
   for(uint8_t chan = TIM_CH1; chan <= TIM_CH4; chan++) {
     publish_frequency(pwmi, chan);
@@ -264,6 +289,7 @@ bool PWMI_Loop(PWMI_t *pwmi)
   reset(pwmi);
   run(pwmi);
   __set_PRIMASK(primask);
+  pwmi->_timeout_tick = tick_keep(pwmi->timeout_ms);
   return true;
 }
 

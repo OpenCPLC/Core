@@ -9,8 +9,8 @@
 
 _Static_assert(USBD_EP_BULK > 0 && USBD_EP_BULK < USB_EP_LIMIT,
   "USB_EP_LIMIT must cover USBD_EP_BULK");
-_Static_assert(USBD_EP_NOTIFY > 0 && USBD_EP_NOTIFY < USB_EP_LIMIT &&
-  USBD_EP_NOTIFY != USBD_EP_BULK, "USB_EP_LIMIT must cover USBD_EP_NOTIFY");
+_Static_assert(USBD_EP_NOTIFY > 0 && USBD_EP_NOTIFY < USB_EP_LIMIT
+  && USBD_EP_NOTIFY != USBD_EP_BULK, "USB_EP_LIMIT must cover USBD_EP_NOTIFY");
 
 //--------------------------------------------------------------------------------------- Constants
 
@@ -53,7 +53,7 @@ _Static_assert(USBD_EP_NOTIFY > 0 && USBD_EP_NOTIFY < USB_EP_LIMIT &&
 #define WEBUSB_GET_URL           0x02
 #define WEBUSB_LANDING_PAGE      1
 #define MSOS_DESCRIPTOR_INDEX    0x07
-#define MSOS_WINDOWS_VERSION     0x06030000  // Windows 8.1, first with MS OS 2.0
+#define MSOS_WINDOWS_VERSION     0x06030000 // Windows 8.1, first with MS OS 2.0
 
 // CDC ACM class requests
 #define CDC_SET_LINE_CODING         0x20
@@ -189,10 +189,10 @@ static uint16_t desc_config(USBD_t *usbd)
     // Interface 0: communication class, abstract control model, no protocol
     dst = desc_interface(dst, 0, 1, 0x02, 0x02, 0x00);
     static const uint8_t functional[] = {
-      5, USB_DESC_CS_INTERFACE, 0x00, 0x10, 0x01, // header, CDC 1.10
-      5, USB_DESC_CS_INTERFACE, 0x01, 0x00, 0x01, // call management: none, data interface 1
-      4, USB_DESC_CS_INTERFACE, 0x02, 0x02,       // ACM: line coding and control line state
-      5, USB_DESC_CS_INTERFACE, 0x06, 0x00, 0x01  // union: master 0, slave 1
+      5, USB_DESC_CS_INTERFACE, 0x00, 0x10, 0x01,  // header, CDC 1.10
+      5, USB_DESC_CS_INTERFACE, 0x01, 0x00, 0x01,  // call management: none, data interface 1
+      4, USB_DESC_CS_INTERFACE, 0x02, 0x02,        // ACM: line coding and control line state
+      5, USB_DESC_CS_INTERFACE, 0x06, 0x00, 0x01   // union: master 0, slave 1
     };
     dst = put_bytes(dst, functional, sizeof(functional));
     dst = desc_endpoint(dst, USBD_EP_NOTIFY | USB_DIR_IN, 3, 8, 16); // interrupt, 16ms
@@ -579,8 +579,8 @@ bool USBD_DTR(USBD_t *usbd) { return usbd->_dtr; }
 uint32_t USBD_Baud(USBD_t *usbd)
 {
   const uint8_t *coding = usbd->_line_coding;
-  return (uint32_t)coding[0] | ((uint32_t)coding[1] << 8) |
-    ((uint32_t)coding[2] << 16) | ((uint32_t)coding[3] << 24);
+  return (uint32_t)coding[0] | ((uint32_t)coding[1] << 8)
+    | ((uint32_t)coding[2] << 16) | ((uint32_t)coding[3] << 24);
 }
 
 status_t USBD_Send(USBD_t *usbd, const uint8_t *data, uint16_t len)

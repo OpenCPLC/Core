@@ -152,7 +152,7 @@ static void cmd_mbb(char **argv, uint16_t argc, STREAM_t *stream)
   switch(hash_djb2_ci(argv[1])) {
     case HASH_List: { // mbb list
       CMD_Argc(2);
-      const char *names[cmd.mbbs_count];
+      const char *names[CMD_MBB_LIMIT];
       for(uint16_t i = 0; i < cmd.mbbs_count; i++) names[i] = cmd.mbbs[i]->name;
       LOG_Bash("MBB list: " ANSI_CREAM "%a %s" ANSI_END, cmd.mbbs_count, names);
       break;

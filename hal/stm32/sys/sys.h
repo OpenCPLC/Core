@@ -39,10 +39,11 @@ void clock_init(void);
 // Thread checking a canary word every 500 ms, `panic` on corruption
 void memory_guard(void);
 
-// Log the message on the panic level and halt, or reset with `SYS_PANIC_RESET`; never returns
-void panic(const char *message);
+// Log the message on the panic level and halt, or reset with `SYS_PANIC_RESET`.
+// A hard fault ends here too, its message naming the address of the faulting instruction.
+void panic(const char *message) __attribute__((noreturn));
 
-// Handler called first by `panic`, `NULL` = none
+// Handler `panic` calls first, interrupts off so it never waits for a tick; `NULL` = none
 void panic_hook(void (*handler)(void));
 
 // Busy-wait microsecond delays on a timer, `sleep_us_init` once before the first wait

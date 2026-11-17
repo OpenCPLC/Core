@@ -108,7 +108,7 @@ typedef struct {
   volatile uint16_t errors;
   volatile uint16_t resets;
   // internal
-  volatile uint8_t _event[USB_EVENT_LIMIT];
+  volatile USB_Event_t _event[USB_EVENT_LIMIT];
   volatile uint8_t _event_head;
   volatile uint8_t _event_tail;
   uint8_t _setup[8];

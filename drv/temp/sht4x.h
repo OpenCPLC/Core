@@ -4,7 +4,7 @@
 #define SHT4X_H_
 
 #include <stdint.h>
-#include <xmath.h>
+#include "xmath.h"
 #include "i2c_master.h"
 
 //--------------------------------------------------------------------------------------- Constants
@@ -16,11 +16,11 @@
 
 // Measurement commands carry their own conversion time, see `SHT4X_Delay_ms`
 typedef enum {
-  SHT4X_Mode_High = 0xFD,        // Highest repeatability, 8.3ms
-  SHT4X_Mode_Medium = 0xF6,      // Medium repeatability, 4.5ms
-  SHT4X_Mode_Low = 0xE0,         // Lowest repeatability, 1.7ms
-  SHT4X_CMD_SoftReset = 0x94,    // Soft reset, 1ms
-  SHT4X_CMD_Serial = 0x89,       // Read serial number
+  SHT4X_Mode_High = 0xFD,      // highest repeatability, 8.3ms
+  SHT4X_Mode_Medium = 0xF6,    // medium repeatability, 4.5ms
+  SHT4X_Mode_Low = 0xE0,       // lowest repeatability, 1.7ms
+  SHT4X_CMD_SoftReset = 0x94,  // soft reset, 1ms
+  SHT4X_CMD_Serial = 0x89,     // read serial number
   SHT4X_CMD_Heater200mW_1s = 0x39,
   SHT4X_CMD_Heater200mW_100ms = 0x32,
   SHT4X_CMD_Heater110mW_1s = 0x2F,
@@ -103,7 +103,7 @@ status_t SHT4X_Loop(SHT4X_t *sht4x);
  */
 bool SHT4X_Command(SHT4X_t *sht4x, SHT4X_CMD_t cmd);
 
-float SHT4X_Temperature_C(SHT4X_t *sht4x);  // Last temperature in °C, `NaN` when expired
-float SHT4X_Humidity_RH(SHT4X_t *sht4x);    // Last humidity in %RH, `NaN` when expired
+float SHT4X_Temperature_C(SHT4X_t *sht4x);  // last temperature in °C, `NaN` when expired
+float SHT4X_Humidity_RH(SHT4X_t *sht4x);    // last humidity in %RH, `NaN` when expired
 
 #endif

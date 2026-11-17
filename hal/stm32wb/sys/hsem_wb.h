@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "stm32wbxx.h"
+#include <stm32wbxx.h>
 
 //----------------------------------------------------------------------------------------- Presets
 

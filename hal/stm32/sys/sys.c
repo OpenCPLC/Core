@@ -41,11 +41,16 @@ void panic_hook(void (*handler)(void))
 
 void panic(const char *message)
 {
-  if(panic_handler) panic_handler();
-  LOG_Panic(message);
-  __disable_irq();
+  // A fault inside the panic itself goes straight to the halt
+  static bool panicking = false;
+  __disable_irq(); // no interrupt cuts into the hook or the log, nor panics over them
+  if(!panicking) {
+    panicking = true;
+    if(panic_handler) panic_handler();
+    LOG_Panic(message);
+  }
   #if(SYS_PANIC_RESET)
-  PWR_Reset();
+    PWR_Reset();
   #endif
   while(1);
 }
@@ -54,6 +59,47 @@ void vrts_panic(const char *msg)
 {
   panic(msg);
 }
+
+// An application definition of `HardFault_Handler` replaces the one here
+#if(LOG_LEVEL <= LOG_LEVEL_PNC)
+
+// `PC` of the faulting instruction, the seventh word of the frame, into the message
+__attribute__((used)) static void hard_fault(const uint32_t *frame)
+{
+  static char message[] = "Hard fault at 0x00000000 " LOG_TAG("SYS");
+  char *digit = message + sizeof("Hard fault at 0x") - 1;
+  uint32_t pc = frame[6];
+  for(uint8_t i = 0; i < 8; i++, pc <<= 4) *digit++ = "0123456789ABCDEF"[pc >> 28];
+  panic(message);
+}
+
+// The frame the core stacked on entry: on `PSP` for a thread, on `MSP` for an interrupt
+__attribute__((weak, naked)) void HardFault_Handler(void)
+{
+  __asm volatile(
+    "movs r0, #4\n"
+    "mov r1, lr\n"
+    "tst r0, r1\n"
+    "beq 1f\n"
+    "mrs r0, psp\n"
+    "ldr r1, =hard_fault\n"
+    "bx r1\n"
+    "1:\n"
+    "mrs r0, msp\n"
+    "ldr r1, =hard_fault\n"
+    "bx r1\n"
+  );
+}
+
+#else
+
+// A log that prints no panic needs no address of the fault
+__attribute__((weak)) void HardFault_Handler(void)
+{
+  panic("Hard fault");
+}
+
+#endif
 
 // `volatile` keeps the check alive: a plain constant would fold to always-false.
 // A stack overflow, a wild pointer or a misconfigured DMA overwrites it

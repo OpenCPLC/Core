@@ -22,10 +22,10 @@ static void heap_sift_down(QUEUE_t *queue, uint16_t i)
   uint16_t count = ary_count(&queue->ary);
   while(1) {
     uint16_t left = 2 * i + 1, right = 2 * i + 2, top = i;
-    if(left < count &&
-      queue->Compare(ary_get(&queue->ary, left), ary_get(&queue->ary, top)) < 0) top = left;
-    if(right < count &&
-      queue->Compare(ary_get(&queue->ary, right), ary_get(&queue->ary, top)) < 0) top = right;
+    if(left < count
+      && queue->Compare(ary_get(&queue->ary, left), ary_get(&queue->ary, top)) < 0) top = left;
+    if(right < count
+      && queue->Compare(ary_get(&queue->ary, right), ary_get(&queue->ary, top)) < 0) top = right;
     if(top == i) break;
     ary_swap(&queue->ary, i, top);
     i = top;

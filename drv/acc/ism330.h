@@ -15,9 +15,9 @@
 
 //--------------------------------------------------------------------------------------- Constants
 
-#define ISM330_ADDRESS 0x6A     // `SDO` low, the factory default
-#define ISM330_ADDRESS_ALT 0x6B // `SDO` high
-#define ISM330_WHO_AM_I 0x6B    // Identity of ISM330DHCX and ISM330DLC
+#define ISM330_ADDRESS 0x6A      // `SDO` low, the factory default
+#define ISM330_ADDRESS_ALT 0x6B  // `SDO` high
+#define ISM330_WHO_AM_I 0x6B     // identity of ISM330DHCX and ISM330DLC
 
 // `CTRL3_C`: both bytes of a value from one sample, address advancing within a burst
 #define ISM330_CTRL3_BDU (1u << 6)

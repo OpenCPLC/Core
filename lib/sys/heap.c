@@ -16,8 +16,8 @@
 // so it is padded to `HEAP_ALIGN`: on a 32-bit target the fields alone take 12 bytes
 // and would hand out 4-aligned memory
 typedef struct heap_block {
-  size_t size;             // payload size [B]
-  struct heap_block *next; // next block in address order
+  size_t size;              // payload size [B]
+  struct heap_block *next;  // next block in address order
   bool free;
 } __attribute__((aligned(HEAP_ALIGN))) heap_block_t;
 
@@ -68,7 +68,6 @@ void *heap_alloc(size_t size)
     return (uint8_t *)block + sizeof(heap_block_t);
   }
   vrts_panic("Heap allocation failed");
-  return NULL;
 }
 
 void heap_free(void *ptr)
@@ -90,7 +89,6 @@ void *heap_reloc(void *ptr, size_t size)
   heap_block_t *block = block_of(ptr);
   if(block->size >= size) return ptr;
   void *moved = heap_alloc(size);
-  if(!moved) return NULL;
   memcpy(moved, ptr, block->size);
   heap_free(ptr);
   return moved;
@@ -127,13 +125,10 @@ void *heap_new(size_t size)
   heap_list_t *list = thread_list();
   if(list->count >= list->limit) {
     uint16_t limit = list->limit + HEAP_NEW_BLOCK;
-    void **var = heap_reloc(list->var, sizeof(void *) * limit);
-    if(!var) return NULL;
-    list->var = var;
+    list->var = heap_reloc(list->var, sizeof(void *) * limit);
     list->limit = limit;
   }
   void *ptr = heap_alloc(size);
-  if(!ptr) return NULL;
   list->var[list->count++] = ptr;
   return ptr;
 }

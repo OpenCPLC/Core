@@ -31,6 +31,13 @@ typedef struct {
   int (*Compare)(const void *a, const void *b);
 } QUEUE_t;
 
+// The storage and the queue under one class, empty or `static`, as `_ary_new` takes it
+#define _QUEUE_New(storage, name, type, capacity, equal, compare) \
+  storage type name##_data[capacity]; \
+  storage QUEUE_t name = { \
+    .ary = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type) }, \
+    .unique = ((equal) != NULL), .Equal = (equal), .Compare = (compare) }
+
 /**
  * @brief Declare a queue with its storage.
  * @param name Variable name
@@ -40,17 +47,11 @@ typedef struct {
  * @param compare Ordering function, `NULL` = FIFO
  */
 #define QUEUE_New(name, type, capacity, equal, compare) \
-  type name##_data[capacity]; \
-  QUEUE_t name = { \
-    .ary = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type) }, \
-    .unique = ((equal) != NULL), .Equal = (equal), .Compare = (compare) }
+  _QUEUE_New(, name, type, capacity, equal, compare)
 
 // `QUEUE_New` with both objects private to the translation unit
 #define QUEUE_NewStatic(name, type, capacity, equal, compare) \
-  static type name##_data[capacity]; \
-  static QUEUE_t name = { \
-    .ary = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type) }, \
-    .unique = ((equal) != NULL), .Equal = (equal), .Compare = (compare) }
+  _QUEUE_New(static, name, type, capacity, equal, compare)
 
 //--------------------------------------------------------------------------------------------- API
 

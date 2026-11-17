@@ -164,14 +164,14 @@ uint64_t tick_now(void)
   return ticker_get();
 }
 
-bool tick_over(uint64_t *tick)
+bool tick_over(volatile uint64_t *tick)
 {
   if(!*tick || *tick > ticker_get()) return false;
   *tick = 0;
   return true;
 }
 
-bool tick_away(uint64_t *tick)
+bool tick_away(volatile uint64_t *tick)
 {
   if(!*tick) return false;
   if(*tick > ticker_get()) return true;

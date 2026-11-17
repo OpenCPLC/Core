@@ -92,11 +92,12 @@ bool ary_insert(ary_t *ary, uint16_t index, const void *element)
   if(ary->count == ary->limit && !ary->overwrite) return false;
   if(index == ary->count) return ary_push(ary, element);
   if(index == 0) return ary_unshift(ary, element);
-  uint8_t tmp[ary->element_size];
+  // Each element moves one slot up straight from its own,
+  // and a full ring pushes into the slot its first element left, never the one it reads.
   for(uint16_t i = ary->count; i > index; i--) {
-    memcpy(tmp, ary_get(ary, i - 1), ary->element_size);
-    if(i == ary->count) ary_push(ary, tmp);
-    else ary_set(ary, i, tmp);
+    const void *previous = ary_get(ary, i - 1);
+    if(i == ary->count) ary_push(ary, previous);
+    else ary_set(ary, i, previous);
   }
   ary_set(ary, index, element);
   return true;
@@ -120,7 +121,8 @@ bool ary_swap(ary_t *ary, uint16_t i, uint16_t j)
 {
   if(i >= ary->count || j >= ary->count) return false;
   if(i == j) return true;
-  uint8_t *a = ary_get(ary, i), *b = ary_get(ary, j);
+  uint8_t *a = ary_ptr(ary, idx_wrap(ary->_tail + i, ary->limit));
+  uint8_t *b = ary_ptr(ary, idx_wrap(ary->_tail + j, ary->limit));
   for(uint16_t k = 0; k < ary->element_size; k++) swap(a[k], b[k]);
   return true;
 }

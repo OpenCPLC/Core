@@ -136,8 +136,8 @@ static uint32_t slot_crc(void)
 static bool request_waits(uint32_t crc)
 {
   BLD_Entry_t entry;
-  return mailbox_newest(&entry) && entry.result == BLD_Result_None && entry.crc == crc &&
-    entry.page == BLD_STAGING_PAGE;
+  return mailbox_newest(&entry) && entry.result == BLD_Result_None && entry.crc == crc
+    && entry.page == BLD_STAGING_PAGE;
 }
 
 // Result of the newest mailbox entry, `-1` without one

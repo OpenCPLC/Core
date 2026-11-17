@@ -4,7 +4,7 @@
 
 #include "pwr.h"
 
-//------------------------------------------------------------------------------- Family registers
+//-------------------------------------------------------------------------------- Family registers
 
 #if defined(STM32G0)
   // G0: status in `ICSR`, clear via `SCR` (write-to-clear)
@@ -124,18 +124,18 @@ static inline void rtc_clear_flag(uint32_t flag)
 // BCD time register into hour, minute and second
 static inline void rtc_decode_tr(uint32_t tr, RTC_Datetime_t *dt)
 {
-  dt->hour   = ((tr >> RTC_TR_HT_Pos)  & 0x03) * 10 + ((tr >> RTC_TR_HU_Pos)  & 0x0F);
+  dt->hour = ((tr >> RTC_TR_HT_Pos) & 0x03) * 10 + ((tr >> RTC_TR_HU_Pos) & 0x0F);
   dt->minute = ((tr >> RTC_TR_MNT_Pos) & 0x07) * 10 + ((tr >> RTC_TR_MNU_Pos) & 0x0F);
-  dt->second = ((tr >> RTC_TR_ST_Pos)  & 0x07) * 10 + ((tr >> RTC_TR_SU_Pos)  & 0x0F);
+  dt->second = ((tr >> RTC_TR_ST_Pos) & 0x07) * 10 + ((tr >> RTC_TR_SU_Pos) & 0x0F);
 }
 
 // BCD date register into year, month, day and weekday
 static inline void rtc_decode_dr(uint32_t dr, RTC_Datetime_t *dt)
 {
-  dt->year      = ((dr >> RTC_DR_YT_Pos) & 0x0F) * 10 + ((dr >> RTC_DR_YU_Pos) & 0x0F);
-  dt->month     = ((dr >> RTC_DR_MT_Pos) & 0x01) * 10 + ((dr >> RTC_DR_MU_Pos) & 0x0F);
+  dt->year = ((dr >> RTC_DR_YT_Pos) & 0x0F) * 10 + ((dr >> RTC_DR_YU_Pos) & 0x0F);
+  dt->month = ((dr >> RTC_DR_MT_Pos) & 0x01) * 10 + ((dr >> RTC_DR_MU_Pos) & 0x0F);
   dt->month_day = ((dr >> RTC_DR_DT_Pos) & 0x03) * 10 + ((dr >> RTC_DR_DU_Pos) & 0x0F);
-  dt->week_day  = (dr >> RTC_DR_WDU_Pos) & 0x07;
+  dt->week_day = (dr >> RTC_DR_WDU_Pos) & 0x07;
 }
 
 // Weekday of a date, stored in `datetime->week_day` too
@@ -149,24 +149,24 @@ static uint8_t rtc_weekday_calc(RTC_Datetime_t *datetime)
 // BCD date register
 static uint32_t rtc_date_register(const RTC_Datetime_t *date)
 {
-  return ((date->year / 10) << RTC_DR_YT_Pos) |
-    ((date->year % 10) << RTC_DR_YU_Pos) |
-    ((date->week_day) << RTC_DR_WDU_Pos) |
-    ((date->month / 10) << RTC_DR_MT_Pos) |
-    ((date->month % 10) << RTC_DR_MU_Pos) |
-    ((date->month_day / 10) << RTC_DR_DT_Pos) |
-    ((date->month_day % 10) << RTC_DR_DU_Pos);
+  return ((date->year / 10) << RTC_DR_YT_Pos)
+    | ((date->year % 10) << RTC_DR_YU_Pos)
+    | ((date->week_day) << RTC_DR_WDU_Pos)
+    | ((date->month / 10) << RTC_DR_MT_Pos)
+    | ((date->month % 10) << RTC_DR_MU_Pos)
+    | ((date->month_day / 10) << RTC_DR_DT_Pos)
+    | ((date->month_day % 10) << RTC_DR_DU_Pos);
 }
 
 // BCD time register
 static uint32_t rtc_time_register(const RTC_Datetime_t *date)
 {
-  return ((date->hour / 10) << RTC_TR_HT_Pos) |
-    ((date->hour % 10) << RTC_TR_HU_Pos) |
-    ((date->minute / 10) << RTC_TR_MNT_Pos) |
-    ((date->minute % 10) << RTC_TR_MNU_Pos) |
-    ((date->second / 10) << RTC_TR_ST_Pos) |
-    ((date->second % 10) << RTC_TR_SU_Pos);
+  return ((date->hour / 10) << RTC_TR_HT_Pos)
+    | ((date->hour % 10) << RTC_TR_HU_Pos)
+    | ((date->minute / 10) << RTC_TR_MNT_Pos)
+    | ((date->minute % 10) << RTC_TR_MNU_Pos)
+    | ((date->second / 10) << RTC_TR_ST_Pos)
+    | ((date->second % 10) << RTC_TR_SU_Pos);
 }
 
 // `stamp_alarm` inside `[stamp_min, stamp_max]`, a window that may wrap at `stamp_reload`
@@ -307,10 +307,10 @@ uint64_t RTC_DatetimeToUnix(const RTC_Datetime_t *date)
     days += RTC_DAYS_IN_MONTH[RTC_LEAP_YEAR(year)][i - 1];
   }
   days += date->month_day - 1;
-  return (uint64_t)days * RTC_SECONDS_IN_DAY +
-    date->hour * RTC_SECONDS_IN_HOUR +
-    date->minute * RTC_SECONDS_IN_MIN +
-    date->second;
+  return (uint64_t)days * RTC_SECONDS_IN_DAY
+    + date->hour * RTC_SECONDS_IN_HOUR
+    + date->minute * RTC_SECONDS_IN_MIN
+    + date->second;
 }
 
 const char *RTC_WeekDayString(void)
@@ -326,12 +326,12 @@ bool RTC_DatetimeIsCorrect(const RTC_Datetime_t *date, int8_t time_zone)
     uint64_t diff = (now > new_ts) ? (now - new_ts) : (new_ts - now);
     if(diff > 3600) return false;
   }
-  return RTC_YEAR_VALID(date->year) &&
-    date->second < 60 &&
-    date->minute < 60 &&
-    date->hour <= 23 &&
-    date->month > 0 && date->month <= 12 &&
-    date->month_day > 0 && date->month_day <= 31;
+  return RTC_YEAR_VALID(date->year)
+    && date->second < 60
+    && date->minute < 60
+    && date->hour <= 23
+    && date->month > 0 && date->month <= 12
+    && date->month_day > 0 && date->month_day <= 31;
 }
 
 //----------------------------------------------------------------------------------- Convert Alarm
@@ -358,9 +358,9 @@ RTC_AlarmCfg_t RTC_WeekstampToAlarm(uint32_t stamp)
 
 uint32_t RTC_AlarmToDaystamp(const RTC_AlarmCfg_t *alarm)
 {
-  return alarm->hour * RTC_SECONDS_IN_HOUR +
-    alarm->minute * RTC_SECONDS_IN_MIN +
-    alarm->second;
+  return alarm->hour * RTC_SECONDS_IN_HOUR
+    + alarm->minute * RTC_SECONDS_IN_MIN
+    + alarm->second;
 }
 
 uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm)
@@ -448,10 +448,10 @@ uint32_t RTC_Daystamp(void)
 uint32_t RTC_Weekstamp(void)
 {
   RTC_Datetime_t dt = RTC_Datetime();
-  return (dt.week_day - 1) * RTC_SECONDS_IN_DAY +
-    dt.hour * RTC_SECONDS_IN_HOUR +
-    dt.minute * RTC_SECONDS_IN_MIN +
-    dt.second;
+  return (dt.week_day - 1) * RTC_SECONDS_IN_DAY
+    + dt.hour * RTC_SECONDS_IN_HOUR
+    + dt.minute * RTC_SECONDS_IN_MIN
+    + dt.second;
 }
 
 //--------------------------------------------------------------------------------------- Alarm Get
@@ -495,20 +495,19 @@ void RTC_AlarmEnable(RTC_Alarm_t alarm, const RTC_AlarmCfg_t *cfg)
     rtc_lock();
     return;
   }
-  *rtc_alarm_reg(alarm) =
-    (cfg->week         << RTC_ALRMAR_WDSEL_Pos) |
-    (cfg->day_mask     << RTC_ALRMAR_MSK4_Pos)  |
-    (cfg->hour_mask    << RTC_ALRMAR_MSK3_Pos)  |
-    (cfg->minute_mask  << RTC_ALRMAR_MSK2_Pos)  |
-    (cfg->second_mask  << RTC_ALRMAR_MSK1_Pos)  |
-    ((cfg->day / 10)    << RTC_ALRMAR_DT_Pos)   |
-    ((cfg->day % 10)    << RTC_ALRMAR_DU_Pos)   |
-    ((cfg->hour / 10)   << RTC_ALRMAR_HT_Pos)   |
-    ((cfg->hour % 10)   << RTC_ALRMAR_HU_Pos)   |
-    ((cfg->minute / 10) << RTC_ALRMAR_MNT_Pos)  |
-    ((cfg->minute % 10) << RTC_ALRMAR_MNU_Pos)  |
-    ((cfg->second / 10) << RTC_ALRMAR_ST_Pos)   |
-    ((cfg->second % 10) << RTC_ALRMAR_SU_Pos);
+  *rtc_alarm_reg(alarm) = (cfg->week << RTC_ALRMAR_WDSEL_Pos)
+    | (cfg->day_mask << RTC_ALRMAR_MSK4_Pos)
+    | (cfg->hour_mask << RTC_ALRMAR_MSK3_Pos)
+    | (cfg->minute_mask << RTC_ALRMAR_MSK2_Pos)
+    | (cfg->second_mask << RTC_ALRMAR_MSK1_Pos)
+    | ((cfg->day / 10) << RTC_ALRMAR_DT_Pos)
+    | ((cfg->day % 10) << RTC_ALRMAR_DU_Pos)
+    | ((cfg->hour / 10) << RTC_ALRMAR_HT_Pos)
+    | ((cfg->hour % 10) << RTC_ALRMAR_HU_Pos)
+    | ((cfg->minute / 10) << RTC_ALRMAR_MNT_Pos)
+    | ((cfg->minute % 10) << RTC_ALRMAR_MNU_Pos)
+    | ((cfg->second / 10) << RTC_ALRMAR_ST_Pos)
+    | ((cfg->second % 10) << RTC_ALRMAR_SU_Pos);
   RTC->CR |= mask;
   rtc_lock();
 }
@@ -648,7 +647,7 @@ void RTC_Alarm_IRQHandler(void)
     rtc_clear_flag(RTC_ISR_ALRBF);
     rtc_alarm_b_flag = true;
   }
-  EXTI->PR1 = EXTI_PR1_PIF17; // Clear EXTI line 17 (RTC Alarm)
+  EXTI->PR1 = EXTI_PR1_PIF17; // clear EXTI line 17 (RTC Alarm)
   NVIC_ClearPendingIRQ(RTC_Alarm_IRQn);
 }
 
@@ -658,7 +657,7 @@ void RTC_WKUP_IRQHandler(void)
     rtc_clear_flag(RTC_ISR_WUTF);
     rtc_wakeup_flag = true;
   }
-  EXTI->PR1 = EXTI_PR1_PIF19; // Clear EXTI line 19 (RTC Wakeup)
+  EXTI->PR1 = EXTI_PR1_PIF19; // clear EXTI line 19 (RTC Wakeup)
   NVIC_ClearPendingIRQ(RTC_WKUP_IRQn);
 }
 #endif

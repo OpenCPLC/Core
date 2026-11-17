@@ -35,7 +35,7 @@
  * @param _rx_dma RX DMA register set
  * @param _busy Transfer in progress flag
  * @param _nack Last transfer was refused by the device
- * @param _tx_buffer Heap copy of register plus data behind `I2C_Master_WriteReg`
+ * @param _tx_buffer Register plus data of `I2C_Master_WriteReg`, kept until the next one
  * @param _tx_ptr TX data, interrupt mode
  * @param _rx_ptr RX data
  * @param _tail Byte index of the transfer, interrupt mode
@@ -60,11 +60,11 @@ typedef struct {
   volatile bool _nack;
   uint8_t *_tx_buffer;
   volatile uint8_t *_tx_ptr;
-  uint8_t *_rx_ptr;
+  uint8_t *volatile _rx_ptr;
   volatile uint16_t _tail;
-  uint16_t _head;
+  volatile uint16_t _head;
   uint8_t _addr;
-  uint16_t _size;
+  volatile uint16_t _size;
 } I2C_Master_t;
 
 //--------------------------------------------------------------------------------------------- API
@@ -116,7 +116,7 @@ status_t I2C_Master_Read(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16_
 
 /**
  * @brief Write a device register: the register address followed by `data`,
- *   copied to a heap block released when the transfer ends.
+ *   copied to a heap block kept until the next call.
  * @param[in,out] i2c Pointer to I2C master structure
  * @param[in] addr 7-bit device address
  * @param[in] reg Register address

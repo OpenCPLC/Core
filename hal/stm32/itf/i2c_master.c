@@ -15,12 +15,6 @@ static inline void start_read(I2C_Master_t *i2c)
   i2c->_size = 0;
 }
 
-static void release_tx_buffer(I2C_Master_t *i2c)
-{
-  heap_free(i2c->_tx_buffer);
-  i2c->_tx_buffer = NULL;
-}
-
 static void irq_handler(I2C_Master_t *i2c)
 {
   uint32_t cr1 = i2c->reg->CR1;
@@ -49,15 +43,17 @@ static void irq_handler(I2C_Master_t *i2c)
     i2c->reg->ICR |= I2C_ICR_STOPCF;
     i2c->reg->CR1 &= ~I2C_CR1_STOPIE;
     i2c->_busy = false;
-    release_tx_buffer(i2c);
   }
   if((cr1 & I2C_CR1_NACKIE) && (isr & I2C_ISR_NACKF)) {
     // `AUTOEND` turns the NACK into a STOP, so `STOPF` is raised here too
     i2c->reg->ICR |= I2C_ICR_NACKCF | I2C_ICR_STOPCF;
-    i2c->reg->CR1 &= ~(I2C_CR1_NACKIE | I2C_CR1_STOPIE |
-      I2C_CR1_TXIE | I2C_CR1_RXIE | I2C_CR1_TCIE);
-    release_tx_buffer(i2c);
+    i2c->reg->CR1 &= ~(I2C_CR1_NACKIE
+      | I2C_CR1_STOPIE
+      | I2C_CR1_TXIE
+      | I2C_CR1_RXIE
+      | I2C_CR1_TCIE);
     i2c->_nack = true;
+    i2c->_size = 0; // a read meant to follow the write never starts
     i2c->_busy = false;
   }
 }
@@ -156,8 +152,8 @@ status_t I2C_Master_Write(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16
   if(!i2c->tx_dma && len == 1) i2c->reg->CR1 |= I2C_CR1_STOPIE;
   // An absent device produces an address NACK and nothing else
   i2c->reg->CR1 |= I2C_CR1_NACKIE;
+  i2c->_busy = true; // first, the transfer may end before the line after its start runs
   i2c->reg->CR2 = I2C_CR2_AUTOEND | (len << 16) | (addr << 1) | I2C_CR2_START;
-  i2c->_busy = true;
   return FREE;
 }
 
@@ -174,8 +170,8 @@ status_t I2C_Master_Read(I2C_Master_t *i2c, uint8_t addr, uint8_t *data, uint16_
     i2c->reg->CR1 |= I2C_CR1_RXIE;
   }
   i2c->reg->CR1 |= I2C_CR1_NACKIE;
+  i2c->_busy = true; // first, the transfer may end before the line after its start runs
   i2c->reg->CR2 = I2C_CR2_AUTOEND | (len << 16) | I2C_CR2_RD_WRN | (addr << 1) | I2C_CR2_START;
-  i2c->_busy = true;
   return FREE;
 }
 
@@ -184,8 +180,9 @@ status_t I2C_Master_WriteReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
 {
   if(i2c->_busy) return BUSY;
   if(!data || !len || len >= I2C_TRANSFER_MAX) return ERR;
+  // Taken and given back here, in a thread: the interrupt ending the write never touches the heap
+  heap_free(i2c->_tx_buffer);
   i2c->_tx_buffer = heap_alloc(len + 1);
-  if(!i2c->_tx_buffer) return ERR;
   i2c->_tx_buffer[0] = reg;
   memcpy(&i2c->_tx_buffer[1], data, len);
   return I2C_Master_Write(i2c, addr, i2c->_tx_buffer, len + 1);
@@ -201,9 +198,9 @@ status_t I2C_Master_ReadReg(I2C_Master_t *i2c, uint8_t addr, uint8_t reg,
   i2c->_rx_ptr = data;
   i2c->_size = len;
   i2c->reg->CR1 |= I2C_CR1_TCIE | I2C_CR1_NACKIE;
+  i2c->_busy = true; // first, the transfer may end before the line after its start runs
   i2c->reg->CR2 = (1 << 16) | (addr << 1) | I2C_CR2_START;
   i2c->reg->TXDR = reg;
-  i2c->_busy = true;
   return FREE;
 }
 
@@ -219,8 +216,8 @@ status_t I2C_Master_WriteRead(I2C_Master_t *i2c, uint8_t addr,
   i2c->_size = rx_len;
   tx_arm(i2c, tx_data, tx_len);
   i2c->reg->CR1 |= I2C_CR1_TCIE | I2C_CR1_NACKIE;
+  i2c->_busy = true; // first, the transfer may end before the line after its start runs
   i2c->reg->CR2 = (tx_len << 16) | (addr << 1) | I2C_CR2_START;
-  i2c->_busy = true;
   return FREE;
 }
 

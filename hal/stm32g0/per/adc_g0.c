@@ -71,9 +71,9 @@ static int8_t select_channels(const uint8_t *cha, uint8_t count, bool ovs,
 }
 
 static uint32_t oversampling_bits(ADC_Oversampling_t *ovs) {
-  return (ovs->shift << ADC_CFGR2_OVSS_Pos) |
-    (ovs->ratio << ADC_CFGR2_OVSR_Pos) |
-    (ovs->enable ? ADC_CFGR2_OVSE : 0);
+  return (ovs->shift << ADC_CFGR2_OVSS_Pos)
+    | (ovs->ratio << ADC_CFGR2_OVSR_Pos)
+    | (ovs->enable ? ADC_CFGR2_OVSE : 0);
 }
 
 // `CFGR1` and `CFGR2` take writes only with converter disabled (RM0444 §15.12.4, §15.12.5):

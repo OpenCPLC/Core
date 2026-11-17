@@ -23,7 +23,7 @@
 #define BLE_NAME_SIZE 23
 
 // What the 31B advertisement leaves for the name,
-// beside the flags entry and the 128-bit service UUID: 31 - 3 - 18 - 2.
+// beside the flags entry and the 128-bit service UUID: 31 − 3 − 18 − 2.
 // Past it the advertised name is cut and marked shortened.
 #define BLE_ADV_NAME_SIZE 8
 
@@ -79,10 +79,10 @@ typedef enum {
 // Stack replies from the latest advertising attempt: 0 = accepted,
 // 0xFF = no response or step not reached. Valid after advertising was attempted.
 typedef struct {
-  uint8_t start;         // `ACI_GAP_SET_DISCOVERABLE`
-  uint8_t tx_power;      // `ACI_GAP_DELETE_AD_TYPE`
-  uint8_t uuid;          // `ACI_GAP_UPDATE_ADV_DATA`
-  uint8_t scan_response; // `HCI_LE_SET_SCAN_RESPONSE_DATA`
+  uint8_t start;          // `ACI_GAP_SET_DISCOVERABLE`
+  uint8_t tx_power;       // `ACI_GAP_DELETE_AD_TYPE`
+  uint8_t uuid;           // `ACI_GAP_UPDATE_ADV_DATA`
+  uint8_t scan_response;  // `HCI_LE_SET_SCAN_RESPONSE_DATA`
 } BLE_AdvStatus_t;
 
 // Characteristic properties, values as in the Bluetooth declaration bitfield

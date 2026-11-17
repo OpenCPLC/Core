@@ -107,7 +107,7 @@ static void print_args(const char *format, va_list list)
     }
     bool long_int = false;
     while(*format == 'l') { format++; long_int = true; }
-    // printf semantics: width is the field width, space-padded unless the `0` flag
+    // `printf` semantics: width is the field width, space-padded unless the `0` flag
     // asks for zeros; precision is the least digit count of an integer
     uint8_t fill_space = flag_zero ? 0 : width;
     uint8_t fill_zero = flag_zero ? width : (has_precision ? precision : 0);
@@ -306,10 +306,13 @@ void _LOG_Critical(const char *message, ...) { LOG_EMIT(LOG_Level_Critical, mess
 
 void _LOG_Panic(const char *message)
 {
+  // A panic may come from an interrupt the port's own never preempts, so the port is polled.
+  // A buffer short of room refuses the whole string, so what waits goes out first.
+  DBG_FlushPolled();
   DBG_String(level_tag[LOG_Level_Panic]);
   DBG_String(message);
   DBG_Enter();
-  DBG_Flush();
+  DBG_FlushPolled();
 }
 
 void _LOG_Message(LOG_Level_t lvl, const char *message, ...)
