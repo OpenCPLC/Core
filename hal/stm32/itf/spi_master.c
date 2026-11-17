@@ -42,9 +42,12 @@ void SPI_Master_Init(SPI_Master_t *spi)
   }
   // 8-bit frames (`DS` = 7), RX threshold at one byte, NSS output
   uint32_t cr2 = SPI_CR2_RXDMAEN | SPI_CR2_FRXTH | SPI_CR2_SSOE | (7u << SPI_CR2_DS_Pos);
-  uint32_t cr1 = SPI_CR1_MSTR | (spi->lsb << SPI_CR1_LSBFIRST_Pos) |
-    (spi->prescaler << SPI_CR1_BR_Pos) | SPI_CR1_SPE |
-    (spi->cpol << SPI_CR1_CPOL_Pos) | (spi->cpha << SPI_CR1_CPHA_Pos);
+  uint32_t cr1 = SPI_CR1_MSTR
+    | (spi->lsb << SPI_CR1_LSBFIRST_Pos)
+    | (spi->prescaler << SPI_CR1_BR_Pos)
+    | SPI_CR1_SPE
+    | (spi->cpol << SPI_CR1_CPOL_Pos)
+    | (spi->cpha << SPI_CR1_CPHA_Pos);
   // Without a chip select GPIO the hardware NSS output (`SSOE`) drives the line
   if(spi->cs) {
     spi->cs->mode = GPIO_Mode_Output;

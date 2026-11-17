@@ -127,7 +127,7 @@ void (* volatile IPCC_TX_Cb)(void *) = void_handler;
 //----------------------------------------------------------------------- Weak IRQ handlers: System
 
 STARTUP_WEAK void NMI_Handler(void) { Default_Handler(); }
-STARTUP_WEAK void HardFault_Handler(void) { while(1); }
+void HardFault_Handler(void); // weak beside `panic`, which a fault ends in
 STARTUP_WEAK void MemManage_Handler(void) { Default_Handler(); }
 STARTUP_WEAK void BusFault_Handler(void) { Default_Handler(); }
 STARTUP_WEAK void UsageFault_Handler(void) { Default_Handler(); }
@@ -297,69 +297,69 @@ void (* const VectorTable[])(void) = {
   PendSV_Handler,
   SysTick_Handler,
   // External interrupts
-  WWDG_IRQHandler,                              // 0
-  PVD_PVM_IRQHandler,                           // 1
-  TAMP_STAMP_LSECSS_IRQHandler,                 // 2
-  RTC_WKUP_IRQHandler,                          // 3
-  FLASH_IRQHandler,                             // 4
-  RCC_IRQHandler,                               // 5
-  EXTI0_IRQHandler,                             // 6
-  EXTI1_IRQHandler,                             // 7
-  EXTI2_IRQHandler,                             // 8
-  EXTI3_IRQHandler,                             // 9
-  EXTI4_IRQHandler,                             // 10
-  DMA1_Channel1_IRQHandler,                     // 11
-  DMA1_Channel2_IRQHandler,                     // 12
-  DMA1_Channel3_IRQHandler,                     // 13
-  DMA1_Channel4_IRQHandler,                     // 14
-  DMA1_Channel5_IRQHandler,                     // 15
-  DMA1_Channel6_IRQHandler,                     // 16
-  DMA1_Channel7_IRQHandler,                     // 17
-  ADC1_IRQHandler,                              // 18
-  USB_HP_IRQHandler,                            // 19
-  USB_LP_IRQHandler,                            // 20
-  C2SEV_PWR_C2H_IRQHandler,                     // 21
-  COMP_IRQHandler,                              // 22
-  EXTI9_5_IRQHandler,                           // 23
-  TIM1_BRK_IRQHandler,                          // 24
-  TIM1_UP_TIM16_IRQHandler,                     // 25
-  TIM1_TRG_COM_TIM17_IRQHandler,                // 26
-  TIM1_CC_IRQHandler,                           // 27
-  TIM2_IRQHandler,                              // 28
-  PKA_IRQHandler,                               // 29
-  I2C1_EV_IRQHandler,                           // 30
-  I2C1_ER_IRQHandler,                           // 31
-  I2C3_EV_IRQHandler,                           // 32
-  I2C3_ER_IRQHandler,                           // 33
-  SPI1_IRQHandler,                              // 34
-  SPI2_IRQHandler,                              // 35
-  USART1_IRQHandler,                            // 36
-  LPUART1_IRQHandler,                           // 37
-  SAI1_IRQHandler,                              // 38
-  TSC_IRQHandler,                               // 39
-  EXTI15_10_IRQHandler,                         // 40
-  RTC_Alarm_IRQHandler,                         // 41
-  CRS_IRQHandler,                               // 42
-  PWR_SOTF_BLEACT_802ACT_RFPHASE_IRQHandler,    // 43
-  IPCC_C1_RX_IRQHandler,                        // 44
-  IPCC_C1_TX_IRQHandler,                        // 45
-  HSEM_IRQHandler,                              // 46
-  LPTIM1_IRQHandler,                            // 47
-  LPTIM2_IRQHandler,                            // 48
-  LCD_IRQHandler,                               // 49
-  QUADSPI_IRQHandler,                           // 50
-  AES1_IRQHandler,                              // 51
-  AES2_IRQHandler,                              // 52
-  RNG_IRQHandler,                               // 53
-  FPU_IRQHandler,                               // 54
-  DMA2_Channel1_IRQHandler,                     // 55
-  DMA2_Channel2_IRQHandler,                     // 56
-  DMA2_Channel3_IRQHandler,                     // 57
-  DMA2_Channel4_IRQHandler,                     // 58
-  DMA2_Channel5_IRQHandler,                     // 59
-  DMA2_Channel6_IRQHandler,                     // 60
-  DMA2_Channel7_IRQHandler,                     // 61
-  DMAMUX1_OVR_IRQHandler,                       // 62
+  WWDG_IRQHandler,                            // 0
+  PVD_PVM_IRQHandler,                         // 1
+  TAMP_STAMP_LSECSS_IRQHandler,               // 2
+  RTC_WKUP_IRQHandler,                        // 3
+  FLASH_IRQHandler,                           // 4
+  RCC_IRQHandler,                             // 5
+  EXTI0_IRQHandler,                           // 6
+  EXTI1_IRQHandler,                           // 7
+  EXTI2_IRQHandler,                           // 8
+  EXTI3_IRQHandler,                           // 9
+  EXTI4_IRQHandler,                           // 10
+  DMA1_Channel1_IRQHandler,                   // 11
+  DMA1_Channel2_IRQHandler,                   // 12
+  DMA1_Channel3_IRQHandler,                   // 13
+  DMA1_Channel4_IRQHandler,                   // 14
+  DMA1_Channel5_IRQHandler,                   // 15
+  DMA1_Channel6_IRQHandler,                   // 16
+  DMA1_Channel7_IRQHandler,                   // 17
+  ADC1_IRQHandler,                            // 18
+  USB_HP_IRQHandler,                          // 19
+  USB_LP_IRQHandler,                          // 20
+  C2SEV_PWR_C2H_IRQHandler,                   // 21
+  COMP_IRQHandler,                            // 22
+  EXTI9_5_IRQHandler,                         // 23
+  TIM1_BRK_IRQHandler,                        // 24
+  TIM1_UP_TIM16_IRQHandler,                   // 25
+  TIM1_TRG_COM_TIM17_IRQHandler,              // 26
+  TIM1_CC_IRQHandler,                         // 27
+  TIM2_IRQHandler,                            // 28
+  PKA_IRQHandler,                             // 29
+  I2C1_EV_IRQHandler,                         // 30
+  I2C1_ER_IRQHandler,                         // 31
+  I2C3_EV_IRQHandler,                         // 32
+  I2C3_ER_IRQHandler,                         // 33
+  SPI1_IRQHandler,                            // 34
+  SPI2_IRQHandler,                            // 35
+  USART1_IRQHandler,                          // 36
+  LPUART1_IRQHandler,                         // 37
+  SAI1_IRQHandler,                            // 38
+  TSC_IRQHandler,                             // 39
+  EXTI15_10_IRQHandler,                       // 40
+  RTC_Alarm_IRQHandler,                       // 41
+  CRS_IRQHandler,                             // 42
+  PWR_SOTF_BLEACT_802ACT_RFPHASE_IRQHandler,  // 43
+  IPCC_C1_RX_IRQHandler,                      // 44
+  IPCC_C1_TX_IRQHandler,                      // 45
+  HSEM_IRQHandler,                            // 46
+  LPTIM1_IRQHandler,                          // 47
+  LPTIM2_IRQHandler,                          // 48
+  LCD_IRQHandler,                             // 49
+  QUADSPI_IRQHandler,                         // 50
+  AES1_IRQHandler,                            // 51
+  AES2_IRQHandler,                            // 52
+  RNG_IRQHandler,                             // 53
+  FPU_IRQHandler,                             // 54
+  DMA2_Channel1_IRQHandler,                   // 55
+  DMA2_Channel2_IRQHandler,                   // 56
+  DMA2_Channel3_IRQHandler,                   // 57
+  DMA2_Channel4_IRQHandler,                   // 58
+  DMA2_Channel5_IRQHandler,                   // 59
+  DMA2_Channel6_IRQHandler,                   // 60
+  DMA2_Channel7_IRQHandler,                   // 61
+  DMAMUX1_OVR_IRQHandler,                     // 62
 };
 
 //-------------------------------------------------------------------------------------------------

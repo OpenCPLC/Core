@@ -36,17 +36,19 @@ void GPIO_BackendWakeup(GPIO_t *gpio)
 
 static void exti_irq_handler(EXTI_t *exti)
 {
+  // A masked line keeps latching its edges, and a shared vector calls every one of its lines
+  if(!exti->irq_enable) return;
   uint32_t mask = 1u << exti->pin;
   // G0 has separate falling/rising pending registers
   if(EXTI->FPR1 & mask) {
-    EXTI->FPR1 = mask; // Write 1 to clear
+    EXTI->FPR1 = mask; // write 1 to clear
     exti->_fall_cnt++;
     exti->_state = false;
     if(exti->FallHandler) exti->FallHandler(exti->fall_arg);
     if(exti->oneshot) EXTI_Off(exti);
   }
   if(EXTI->RPR1 & mask) {
-    EXTI->RPR1 = mask; // Write 1 to clear
+    EXTI->RPR1 = mask; // write 1 to clear
     exti->_rise_cnt++;
     exti->_state = true;
     if(exti->RiseHandler) exti->RiseHandler(exti->rise_arg);
@@ -83,7 +85,7 @@ void EXTI_Init(EXTI_t *exti)
     (exti->port->MODER & ~(3u << (2u * exti->pin))) | (exti->mode << (2u * exti->pin));
   exti->port->PUPDR =
     (exti->port->PUPDR & ~(3u << (2u * exti->pin))) | (exti->pull << (2u * exti->pin));
-  // EXTICR - G0 uses 8-bit fields in EXTI->EXTICR
+  // `EXTICR`: G0 uses 8-bit fields in `EXTI->EXTICR`
   uint32_t reg = exti->pin / 4;
   uint32_t pos = 8 * (exti->pin % 4);
   uint32_t val = EXTI->EXTICR[reg] & ~(0xFFu << pos);
@@ -105,7 +107,7 @@ void EXTI_Init(EXTI_t *exti)
   // Enable/disable
   if(exti->irq_enable) EXTI_On(exti);
   else EXTI_Off(exti);
-  // IRQ - G0 has no subpriority
+  // IRQ: G0 has no subpriority
   IRQ_EnableEXTI(exti->pin, exti->irq_priority, (IRQ_Handler_t)exti_irq_handler, exti);
 }
 

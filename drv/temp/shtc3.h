@@ -4,7 +4,7 @@
 #define SHTC3_H_
 
 #include <stdint.h>
-#include <xmath.h>
+#include "xmath.h"
 #include "i2c_master.h"
 
 //--------------------------------------------------------------------------------------- Constants
@@ -90,7 +90,7 @@ typedef struct {
  */
 status_t SHTC3_Loop(SHTC3_t *shtc3);
 
-float SHTC3_Temperature_C(SHTC3_t *shtc3);  // Last temperature in °C, `NaN` when expired
-float SHTC3_Humidity_RH(SHTC3_t *shtc3);    // Last humidity in %RH, `NaN` when expired
+float SHTC3_Temperature_C(SHTC3_t *shtc3);  // last temperature in °C, `NaN` when expired
+float SHTC3_Humidity_RH(SHTC3_t *shtc3);    // last humidity in %RH, `NaN` when expired
 
 #endif

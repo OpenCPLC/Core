@@ -125,8 +125,8 @@ bool RTC_DatetimeIsCorrect(const RTC_Datetime_t *date, int8_t time_zone)
 {
   unused(time_zone);
   if(date->month < 1 || date->month > 12) return false;
-  if(date->month_day < 1 ||
-    date->month_day > get_days_in_month(date->month, 2000 + date->year)) return false;
+  if(date->month_day < 1
+    || date->month_day > get_days_in_month(date->month, 2000 + date->year)) return false;
   if(date->hour > 23) return false;
   if(date->minute > 59) return false;
   if(date->second > 59) return false;

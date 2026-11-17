@@ -56,12 +56,24 @@ void heap_free(void *ptr);
  * @brief Allocate a block owned by the calling thread's garbage collector.
  *   Every block taken this way goes back with the next `heap_clear` of that thread.
  * @param[in] size Number of bytes, `0` returns `NULL`
- * @return Pointer to the block, `NULL` when the collector list cannot grow
+ * @return Pointer to the block, a full heap is a `vrts_panic` as in `heap_alloc`
  */
 void *heap_new(size_t size);
 
 // Release every `heap_new` block of the calling thread
 void heap_clear(void);
+
+//-------------------------------------------------------------------------------------- Attributes
+
+// A block of `heap_alloc` goes back through `heap_free` or `heap_reloc`, which `-Wall`
+// and `-fanalyzer` then hold every caller to; each names the others, so they come last.
+// gcc 11 is the first to take a deallocator in `malloc`, an older compiler goes without.
+#if defined(__GNUC__) && __GNUC__ >= 11
+void *heap_alloc(size_t size)
+  __attribute__((malloc(heap_free, 1), malloc(heap_reloc, 1), returns_nonnull));
+void *heap_reloc(void *ptr, size_t size)
+  __attribute__((malloc(heap_free, 1), malloc(heap_reloc, 1)));
+#endif
 
 //-------------------------------------------------------------------------------------------------
 #endif

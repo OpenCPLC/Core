@@ -34,16 +34,37 @@ typedef struct {
 
 //------------------------------------------------------------------------------------------ Macros
 
+// Each macro declares two objects, the storage and the array over it.
+// `static` written before the macro would reach the first alone,
+// so each has a `_static` twin passing the class to both.
+
+#define _ary_new(storage, name, type, capacity, ring) \
+  storage type name##_data[capacity]; \
+  storage ary_t name = { .value = name##_data, .limit = (capacity), \
+    .element_size = sizeof(type), .overwrite = (ring), ._head = 0, ._tail = 0, .count = 0 }
+
+#define _ary_init(storage, name, type, capacity, ...) \
+  storage type name##_data[capacity] = __VA_ARGS__; \
+  storage ary_t name = { .value = name##_data, .limit = (capacity), \
+    .element_size = sizeof(type), .overwrite = false, \
+    ._head = (uint16_t)((sizeof((type[])__VA_ARGS__) / sizeof(type)) % (capacity)), \
+    ._tail = 0, .count = (uint16_t)(sizeof((type[])__VA_ARGS__) / sizeof(type)) }
+
+#define _ary_const(storage, name, type, ...) \
+  storage const type name##_data[] = __VA_ARGS__; \
+  enum { name##_limit = sizeof(name##_data) / sizeof(type) }; \
+  storage const ary_t name = { .value = (void *)(uintptr_t)name##_data, .limit = name##_limit, \
+    .element_size = sizeof(type), .overwrite = false, \
+    ._head = name##_limit, ._tail = 0, .count = name##_limit }
+
 /**
  * @brief Declare an empty array with its storage.
  * @param name Variable name
  * @param type Element type
  * @param capacity Maximum elements
  */
-#define ary_new(name, type, capacity) \
-  type name##_data[capacity]; \
-  ary_t name = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type), \
-    .overwrite = false, ._head = 0, ._tail = 0, .count = 0 }
+#define ary_new(name, type, capacity) _ary_new(, name, type, capacity, false)
+#define ary_new_static(name, type, capacity) _ary_new(static, name, type, capacity, false)
 
 /**
  * @brief Declare a ring buffer, the oldest element is overwritten when full.
@@ -51,10 +72,8 @@ typedef struct {
  * @param type Element type
  * @param capacity Maximum elements
  */
-#define ary_ring(name, type, capacity) \
-  type name##_data[capacity]; \
-  ary_t name = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type), \
-    .overwrite = true, ._head = 0, ._tail = 0, .count = 0 }
+#define ary_ring(name, type, capacity) _ary_new(, name, type, capacity, true)
+#define ary_ring_static(name, type, capacity) _ary_new(static, name, type, capacity, true)
 
 /**
  * @brief Declare an array with initial values.
@@ -64,25 +83,20 @@ typedef struct {
  * @param capacity Maximum elements
  * @param ... Initial values in braces, `{1, 2, 3}`
  */
-#define ary_init(name, type, capacity, ...) \
-  type name##_data[capacity] = __VA_ARGS__; \
-  ary_t name = { .value = name##_data, .limit = (capacity), .element_size = sizeof(type), \
-    .overwrite = false, \
-    ._head = (uint16_t)((sizeof((type[])__VA_ARGS__) / sizeof(type)) % (capacity)), \
-    ._tail = 0, .count = (uint16_t)(sizeof((type[])__VA_ARGS__) / sizeof(type)) }
+#define ary_init(name, type, capacity, ...) _ary_init(, name, type, capacity, __VA_ARGS__)
+#define ary_init_static(name, type, capacity, ...) \
+  _ary_init(static, name, type, capacity, __VA_ARGS__)
 
 /**
  * @brief Declare a read-only array sized by its initializer.
+ *   The data stays in flash and `const` on the array keeps writers off it,
+ *   so its address reaches `void *value` through `uintptr_t`, on purpose.
  * @param name Variable name
  * @param type Element type
  * @param ... Initial values in braces, `{1, 2, 3}`
  */
-#define ary_const(name, type, ...) \
-  const type name##_data[] = __VA_ARGS__; \
-  enum { name##_limit = sizeof(name##_data) / sizeof(type) }; \
-  const ary_t name = { .value = (void *)name##_data, .limit = name##_limit, \
-    .element_size = sizeof(type), .overwrite = false, \
-    ._head = name##_limit, ._tail = 0, .count = name##_limit }
+#define ary_const(name, type, ...) _ary_const(, name, type, __VA_ARGS__)
+#define ary_const_static(name, type, ...) _ary_const(static, name, type, __VA_ARGS__)
 
 /**
  * @brief Loop over element indices.

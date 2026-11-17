@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "stm32wbxx.h"
+#include <stm32wbxx.h>
 #include "vrts.h"
 #include "pwr.h"
 #include "sys.h"
@@ -23,8 +23,8 @@
 // Node layout is fixed by `WPAN_Header_t`, ownership by the IPCC channel flags;
 // the interrupt mask only fences CPU1 against its own contexts.
 typedef struct node {
-  struct node *next;
-  struct node *prev;
+  struct node *volatile next;
+  struct node *volatile prev;
 } node_t;
 
 static void list_init(node_t *head)
@@ -432,10 +432,10 @@ uint8_t WPAN_BleStackInit(uint16_t attributes, uint16_t services, uint16_t value
   param.ExtendedPacketLengthEnable = 1;
   // Prepare-write and memory block counts from the `ble_bufsize.h` formulas
   param.PrWriteListSize = (uint8_t)(div_ceil(WPAN_BLE_ATT_MTU, 23 - 5) * 2);
-  param.MblockCount = (uint8_t)(param.PrWriteListSize +
-    div_ceil(WPAN_BLE_ATT_MTU + 4u, 32) + 1 +
-    WPAN_BLE_LINKS +
-    (div_ceil(WPAN_BLE_ATT_MTU + 4u, 32) + 2) * WPAN_BLE_LINKS + 1);
+  param.MblockCount = (uint8_t)(param.PrWriteListSize
+    + div_ceil(WPAN_BLE_ATT_MTU + 4u, 32) + 1
+    + WPAN_BLE_LINKS
+    + (div_ceil(WPAN_BLE_ATT_MTU + 4u, 32) + 2) * WPAN_BLE_LINKS + 1);
   param.AttMtu = WPAN_BLE_ATT_MTU;
   param.PeripheralSca = 500;
   param.CentralSca = 0;

@@ -8,10 +8,10 @@
 #include "xdef.h"
 
 #if defined(STM32G0)
-  #include "stm32g0xx.h"
+  #include <stm32g0xx.h>
   #include "pwr_g0.h"
 #elif defined(STM32WB)
-  #include "stm32wbxx.h"
+  #include <stm32wbxx.h>
   #include "pwr_wb.h"
 #endif
 
@@ -188,11 +188,11 @@ bool IWDG_WasReset(void);
 // A higher level resets earlier on a supply droop, before the core enters an undefined
 // state. `BOR_Level_1V7` leaves only the always-on power-down detector. Voltages approximate
 typedef enum {
-  BOR_Level_1V7 = 0, // ~1.7V power-down only, always on
-  BOR_Level_2V0 = 1, // rising ~2.0V
-  BOR_Level_2V2 = 2, // rising ~2.2V
-  BOR_Level_2V5 = 3, // rising ~2.5V
-  BOR_Level_2V8 = 4  // rising ~2.8V
+  BOR_Level_1V7 = 0,  // ~1.7V power-down only, always on
+  BOR_Level_2V0 = 1,  // rising ~2.0V
+  BOR_Level_2V2 = 2,  // rising ~2.2V
+  BOR_Level_2V5 = 3,  // rising ~2.5V
+  BOR_Level_2V8 = 4   // rising ~2.8V
 } BOR_Level_t;
 
 // Threshold programmed in the option bytes

@@ -6,9 +6,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #if defined(STM32G0)
-  #include "stm32g0xx.h"
+  #include <stm32g0xx.h>
 #elif defined(STM32WB)
-  #include "stm32wbxx.h"
+  #include <stm32wbxx.h>
 #endif
 #include "irq.h"
 #include "pwr.h"
@@ -89,7 +89,7 @@ typedef struct {
   GPIO_WakeupPull_t wakeup_pull;
   #endif
   uint8_t alternate;
-  bool set;
+  volatile bool set;
 } GPIO_t;
 
 /**
@@ -182,7 +182,7 @@ typedef struct {
   GPIO_Pull_t pull;
   bool rise_detect;
   bool fall_detect;
-  bool irq_enable;
+  volatile bool irq_enable;
   IRQ_Priority_t irq_priority;
   bool oneshot;
   EXTI_Handler_t RiseHandler;
@@ -192,7 +192,7 @@ typedef struct {
   // internal
   volatile uint16_t _rise_cnt;
   volatile uint16_t _fall_cnt;
-  bool _state;
+  volatile bool _state;
 } EXTI_t;
 
 /**

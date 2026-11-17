@@ -24,13 +24,11 @@ static MBB_t tx_file = { .name = "debug", .buffer = tx_memory, .limit = DBG_TX_S
 UART_t *DbgUart;
 MBB_t *DbgFile = &tx_file;
 volatile bool DbgReset;
-bool DbgEcho = true;
 
 // Binary transfer: no console parsing, no echo, frames closed by the port timeout
 static void switch_mode(bool data_mode)
 {
   DbgUart->buff->console_mode = !data_mode;
-  DbgEcho = !data_mode;
   UART_SetTimeout(DbgUart, data_mode ? DBG_DATAMODE_TIMEOUT : 0);
 }
 
@@ -123,11 +121,8 @@ void DBG_Loop(void)
       heap_clear();
       if(DbgFile->size) {
         uint8_t *batch = heap_new(DbgFile->size);
-        // A heap too small to copy the batch out costs log lines, never the device
-        if(batch) {
-          memcpy(batch, DbgFile->buffer, DbgFile->size);
-          UART_Send(DbgUart, batch, DbgFile->size);
-        }
+        memcpy(batch, DbgFile->buffer, DbgFile->size);
+        UART_Send(DbgUart, batch, DbgFile->size);
         MBB_Clear(DbgFile);
       }
       else if(DbgReset && UART_SendCompleted(DbgUart)) PWR_Reset();
@@ -154,6 +149,14 @@ void DBG_Flush(void)
   if(!DbgFile->size) return;
   UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
   DBG_WaitBlock();
+  MBB_Clear(DbgFile);
+}
+
+void DBG_FlushPolled(void)
+{
+  // Before `DBG_Init` there is no port, and the lines stay where the printers left them
+  if(!DbgUart || !DbgFile->size) return;
+  UART_SendPolled(DbgUart, DbgFile->buffer, DbgFile->size);
   MBB_Clear(DbgFile);
 }
 
@@ -191,7 +194,6 @@ int32_t DBG_Int(int64_t nbr, uint8_t base, bool sign, uint8_t fill_zero, uint8_t
 }
 
 int32_t DBG_Float(float nbr, uint8_t accuracy) { return MBB_Float(DbgFile, nbr, accuracy, 0, 0); }
-
 
 int32_t DBG_Dec(int64_t nbr) { return MBB_Dec(DbgFile, nbr); }
 int32_t DBG_uDec(uint64_t nbr) { return MBB_uDec(DbgFile, nbr); }

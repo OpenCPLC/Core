@@ -7,9 +7,9 @@
 #include <stdint.h>
 #include <string.h>
 #if defined(STM32G0)
-  #include "stm32g0xx.h"
+  #include <stm32g0xx.h>
 #elif defined(STM32WB)
-  #include "stm32wbxx.h"
+  #include <stm32wbxx.h>
 #endif
 #include "xdef.h"
 #include "main.h"
@@ -43,7 +43,7 @@
 
 // Declare an 8-byte aligned stack of `size` words
 #define stack(name, size) \
-  static uint32_t name[8 * ((size + 7) / 8)] __attribute__((aligned(8)))
+  static uint32_t name[8 * (((size) + 7) / 8)] __attribute__((aligned(8)))
 
 // Register a thread on a stack declared with `stack`
 #define thread(fnc, stack_name) \
@@ -82,14 +82,14 @@ uint64_t tick_now(void);
  * @param[in,out] tick Deadline from `tick_keep`, `0` = disarmed
  * @return `true` once when the deadline passes, `false` otherwise
  */
-bool tick_over(uint64_t *tick);
+bool tick_over(volatile uint64_t *tick);
 
 /**
  * @brief Pending check, `*tick` resets to `0` on expiry.
  * @param[in,out] tick Deadline from `tick_keep`, `0` = disarmed
  * @return `true` while waiting, `false` once expired or disarmed
  */
-bool tick_away(uint64_t *tick);
+bool tick_away(volatile uint64_t *tick);
 
 /**
  * @brief Time since a reference tick.
@@ -146,8 +146,8 @@ bool vrts_unlock(void);
 // Index of the running thread, `0` with switching off
 uint8_t vrts_active_thread(void);
 
-// Fatal scheduler error, weak: the default masks interrupts and halts
-void vrts_panic(const char *msg);
+// Fatal scheduler error, weak: the default masks interrupts and halts, and none may return
+void vrts_panic(const char *msg) __attribute__((noreturn));
 
 //-------------------------------------------------------------------------------------------------
 #endif

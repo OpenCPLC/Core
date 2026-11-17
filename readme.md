@@ -6,7 +6,7 @@ OpenCPLC is a hardware abstraction layer between your application and microcontr
 
 Multithreading is handled by [🔀VRTS](https://github.com/Xaeian/VRTS), reducing typical [RTOS](https://www.freertos.org) complexity so you can focus on control logic. A built-in CMD console gives it a 🐧Linux-like feel, while [**⚒️Forge**](https://github.com/OpenCPLC/Forge) keeps the workflow closer to [🐍Python](https://www.python.org/downloads): install via [`pip`](https://pypi.org/project/pip), clone projects in one command, and start building.
 
-```bash
+```sh
 pip install opencplc            # install OpenCPLC Forge (requires Python 3.12+)
 opencplc -n myapp -b Uno        # new project for Uno
 opencplc -n myapp -c STM32G081  # bare-metal project for STM32G081 (e.g. Nucleo)

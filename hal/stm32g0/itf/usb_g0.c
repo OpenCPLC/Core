@@ -20,8 +20,8 @@ static void pma_write(uint16_t offset, const uint8_t *src, uint16_t len)
 {
   volatile uint32_t *dst = pma(offset);
   while(len >= 4) {
-    *dst++ = (uint32_t)src[0] | ((uint32_t)src[1] << 8) |
-      ((uint32_t)src[2] << 16) | ((uint32_t)src[3] << 24);
+    *dst++ = (uint32_t)src[0] | ((uint32_t)src[1] << 8)
+      | ((uint32_t)src[2] << 16) | ((uint32_t)src[3] << 24);
     src += 4;
     len -= 4;
   }
@@ -202,8 +202,12 @@ static void transfer(USB_t *usb, uint8_t ep)
 
 static void irq_handler(USB_t *usb)
 {
-  const uint32_t handled = USB_ISTR_CTR | USB_ISTR_RESET | USB_ISTR_SUSP | USB_ISTR_WKUP |
-    USB_ISTR_ERR | USB_ISTR_PMAOVR;
+  const uint32_t handled = USB_ISTR_CTR
+    | USB_ISTR_RESET
+    | USB_ISTR_SUSP
+    | USB_ISTR_WKUP
+    | USB_ISTR_ERR
+    | USB_ISTR_PMAOVR;
   uint32_t istr;
   // `ISTR` flags clear on a write of `0`, a write of `1` leaves them.
   while((istr = USB_DRD_FS->ISTR) & handled) {
@@ -272,8 +276,12 @@ status_t USB_Init(USB_t *usb)
   USB_DRD_FS->CNTR = 0;
   USB_DRD_FS->ISTR = 0;
   USB_DRD_FS->DADDR = USB_DADDR_EF;
-  USB_DRD_FS->CNTR = USB_CNTR_CTRM | USB_CNTR_RESETM | USB_CNTR_SUSPM | USB_CNTR_WKUPM |
-    USB_CNTR_ERRM | USB_CNTR_PMAOVRM;
+  USB_DRD_FS->CNTR = USB_CNTR_CTRM
+    | USB_CNTR_RESETM
+    | USB_CNTR_SUSPM
+    | USB_CNTR_WKUPM
+    | USB_CNTR_ERRM
+    | USB_CNTR_PMAOVRM;
   IRQ_EnableUSB(usb->irq_priority, (IRQ_Handler_t)irq_handler, usb);
   usb->_init = true;
   USB_DRD_FS->BCDR |= USB_BCDR_DPPU; // attach: `DP` pull-up

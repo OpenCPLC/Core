@@ -6,7 +6,7 @@
 #include <string.h>
 
 #if defined(BOOT_KEYS)
-  #include "monocypher-ed25519.h"
+  #include <monocypher-ed25519.h>
 #endif
 
 #include "cmd.h"
@@ -120,8 +120,9 @@ static uint16_t chip_id(void)
 
 //------------------------------------------------------------------------------------------- Image
 
-_Static_assert(BOOT_BOARD_VARIANT <= 0xFFFFu && PRO_SECURITY_EPOCH <= 0xFFFFu &&
-  PRO_SIGNING_KEY <= 0xFFFFu, "board variant, security epoch and signing key take 16 bits each");
+_Static_assert(BOOT_BOARD_VARIANT <= 0xFFFFu && PRO_SECURITY_EPOCH <= 0xFFFFu
+  && PRO_SIGNING_KEY <= 0xFFFFu,
+  "board variant, security epoch and signing key take 16 bits each");
 
 // Header in place, of an image that takes `room` bytes at most with its trailer.
 // An erased size is `0xFFFFFFFF`, so the bound is tested without adding to it;

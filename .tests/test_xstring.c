@@ -1,4 +1,5 @@
 // .tests/test_xstring.c
+
 // Strings: case tables map the letters and invert each other, numbers with unit suffixes parse,
 // integers split and print back in every base the library writes.
 
@@ -41,6 +42,12 @@ static void unit_suffixes_parse(void)
   }
   TEST_Check(!str_is_uf32(NULL));
   TEST_Check(!str_is_uf32(""));
+  // Its length never sizes an array on the stack, so a number too long to hold is none
+  char digits[64];
+  memset(digits, '1', sizeof(digits) - 1);
+  digits[sizeof(digits) - 1] = '\0';
+  TEST_Check(!str_is_uf32(digits), "63 digits are no number");
+  TEST_Check(isNaN(str_to_uf32(digits)), "63 digits read as none");
 }
 
 static void heap_strings(void)
@@ -63,13 +70,15 @@ static void integers_split(void)
   TEST_Check(str_split_int("1.2.3", '.', 10, part, 2) == 0);
   TEST_Check(str_split_int("", '.', 10, part, 4) == 0);
   TEST_Check(str_split_int("4294967296", '.', 10, part, 1) == 0);
-  TEST_Check(str_split_int("00A0-000f", '-', 16, part, 2) == 2 && part[0] == 0xA0 &&
-    part[1] == 0x0F);
+  TEST_Check(str_split_int("00A0-000f", '-', 16, part, 2) == 2
+    && part[0] == 0xA0
+    && part[1] == 0x0F);
   TEST_Check(str_split_int("1-a", '-', 10, part, 2) == 0, "a digit the base does not have");
   // Padding is what the print adds, not what the input owes: any width parses
   TEST_Check(str_split_int("0-1", '-', 16, part, 2) == 2 && part[0] == 0 && part[1] == 1);
-  TEST_Check(str_split_int("f-FFFF", '-', 16, part, 2) == 2 && part[0] == 0xF &&
-    part[1] == 0xFFFF);
+  TEST_Check(str_split_int("f-FFFF", '-', 16, part, 2) == 2
+    && part[0] == 0xF
+    && part[1] == 0xFFFF);
 }
 
 static void integers_print_back(void)

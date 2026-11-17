@@ -2,7 +2,7 @@
 
 #include <opencplc.h>
 
-void loop(void)
+static void loop(void)
 {
   while(1) {
     RGB_Set(&RGB, RGB_Red);

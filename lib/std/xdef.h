@@ -1,7 +1,7 @@
 // lib/std/xdef.h
 
-#define ON  1  // Enabled
-#define OFF 0  // Disabled
+#define ON  1  // enabled
+#define OFF 0  // disabled
 
 #ifndef XDEF_H_
 #define XDEF_H_
@@ -20,11 +20,11 @@
 
 // `OK`, `FREE` and `IDLE` share value `0`: a function reports the one that fits
 typedef enum {
-  OK   = 0,  // Operation finished
-  FREE = 0,  // Resource available
-  IDLE = 0,  // Nothing to do
-  ERR  = 1,  // Error occurred
-  BUSY = 2   // Resource busy
+  OK   = 0,  // operation finished
+  FREE = 0,  // resource available
+  IDLE = 0,  // nothing to do
+  ERR  = 1,  // error occurred
+  BUSY = 2   // resource busy
 } status_t;
 
 //------------------------------------------------------------------------------------------- Float

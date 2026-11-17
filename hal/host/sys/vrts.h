@@ -44,14 +44,14 @@ uint64_t tick_now(void);
  * @param[in,out] tick Deadline from `tick_keep`
  * @return `true` once when the deadline passes
  */
-bool tick_over(uint64_t *tick);
+bool tick_over(volatile uint64_t *tick);
 
 /**
  * @brief Deadline still ahead; `*tick` is cleared to `0` when it passes.
  * @param[in,out] tick Deadline from `tick_keep`
  * @return `true` while waiting
  */
-bool tick_away(uint64_t *tick);
+bool tick_away(volatile uint64_t *tick);
 
 /**
  * @brief Time since a tick.
@@ -111,8 +111,8 @@ bool vrts_unlock(void);
 // Index of the running thread
 uint8_t vrts_active_thread(void);
 
-// Fatal scheduler error, an application definition replaces the default
-void vrts_panic(const char *msg);
+// Fatal scheduler error, an application definition replaces the default, and none may return
+void vrts_panic(const char *msg) __attribute__((noreturn));
 
 //-------------------------------------------------------------------------------------------------
 

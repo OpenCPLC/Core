@@ -131,7 +131,7 @@ typedef struct {
   ADC_SamplingTime_t sampling_time;
   ADC_Oversampling_t oversampling;
   // internal
-  uint8_t _active;
+  volatile uint8_t _active;
   uint8_t _lead;
   uint8_t _total;
 } ADC_Measure_t;

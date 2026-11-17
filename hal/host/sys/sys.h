@@ -27,7 +27,7 @@ int sys_exit_requested(void);
 void sys_exit_request(void);
 
 // Fatal error: the hook runs first, then the message goes to `stderr` and the process ends
-void panic(const char *message);
+void panic(const char *message) __attribute__((noreturn));
 void panic_hook(void (*handler)(void));
 
 // Whole files, `file_load` allocates the buffer with `malloc`; `0` and `NULL` when absent

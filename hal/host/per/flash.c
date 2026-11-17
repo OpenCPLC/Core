@@ -260,8 +260,9 @@ status_t FLASH_Erase(uint16_t page)
   // one with a doubleword ECC cannot read or corrects is not blank:
   // an erase cut halfway leaves ones ECC corrected over cells not erased whole.
   bool corrected;
-  if(blank(page_at(page), FLASH_PAGE_SIZE) &&
-    !FLASH_Check(FLASH_GetAddress(page, 0), FLASH_PAGE_SIZE, &corrected) && !corrected) return OK;
+  if(blank(page_at(page), FLASH_PAGE_SIZE)
+    && !FLASH_Check(FLASH_GetAddress(page, 0), FLASH_PAGE_SIZE, &corrected)
+    && !corrected) return OK;
   erase(page);
   return OK;
 }

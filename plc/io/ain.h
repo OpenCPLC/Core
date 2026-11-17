@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <xmath.h>
+#include "xmath.h"
 #include "vrts.h"
 #include "adc.h"
 #include "log.h"
@@ -59,9 +59,9 @@
 
 // Unit of the threshold configuration
 typedef enum {
-  AIN_Thresh_V,       // Voltage [V]
-  AIN_Thresh_mA,      // Current-loop [mA]
-  AIN_Thresh_Percent  // Percent of the working range [%]
+  AIN_Thresh_V,       // voltage [V]
+  AIN_Thresh_mA,      // current-loop [mA]
+  AIN_Thresh_Percent  // percent of the working range [%]
 } AIN_Thresh_t;
 
 //-------------------------------------------------------------------------------------------------
@@ -110,6 +110,7 @@ void AIN_SetVref(AIN_t *vref);
  * @brief Set lower and upper threshold for analog input, in any unit; `0` = off.
  * Ratio units follow the working range: 0-10V, or the 2-10V window when `mode_4_20mA`
  * is set. Stored internally in [µV].
+ * @param[in,out] ain Analog input
  * @param[in] low Lower threshold, in `unit`
  * @param[in] high Upper threshold, in `unit`
  * @param[in] unit Threshold unit (`AIN_Thresh_...`)

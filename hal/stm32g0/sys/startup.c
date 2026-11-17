@@ -130,7 +130,7 @@ void (* volatile USB_Cb)(void *) = void_handler; void * volatile USB_CbArg;
 
 //------------------------------------------------------------------------------- Weak IRQ handlers
 
-STARTUP_WEAK void HardFault_Handler(void) { while(1); }
+void HardFault_Handler(void); // weak beside `panic`, which a fault ends in
 STARTUP_WEAK void NMI_Handler(void) { Default_Handler(); }
 STARTUP_WEAK void SVC_Handler(void) { Default_Handler(); }
 STARTUP_WEAK void PendSV_Handler(void) { Default_Handler(); }
@@ -278,36 +278,36 @@ void (* const VectorTable[])(void) = {
   0, 0,
   PendSV_Handler,
   SysTick_Handler,
-  WWDG_IRQHandler,                    // 0  IRQ_Watchdog
-  PVD_IRQHandler,                     // 1  IRQ_PVD
-  RTC_TAMP_IRQHandler,                // 2  IRQ_RTC
-  FLASH_IRQHandler,                   // 3  IRQ_FLASH
-  RCC_IRQHandler,                     // 4  IRQ_RCC
-  EXTI0_1_IRQHandler,                 // 5  IRQ_EXTI01
-  EXTI2_3_IRQHandler,                 // 6  IRQ_EXTI23
-  EXTI4_15_IRQHandler,                // 7  IRQ_EXTI4F
-  USB_UCPD_IRQHandler,                // 8  IRQ_USB
-  DMA_Channel1_IRQHandler,            // 9  IRQ_DMA1_CH1
-  DMA_Channel2_3_IRQHandler,          // 10 IRQ_DMA1_CH23
-  DMA_Channel4_7_DMA2_IRQHandler,     // 11 IRQ_DMA1_CH47_DMA2
-  ADC_COMP_IRQHandler,                // 12 IRQ_ADC
-  TIM1_BRK_UP_TRG_COMP_IRQHandler,    // 13 IRQ_TIM1
-  TIM1_CC_IRQHandler,                 // 14 IRQ_TIM1_CC
-  TIM2_IRQHandler,                    // 15 IRQ_TIM2
-  TIM3_TIM4_IRQHandler,               // 16 IRQ_TIM3_TIM4
-  TIM6_DAC_LPTIM1_IRQHandler,         // 17 IRQ_TIM6_DAC_LPTIM1
-  TIM7_LPTIM2_IRQHandler,             // 18 IRQ_TIM7_LPTIM2
-  TIM14_IRQHandler,                   // 19 IRQ_TIM14
-  TIM15_IRQHandler,                   // 20 IRQ_TIM15
-  TIM16_IRQHandler,                   // 21 IRQ_TIM16
-  TIM17_IRQHandler,                   // 22 IRQ_TIM17
-  I2C1_IRQHandler,                    // 23 IRQ_I2C1
-  I2C2_I2C3_IRQHandler,               // 24 IRQ_I2C23
-  SPI1_IRQHandler,                    // 25 IRQ_SPI1
-  SPI2_SPI3_IRQHandler,               // 26 IRQ_SPI23
-  USART1_IRQHandler,                  // 27 IRQ_UART1
-  USART2_LPUART2_IRQHandler,          // 28 IRQ_UART2_LPUART2
-  USART3456_LPUART1_IRQHandler,       // 29 IRQ_UART3456_LPUART1
-  CEC_IRQHandler,                     // 30 IRQ_CEC
-  RNG_IRQHandler                      // 31 IRQ_RNG
+  WWDG_IRQHandler,                  // 0  IRQ_Watchdog
+  PVD_IRQHandler,                   // 1  IRQ_PVD
+  RTC_TAMP_IRQHandler,              // 2  IRQ_RTC
+  FLASH_IRQHandler,                 // 3  IRQ_FLASH
+  RCC_IRQHandler,                   // 4  IRQ_RCC
+  EXTI0_1_IRQHandler,               // 5  IRQ_EXTI01
+  EXTI2_3_IRQHandler,               // 6  IRQ_EXTI23
+  EXTI4_15_IRQHandler,              // 7  IRQ_EXTI4F
+  USB_UCPD_IRQHandler,              // 8  IRQ_USB
+  DMA_Channel1_IRQHandler,          // 9  IRQ_DMA1_CH1
+  DMA_Channel2_3_IRQHandler,        // 10 IRQ_DMA1_CH23
+  DMA_Channel4_7_DMA2_IRQHandler,   // 11 IRQ_DMA1_CH47_DMA2
+  ADC_COMP_IRQHandler,              // 12 IRQ_ADC
+  TIM1_BRK_UP_TRG_COMP_IRQHandler,  // 13 IRQ_TIM1
+  TIM1_CC_IRQHandler,               // 14 IRQ_TIM1_CC
+  TIM2_IRQHandler,                  // 15 IRQ_TIM2
+  TIM3_TIM4_IRQHandler,             // 16 IRQ_TIM3_TIM4
+  TIM6_DAC_LPTIM1_IRQHandler,       // 17 IRQ_TIM6_DAC_LPTIM1
+  TIM7_LPTIM2_IRQHandler,           // 18 IRQ_TIM7_LPTIM2
+  TIM14_IRQHandler,                 // 19 IRQ_TIM14
+  TIM15_IRQHandler,                 // 20 IRQ_TIM15
+  TIM16_IRQHandler,                 // 21 IRQ_TIM16
+  TIM17_IRQHandler,                 // 22 IRQ_TIM17
+  I2C1_IRQHandler,                  // 23 IRQ_I2C1
+  I2C2_I2C3_IRQHandler,             // 24 IRQ_I2C23
+  SPI1_IRQHandler,                  // 25 IRQ_SPI1
+  SPI2_SPI3_IRQHandler,             // 26 IRQ_SPI23
+  USART1_IRQHandler,                // 27 IRQ_UART1
+  USART2_LPUART2_IRQHandler,        // 28 IRQ_UART2_LPUART2
+  USART3456_LPUART1_IRQHandler,     // 29 IRQ_UART3456_LPUART1
+  CEC_IRQHandler,                   // 30 IRQ_CEC
+  RNG_IRQHandler                    // 31 IRQ_RNG
 };

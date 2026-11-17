@@ -8,10 +8,10 @@
 //---------------------------------------------------------------------------------- Family include
 
 #if defined(STM32G0)
-  #include "stm32g0xx.h"
+  #include <stm32g0xx.h>
   #include "dma_g0.h"
 #elif defined(STM32WB)
-  #include "stm32wbxx.h"
+  #include <stm32wbxx.h>
   #include "dma_wb.h"
 #endif
 

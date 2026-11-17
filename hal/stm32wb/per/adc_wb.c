@@ -69,10 +69,9 @@ static void set_sampling_time(ADC_t *adc, uint8_t *cha, uint8_t count, ADC_Sampl
 
 static void set_oversampling(ADC_t *adc, ADC_Oversampling_t *ovs)
 {
-  adc->reg->CFGR2 =
-    (ovs->shift << ADC_CFGR2_OVSS_Pos) |
-    (ovs->ratio << ADC_CFGR2_OVSR_Pos) |
-    (ovs->enable ? ADC_CFGR2_ROVSE : 0);
+  adc->reg->CFGR2 = (ovs->shift << ADC_CFGR2_OVSS_Pos)
+    | (ovs->ratio << ADC_CFGR2_OVSR_Pos)
+    | (ovs->enable ? ADC_CFGR2_ROVSE : 0);
 }
 
 //----------------------------------------------------------------------------------------- Handler

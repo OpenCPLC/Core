@@ -150,7 +150,7 @@ uint16_t BUFF_Peek(const BUFF_t *buff, uint8_t *dst)
   uint16_t size = BUFF_Size(buff);
   if(!size) return 0;
   uint16_t n = size;
-  const uint8_t *ptr = (const uint8_t *)buff->_tail;
+  const volatile uint8_t *ptr = buff->_tail;
   while(n) {
     if(dst) *dst++ = *ptr;
     ptr++;
@@ -170,7 +170,6 @@ char *BUFF_ReadString(BUFF_t *buff)
   uint16_t size = BUFF_Size(buff);
   if(!size) return NULL;
   char *str = heap_new(size + 1);
-  if(!str) return NULL;
   BUFF_Read(buff, (uint8_t *)str);
   str[size] = '\0';
   return str;

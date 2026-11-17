@@ -1,4 +1,5 @@
 // .tests/test_usbd.c
+
 // USB device core `USBD_t` against the in-memory controller model `USB_Host*`:
 // descriptors, BOS with MS OS 2.0 and WebUSB, enumeration,
 // addressing with zero and with a cancelled pending address, bulk transfers on ZLP boundaries,
@@ -97,8 +98,8 @@ static void vendor_device(void)
   TEST_Check(reply[2] == 57 && reply[4] == 2);
   TEST_Check(reply[5] == 24 && reply[6] == 16 && reply[7] == 5);
   TEST_Check(reply[27] == 0x01 && reply[28] == 1); // WebUSB vendor code, landing page
-  TEST_Check(reply[29] == 28 && reply[49] == 0x00 && reply[50] == 0x00 &&
-    reply[51] == 0x03 && reply[52] == 0x06);
+  TEST_Check(reply[29] == 28 && reply[49] == 0x00 && reply[50] == 0x00
+    && reply[51] == 0x03 && reply[52] == 0x06);
   TEST_Check(reply[53] == 162 && reply[54] == 0 && reply[55] == 0x02);
   // Device qualifier exists only at high speed
   TEST_Check(control(0x80, 6, 0x0600, 0, 10) == 0);
@@ -108,8 +109,8 @@ static void vendor_device(void)
   TEST_Check(reply[0] == 10 && reply[8] == 162 && reply[9] == 0);
   TEST_Check(memcmp(&reply[14], "WINUSB\0\0", 8) == 0);
   TEST_Check(reply[30] == 132 && reply[32] == 4 && reply[34] == 7 && reply[36] == 42);
-  TEST_Check(reply[38] == 'D' && reply[80] == 80 && reply[82] == '{' &&
-    reply[160] == 0 && reply[161] == 0);
+  TEST_Check(reply[38] == 'D' && reply[80] == 80 && reply[82] == '{'
+    && reply[160] == 0 && reply[161] == 0);
   // WebUSB URL
   TEST_Check(control(0xC0, 0x01, 1, 2, 255) == 3 + 14);
   TEST_Check(reply[0] == 17 && reply[1] == 3 && reply[2] == 0 && reply[3] == 'l');
@@ -192,8 +193,8 @@ static void device_without_bos(void)
   USB_HostReset(&plain._usb);
   while(USBD_Step(&plain));
   TEST_Check(control_on(&plain, 0x80, 6, 0x0100, 0, 18) == 18);
-  TEST_Check(reply[2] == 0x00 && reply[3] == 0x02 &&
-    reply[14] == 0 && reply[15] == 0 && reply[16] == 3);
+  TEST_Check(reply[2] == 0x00 && reply[3] == 0x02
+    && reply[14] == 0 && reply[15] == 0 && reply[16] == 3);
   TEST_Check(control_on(&plain, 0x80, 6, 0x0F00, 0, 255) == 0);
   TEST_Check(stalled(&plain));
 }
@@ -213,19 +214,19 @@ static void cdc_device(void)
   TEST_Check(control_on(&com, 0x80, 6, 0x0200, 0, 255) == 67);
   TEST_Check(reply[2] == 67 && reply[3] == 0 && reply[4] == 2);
   TEST_Check(reply[9] == 9 && reply[14] == 0x02 && reply[15] == 0x02 && reply[16] == 0x00);
-  TEST_Check(reply[18] == 5 && reply[19] == 0x24 && reply[20] == 0x00 &&
-    reply[21] == 0x10 && reply[22] == 0x01);
+  TEST_Check(reply[18] == 5 && reply[19] == 0x24 && reply[20] == 0x00
+    && reply[21] == 0x10 && reply[22] == 0x01);
   TEST_Check(reply[23] == 5 && reply[25] == 0x01 && reply[27] == 1);
   TEST_Check(reply[28] == 4 && reply[30] == 0x02 && reply[31] == 0x02);
   TEST_Check(reply[32] == 5 && reply[34] == 0x06 && reply[35] == 0 && reply[36] == 1);
-  TEST_Check(reply[37] == 7 && reply[39] == 0x82 && reply[40] == 3 &&
-    reply[41] == 8 && reply[43] == 16);
+  TEST_Check(reply[37] == 7 && reply[39] == 0x82 && reply[40] == 3
+    && reply[41] == 8 && reply[43] == 16);
   TEST_Check(reply[44] == 9 && reply[46] == 1 && reply[48] == 2 && reply[49] == 0x0A);
   TEST_Check(reply[55] == 0x01 && reply[56] == 2 && reply[62] == 0x81);
   // Line coding defaults to 115200 8N1 and follows the host
   TEST_Check(control_on(&com, 0xA1, 0x21, 0, 0, 7) == 7);
-  TEST_Check(reply[0] == 0x00 && reply[1] == 0xC2 && reply[2] == 0x01 &&
-    reply[3] == 0 && reply[6] == 8);
+  TEST_Check(reply[0] == 0x00 && reply[1] == 0xC2 && reply[2] == 0x01
+    && reply[3] == 0 && reply[6] == 8);
   TEST_Check(USBD_Baud(&com) == 115200);
   TEST_Check(control_on(&com, 0x00, 9, 1, 0, 0) == 0);
   TEST_Check(USBD_IsReady(&com) && !USBD_DTR(&com));

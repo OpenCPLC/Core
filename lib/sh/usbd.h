@@ -43,8 +43,8 @@
 //------------------------------------------------------------------------------------------- Types
 
 typedef enum {
-  USBD_Mode_Vendor = 0, // one vendor interface with a bulk pair, WinUSB and WebUSB through BOS
-  USBD_Mode_CDC = 1     // CDC ACM: virtual COM port, class driver on every desktop OS
+  USBD_Mode_Vendor = 0,  // one vendor interface with a bulk pair, WinUSB and WebUSB through BOS
+  USBD_Mode_CDC = 1      // CDC ACM: virtual COM port, class driver on every desktop OS
 } USBD_Mode_t;
 
 //--------------------------------------------------------------------------------------- Structure

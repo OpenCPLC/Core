@@ -119,12 +119,14 @@ bool HD44780_Exec(HD44780_t *hd, HD44780_Exec_t exec)
       if(!HD44780_Command(hd, HD44780_CMD_DisplayControl | hd->_display)) return false;
       break;
     case HD44780_Exec_ScrollLeft:
-      if(!HD44780_Command(hd, HD44780_CMD_CursorShift | HD44780_Move_Display |
-        HD44780_Move_Left)) return false;
+      if(!HD44780_Command(hd, HD44780_CMD_CursorShift
+        | HD44780_Move_Display
+        | HD44780_Move_Left)) return false;
       break;
     case HD44780_Exec_ScrollRight:
-      if(!HD44780_Command(hd, HD44780_CMD_CursorShift | HD44780_Move_Display |
-        HD44780_Move_Right)) return false;
+      if(!HD44780_Command(hd, HD44780_CMD_CursorShift
+        | HD44780_Move_Display
+        | HD44780_Move_Right)) return false;
       break;
     case HD44780_Exec_EntryLeft2Right:
     case HD44780_Exec_EntryRight2Left:

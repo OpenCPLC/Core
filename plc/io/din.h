@@ -23,19 +23,19 @@
 
 // Digital input operating mode
 typedef enum {
-  DIN_Mode_DC = 0,     // Standard debounced input
-  DIN_Mode_AC,         // Rectified mains input: pulse-stretch before debounce
-  DIN_Mode_FastCounter // PWMI capture, GPIF skipped
+  DIN_Mode_DC = 0,      // standard debounced input
+  DIN_Mode_AC,          // rectified mains input: pulse-stretch before debounce
+  DIN_Mode_FastCounter  // PWMI capture, GPIF skipped
 } DIN_Mode_t;
 
 // Digital input time parameter
 typedef enum {
-  DIN_Time_Ton = 0,  // Debounce time for ON [ms]
-  DIN_Time_Toff,     // Debounce time for OFF [ms]
-  DIN_Time_TonLong,  // Long press threshold [ms]
-  DIN_Time_ToffLong, // Long release threshold [ms]
-  DIN_Time_Toggle,   // Double click window [ms]
-  DIN_Time_Hold      // AC pulse-stretch hold [ms]
+  DIN_Time_Ton = 0,   // debounce time for ON [ms]
+  DIN_Time_Toff,      // debounce time for OFF [ms]
+  DIN_Time_TonLong,   // long press threshold [ms]
+  DIN_Time_ToffLong,  // long release threshold [ms]
+  DIN_Time_Toggle,    // double click window [ms]
+  DIN_Time_Hold       // AC pulse-stretch hold [ms]
 } DIN_Time_t;
 
 /**

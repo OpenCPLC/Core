@@ -11,7 +11,7 @@
 //-------------------------------------------------------------------------------------------------
 
 #if(RGB_BASH)
-static RGB_t *rgb_focus; // Target of `RGB_Bash`, last `RGB_Init` wins
+static RGB_t *rgb_focus; // target of `RGB_Bash`, last `RGB_Init` wins
 #endif
 
 static void set_red(RGB_t *rgb) { if(rgb->red) GPIO_Set(rgb->red); }

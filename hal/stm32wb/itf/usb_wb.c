@@ -196,8 +196,12 @@ static void transfer(USB_t *usb, uint8_t ep)
 
 static void irq_handler(USB_t *usb)
 {
-  const uint16_t handled = USB_ISTR_CTR | USB_ISTR_RESET | USB_ISTR_SUSP | USB_ISTR_WKUP |
-    USB_ISTR_ERR | USB_ISTR_PMAOVR;
+  const uint16_t handled = USB_ISTR_CTR
+    | USB_ISTR_RESET
+    | USB_ISTR_SUSP
+    | USB_ISTR_WKUP
+    | USB_ISTR_ERR
+    | USB_ISTR_PMAOVR;
   uint16_t istr;
   // `ISTR` flags clear on a write of `0`, a write of `1` leaves them.
   while((istr = USB->ISTR) & handled) {
@@ -271,8 +275,12 @@ status_t USB_Init(USB_t *usb)
   USB->ISTR = 0;
   USB->BTABLE = 0;
   USB->DADDR = USB_DADDR_EF;
-  USB->CNTR = USB_CNTR_CTRM | USB_CNTR_RESETM | USB_CNTR_SUSPM | USB_CNTR_WKUPM |
-    USB_CNTR_ERRM | USB_CNTR_PMAOVRM;
+  USB->CNTR = USB_CNTR_CTRM
+    | USB_CNTR_RESETM
+    | USB_CNTR_SUSPM
+    | USB_CNTR_WKUPM
+    | USB_CNTR_ERRM
+    | USB_CNTR_PMAOVRM;
   IRQ_EnableUSB(usb->irq_priority, (IRQ_Handler_t)irq_handler, usb);
   usb->_init = true;
   USB->BCDR |= USB_BCDR_DPPU; // attach: `DP` pull-up

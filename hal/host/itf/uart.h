@@ -143,6 +143,7 @@ bool UART_IsBusy(UART_t *uart);
 bool UART_IsFree(UART_t *uart);
 
 status_t UART_Send(UART_t *uart, const uint8_t *data, uint16_t len);
+status_t UART_SendPolled(UART_t *uart, const uint8_t *data, uint16_t len);
 
 uint16_t UART_Size(UART_t *uart);
 uint16_t UART_MessageCount(UART_t *uart);
@@ -180,9 +181,9 @@ void UART_HostAttach(UART_t *uart, UART_HostLine_t Line, void *ctx);
 
 // Unique ID, the 96 bits the target reads at `UID_BASE`
 static const uint8_t HOST_UID[12] = {
-  0x48, 0x4F, 0x53, 0x54, // "HOST"
-  0x50, 0x4C, 0x41, 0x54, // "PLAT"
-  0x46, 0x4F, 0x52, 0x4D  // "FORM"
+  0x48, 0x4F, 0x53, 0x54,  // "HOST"
+  0x50, 0x4C, 0x41, 0x54,  // "PLAT"
+  0x46, 0x4F, 0x52, 0x4D   // "FORM"
 };
 #define UID_BASE ((uintptr_t)(const void *)HOST_UID)
 

@@ -74,13 +74,13 @@ typedef struct {
   volatile uint16_t errors;
   volatile uint16_t resets;
   // internal
-  volatile uint8_t _event[USB_EVENT_LIMIT];
+  volatile USB_Event_t _event[USB_EVENT_LIMIT];
   volatile uint8_t _event_head;
   volatile uint8_t _event_tail;
   uint8_t _setup[8];
   volatile bool _setup_pending;
   volatile uint8_t _address;
-  uint8_t _daddr;    // address on the bus
+  uint8_t _daddr; // address on the bus
   bool _attached;
   bool _init;
 } USB_t;

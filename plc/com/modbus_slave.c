@@ -19,7 +19,7 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
   uint16_t reg, start, count, value;
   uint8_t bit;
   heap_free((void *)modbus->buffer_tx);
-  modbus->buffer_tx = NULL; // Holds a live block or `NULL`, never a freed pointer
+  modbus->buffer_tx = NULL; // holds a live block or `NULL`, never a freed pointer
   uint16_t size_tx = 0;
   MODBUS_Fnc_t function_code = (MODBUS_Fnc_t)modbus->buffer_rx[1];
   switch(function_code) {
@@ -102,8 +102,8 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
       for(uint16_t i = 0; i < size_tx; i++) modbus->buffer_tx[i] = modbus->buffer_rx[i];
       reg = (modbus->buffer_rx[2] << 8) | (modbus->buffer_rx[3]);
       value = (modbus->buffer_rx[4] << 8) | (modbus->buffer_rx[5]);
-      if(reg < modbus->reg_count && (!modbus->write_mask || modbus->write_mask[reg]) &&
-        modbus->reg_read[reg] != value) {
+      if(reg < modbus->reg_count && (!modbus->write_mask || modbus->write_mask[reg])
+        && modbus->reg_read[reg] != value) {
         modbus->reg_write[reg] = value;
         modbus->update_flag[reg] = true;
         modbus->update_any = true;
@@ -134,8 +134,8 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
           idx++;
         }
         bit = 0;
-        if((!modbus->write_mask || modbus->write_mask[reg]) &&
-          modbus->reg_read[reg] != value) {
+        if((!modbus->write_mask || modbus->write_mask[reg])
+          && modbus->reg_read[reg] != value) {
           modbus->reg_write[reg] = value;
           modbus->update_flag[reg] = true;
           modbus->update_any = true;
@@ -146,17 +146,17 @@ MODBUS_Status_t MODBUS_Loop(MODBUS_Slave_t *modbus)
     case MODBUS_Fnc_WriteRegisters:
       count = (modbus->buffer_rx[4] << 8) | modbus->buffer_rx[5];
       if(!count || count > MODBUS_WRITE_REGISTERS_MAX) return MODBUS_Status_InvalidSize;
-      if(size_rx < 11 || !(size_rx % 2) || (count != (size_rx - 9) / 2) ||
-        count != modbus->buffer_rx[6] / 2) return MODBUS_Status_InvalidSize;
+      if(size_rx < 11 || !(size_rx % 2) || (count != (size_rx - 9) / 2)
+        || count != modbus->buffer_rx[6] / 2) return MODBUS_Status_InvalidSize;
       size_tx = 6;
       modbus->buffer_tx = (uint8_t *)heap_alloc(size_tx + 2);
       for(uint16_t i = 0; i < size_tx; i++) modbus->buffer_tx[i] = modbus->buffer_rx[i];
       start = (modbus->buffer_rx[2] << 8) | modbus->buffer_rx[3];
       for(uint16_t i = 0; i < count; i++) {
         value = (modbus->buffer_rx[7 + (2 * i)] << 8) | modbus->buffer_rx[8 + (2 * i)];
-        if(start + i < modbus->reg_count &&
-          (!modbus->write_mask || modbus->write_mask[start + i]) &&
-          modbus->reg_read[start + i] != value) {
+        if(start + i < modbus->reg_count
+          && (!modbus->write_mask || modbus->write_mask[start + i])
+          && modbus->reg_read[start + i] != value) {
           modbus->reg_write[start + i] = value;
           modbus->update_flag[start + i] = true;
           modbus->update_any = true;

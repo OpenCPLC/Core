@@ -1,4 +1,5 @@
 // .tests/test_xmath.c
+
 // Integer means: `iqr_mean_u32` leaves samples beyond 1.5 × IQR out,
 // keeps a plain mean under four samples and scales before it divides.
 // Interpolation holds the end values past the table, rising or falling.

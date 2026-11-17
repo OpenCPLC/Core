@@ -39,6 +39,8 @@ void GPIO_BackendWakeup(GPIO_t *gpio)
 // The vector clears the pending bit of its line before calling, so no `PR1` check here
 static void exti_irq_handler(EXTI_t *exti)
 {
+  // A masked line keeps latching its edges, and a shared vector calls every one of its lines
+  if(!exti->irq_enable) return;
   // Determine edge from current pin state
   bool level = (exti->port->IDR >> exti->pin) & 1;
   exti->_state = level;
@@ -80,7 +82,7 @@ void EXTI_Init(EXTI_t *exti)
     (exti->port->MODER & ~(3u << (2u * exti->pin))) | (exti->mode << (2u * exti->pin));
   exti->port->PUPDR =
     (exti->port->PUPDR & ~(3u << (2u * exti->pin))) | (exti->pull << (2u * exti->pin));
-  // EXTICR - WB uses 4-bit fields in SYSCFG->EXTICR
+  // `EXTICR`: WB uses 4-bit fields in `SYSCFG->EXTICR`
   uint32_t reg = exti->pin / 4;
   uint32_t pos = 4 * (exti->pin % 4);
   uint32_t val = SYSCFG->EXTICR[reg] & ~(0xFu << pos);
@@ -103,7 +105,7 @@ void EXTI_Init(EXTI_t *exti)
   // Enable/disable
   if(exti->irq_enable) EXTI_On(exti);
   else EXTI_Off(exti);
-  // IRQ - WB has subpriority
+  // IRQ: WB has subpriority
   IRQ_EnableEXTI(exti->pin, exti->irq_priority, (IRQ_Handler_t)exti_irq_handler, exti);
 }
 

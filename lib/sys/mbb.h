@@ -30,7 +30,7 @@
 /**
  * @brief Memory byte buffer: a byte sink with printers, a record store and a flash mirror.
  * @param[in] name Logical name, the shell addresses the buffer by it
- * @param[in] buffer RAM storage
+ * @param[in] buffer RAM storage, its start moved forward by `MBB_OffsetSet`
  * @param[in,out] size Bytes held
  * @param[in] limit Capacity [B]
  * @param[in] flash_page Page of the flash mirror, `0` = none
@@ -38,8 +38,7 @@
  * @param[in] StructPrint Printer of one record for the shell
  * @param[in,out] lock Writes refused while set, the shell takes it during a data transfer
  * Internal:
- * @param _base Start of the storage, `buffer` moves with `MBB_OffsetSet`
- * @param _offset Bytes `buffer` sits past `_base`
+ * @param _offset Bytes `buffer` sits past the start of the storage
  */
 typedef struct {
   const char *name;
@@ -51,50 +50,45 @@ typedef struct {
   int32_t (*StructPrint)(void *);
   bool lock;
   // internal
-  uint8_t *_base;
   uint16_t _offset;
 } MBB_t;
 
-#define _MBB_Init2(id, size) \
-  static uint8_t id##_buffer[size]; \
-  MBB_t id = { \
+#define _MBB_Init2(storage, id, capacity) \
+  static uint8_t id##_buffer[capacity]; \
+  storage MBB_t id = { \
     .name = #id, \
     .buffer = id##_buffer, \
-    .limit = (size), \
-    ._base = id##_buffer \
+    .limit = (capacity), \
   }
 
-#define _MBB_Init3(id, size, flash_page) \
-  static uint8_t id##_buffer[size]; \
-  MBB_t id = { \
+#define _MBB_Init3(storage, id, capacity, page) \
+  static uint8_t id##_buffer[capacity]; \
+  storage MBB_t id = { \
     .name = #id, \
     .buffer = id##_buffer, \
-    .limit = (size), \
-    .flash_page = (flash_page), \
-    ._base = id##_buffer \
+    .limit = (capacity), \
+    .flash_page = (page), \
   }
 
-#define _MBB_Init4(id, size, struct_size, StructPrint) \
-  static uint8_t id##_buffer[size]; \
-  MBB_t id = { \
+#define _MBB_Init4(storage, id, capacity, record_size, printer) \
+  static uint8_t id##_buffer[capacity]; \
+  storage MBB_t id = { \
     .name = #id, \
     .buffer = id##_buffer, \
-    .limit = (size), \
-    .struct_size = (struct_size), \
-    .StructPrint = (StructPrint), \
-    ._base = id##_buffer \
+    .limit = (capacity), \
+    .struct_size = (record_size), \
+    .StructPrint = (printer), \
   }
 
-#define _MBB_Init5(id, size, flash_page, struct_size, StructPrint) \
-  static uint8_t id##_buffer[size]; \
-  MBB_t id = { \
+#define _MBB_Init5(storage, id, capacity, page, record_size, printer) \
+  static uint8_t id##_buffer[capacity]; \
+  storage MBB_t id = { \
     .name = #id, \
     .buffer = id##_buffer, \
-    .limit = (size), \
-    .flash_page = (flash_page), \
-    .struct_size = (struct_size), \
-    .StructPrint = (StructPrint), \
-    ._base = id##_buffer \
+    .limit = (capacity), \
+    .flash_page = (page), \
+    .struct_size = (record_size), \
+    .StructPrint = (printer), \
   }
 
 /**
@@ -104,7 +98,11 @@ typedef struct {
  * @param ... `flash_page`, or `struct_size, StructPrint`, or all three in that order
  */
 #define MBB_Init(...) \
-  _args5(__VA_ARGS__, _MBB_Init5, _MBB_Init4, _MBB_Init3, _MBB_Init2)(__VA_ARGS__)
+  _args5(__VA_ARGS__, _MBB_Init5, _MBB_Init4, _MBB_Init3, _MBB_Init2)(, __VA_ARGS__)
+
+// `MBB_Init` with the `MBB_t` private to the translation unit, as its buffer always is
+#define MBB_InitStatic(...) \
+  _args5(__VA_ARGS__, _MBB_Init5, _MBB_Init4, _MBB_Init3, _MBB_Init2)(static, __VA_ARGS__)
 
 //------------------------------------------------------------------------------------------ Buffer
 
@@ -194,8 +192,8 @@ int32_t MBB_Alarm(MBB_t *mbb, const RTC_AlarmCfg_t *alarm);
 // negative, so a caller summing writer results stays balanced
 int32_t MBB_StructAdd(MBB_t *mbb, const uint8_t *object);
 uint16_t MBB_StructCount(const MBB_t *mbb);
-int32_t MBB_StructShift(MBB_t *mbb, uint16_t count); // drop the oldest `count`
-int32_t MBB_StructDrop(MBB_t *mbb, uint16_t count);  // drop the newest `count`
+int32_t MBB_StructShift(MBB_t *mbb, uint16_t count);  // drop the oldest `count`
+int32_t MBB_StructDrop(MBB_t *mbb, uint16_t count);   // drop the newest `count`
 int32_t MBB_StructGet(const MBB_t *mbb, uint16_t index, uint8_t *dst);
 const uint8_t *MBB_StructPeek(const MBB_t *mbb, uint16_t index);
 

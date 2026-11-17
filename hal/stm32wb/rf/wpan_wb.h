@@ -57,9 +57,9 @@
 //------------------------------------------------------------------------------------------- Types
 
 typedef enum {
-  WPAN_Fw_None = 0,     // CPU2 has not reported yet
-  WPAN_Fw_Wireless = 1, // wireless stack is running
-  WPAN_Fw_Fus = 2       // firmware upgrade services run instead of the stack
+  WPAN_Fw_None = 0,      // CPU2 has not reported yet
+  WPAN_Fw_Wireless = 1,  // wireless stack is running
+  WPAN_Fw_Fus = 2        // firmware upgrade services run instead of the stack
 } WPAN_Fw_t;
 
 //--------------------------------------------------------------------------------------------- API

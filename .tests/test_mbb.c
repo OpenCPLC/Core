@@ -1,4 +1,5 @@
 // .tests/test_mbb.c
+
 // Byte buffer `MBB_t`: a writer appends all of its text or none of it and returns how much,
 // floats print as fixed point rounded half away from zero, records shift and drop in balance,
 // and the flash mirror loads back what it saved.
@@ -15,7 +16,7 @@ static uint8_t memory[64];
 // Empty buffer of `limit` bytes over `memory`
 static MBB_t buffer(uint16_t limit)
 {
-  return (MBB_t){ .name = "test", .buffer = memory, .limit = limit, ._base = memory };
+  return (MBB_t){ .name = "test", .buffer = memory, .limit = limit };
 }
 
 // Content of a buffer as text
@@ -205,11 +206,26 @@ static void flash_mirror_loads_back_what_it_saved(void)
   TEST_Check(MBB_FlashSave(&saved) == OK);
   TEST_Equal(FLASH_HostCycles(), spent, "same bytes saved again, no flash cycle");
   static uint8_t other[16];
-  MBB_t loaded = { .buffer = other, .limit = sizeof(other), .flash_page = 20, ._base = other };
+  MBB_t loaded = { .buffer = other, .limit = sizeof(other), .flash_page = 20 };
   TEST_Check(MBB_FlashLoad(&loaded) == OK);
   TEST_Check(loaded.size == 8 && !memcmp(other, "settings", 8), "loaded");
-  MBB_t small = { .buffer = other, .limit = 4, .flash_page = 20, ._base = other };
+  MBB_t small = { .buffer = other, .limit = 4, .flash_page = 20 };
   TEST_Check(MBB_FlashLoad(&small) == ERR && !small.size, "record larger than the buffer");
+}
+
+MBB_InitStatic(plain, 16);
+MBB_InitStatic(paged, 16, 2);
+MBB_InitStatic(records, 16, 4, NULL);
+MBB_InitStatic(mirrored, 16, 2, 4, NULL);
+
+// `MBB_InitStatic` declares what `MBB_Init` does, private to this file, at every argument count
+static void declared_buffers_take_every_argument_count(void)
+{
+  TEST_Check(plain.limit == 16 && !strcmp(plain.name, "plain"));
+  TEST_Check(paged.flash_page == 2, "flash page");
+  TEST_Check(records.struct_size == 4 && !records.flash_page, "record size");
+  TEST_Check(mirrored.flash_page == 2 && mirrored.struct_size == 4, "both");
+  TEST_Equal(MBB_Char(&plain, 'x'), 1, "one byte appended");
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -224,4 +240,5 @@ void TEST_Cases(void)
   TEST(large_float_prints_its_digits);
   TEST(records_shift_and_drop_in_balance);
   TEST(flash_mirror_loads_back_what_it_saved);
+  TEST(declared_buffers_take_every_argument_count);
 }

@@ -6,7 +6,7 @@ OpenCPLC to warstwa abstrakcji między aplikacją a peryferiami mikrokontrolera.
 
 Wielowątkowość obsługuje [🔀VRTS](https://github.com/Xaeian/VRTS), redukując typową złożoność [RTOS](https://www.freertos.org)'ów, co pozwala skupić się na logice sterowania. Wbudowana konsola CMD daje klimat 🐧Linuxa, a [**⚒️Forge**](https://github.com/OpenCPLC/Forge) sprowadza workflow do poziomu [🐍Pythona](https://www.python.org/downloads): instalacja przez [`pip`](https://pypi.org/project/pip), klonowanie projektów jedną komendą i od razu działasz.
 
-```bash
+```sh
 pip install opencplc            # zainstaluj OpenCPLC Forge (wymaga Python 3.12+)
 opencplc -n myapp -b Uno        # nowy projekt dla Uno
 opencplc -n myapp -c STM32G081  # projekt niskopoziomowy dla STM32G081 (np. Nucleo)
@@ -21,7 +21,7 @@ W świecie technologii, programowanie staje się coraz bardziej złożone _(czę
 
 Zapotrzebowanie na automatyków było, jest i będzie bardzo duże. W przeszłości, kiedy programistów było niewielu, a za automatykę brali się głównie elektrycy, zaprojektowanie języka drabinkowego ladder logic **🪜LAD** było strzałem w dziesiątkę! Opierał się bowiem na logice znanej z układów elektrycznych. Dziś sytuacja się odwróciła: kod w języku **C** jest często bardziej czytelny dla absolwentów kierunków technicznych niż drzewo logiczne ze styków i cewek. Nie zapominajmy, że język [**C**](<https://pl.wikipedia.org/wiki/C_(j%C4%99zyk_programowania)>) powstał jako język ogólnego przeznaczenia, dlatego charakteryzuje się dużą uniwersalnością, szczególnie w porównaniu do sandbox'ów dostarczanych przez producentów sterowników PLC.
 
-_Praktyczne porównanie języków LAD, ST i ANSI C można zobaczyć na przykładzie systemu [**🟢start🔴stop**](https://github.com/OpenCPLC/Core/wiki/Start-Stop-Lang-Comparison-PL)._   
+_Praktyczne porównanie języków LAD, ST i ANSI C można zobaczyć na przykładzie systemu [**🟢start🔴stop**](https://github.com/OpenCPLC/Core/wiki/Start-Stop-Lang-Comparison-PL)._
 
 ## 🖥️ Our Controllers
 

@@ -1,4 +1,5 @@
 // hal/stm32/per/flash_record.c
+
 // Records over the flash API, one code for the chip and its host model
 
 #include "flash.h"

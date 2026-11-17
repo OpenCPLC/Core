@@ -14,8 +14,8 @@
   #define USB_PRESENT 0
 #endif
 
-#define USB_PMA_SIZE 2048   // Packet memory [B], `32`-bit access
-#define USB_PMA_TABLE 64    // Buffer descriptors at offset `0`: `2` words for `8` endpoints
+#define USB_PMA_SIZE 2048  // packet memory [B], `32`-bit access
+#define USB_PMA_TABLE 64   // buffer descriptors at offset `0`: `2` words for `8` endpoints
 
 //-------------------------------------------------------------------------------------------------
 

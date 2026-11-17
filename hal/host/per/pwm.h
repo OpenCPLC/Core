@@ -44,7 +44,8 @@ typedef enum {
  * @param[in] auto_reload Period, sets the frequency
  * @param[in] channel Pin of each output: `CH1..4` at `0..3`, `CH1N..4N` at `4..7`
  * @param[in] invert Output polarity, same indexing as `channel`
- * @param[in,out] value Compare value of `CH1..4`, kept current by the setters
+ * @param[in,out] value Compare value of `CH1..4`, kept current by the setters,
+ *   which an interrupt may call
  * @param[in] align Counter alignment
  * @param[in] deadtime Dead time of the complementary pairs [ticks], `0..1008`
  * @param[in] dma_trig Raise a DMA request on update
@@ -60,7 +61,7 @@ typedef struct {
   uint32_t auto_reload;
   TIM_CHx_t channel[8];
   bool invert[8];
-  uint32_t value[4];
+  volatile uint32_t value[4];
   PWM_Align_t align;
   uint16_t deadtime;
   bool dma_trig;
@@ -108,6 +109,14 @@ void PWM_SetValue(PWM_t *pwm, TIM_Channel_t channel, uint32_t value);
  * @return Compare value
  */
 uint32_t PWM_GetValue(PWM_t *pwm, TIM_Channel_t channel);
+
+/**
+ * @brief Where the counter stands in its period, counted from the period's start:
+ *   up to the crest and, in the center modes, on down to the bottom.
+ * @param[in] pwm PWM instance
+ * @return Position [ticks], `0` to `pwm_period_ticks` less one
+ */
+uint32_t PWM_GetPosition(const PWM_t *pwm);
 
 /**
  * @brief Set the dead time of the complementary outputs. Values snap down to the nearest

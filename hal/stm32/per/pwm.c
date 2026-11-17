@@ -126,6 +126,7 @@ void PWM_SetValue(PWM_t *pwm, TIM_Channel_t channel, uint32_t value)
     case TIM_CH2: case TIM_CH2N: pwm->value[TIM_CH2] = value; pwm->reg->CCR2 = value; break;
     case TIM_CH3: case TIM_CH3N: pwm->value[TIM_CH3] = value; pwm->reg->CCR3 = value; break;
     case TIM_CH4: case TIM_CH4N: pwm->value[TIM_CH4] = value; pwm->reg->CCR4 = value; break;
+    default: break;
   }
 }
 
@@ -136,8 +137,17 @@ uint32_t PWM_GetValue(PWM_t *pwm, TIM_Channel_t channel)
     case TIM_CH2: case TIM_CH2N: return pwm->value[TIM_CH2];
     case TIM_CH3: case TIM_CH3N: return pwm->value[TIM_CH3];
     case TIM_CH4: case TIM_CH4N: return pwm->value[TIM_CH4];
+    default: break;
   }
   return 0;
+}
+
+uint32_t PWM_GetPosition(const PWM_t *pwm)
+{
+  uint32_t value = TIM_Is32bit(pwm->reg) ? pwm->reg->CNT : (pwm->reg->CNT & 0xFFFFu);
+  // Counting down, the climb to the crest is behind: twice the top less the way left
+  if(pwm->align && (pwm->reg->CR1 & TIM_CR1_DIR)) return 2u * pwm->reg->ARR - value;
+  return value;
 }
 
 void PWM_SetDeadtime(PWM_t *pwm, uint16_t deadtime)

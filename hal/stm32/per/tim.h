@@ -98,7 +98,7 @@ typedef struct {
   void (*Callback)(void *);
   void *callback_arg;
   bool dma_trig;
-  bool enable;
+  volatile bool enable;
   bool enable_interrupt;
   // internal
   volatile uint16_t _event_cnt;

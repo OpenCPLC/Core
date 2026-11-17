@@ -41,7 +41,7 @@ typedef struct {
   bool console_mode;
   void (*Overflow)(void);
   // internal
-  uint8_t _esc;
+  volatile uint8_t _esc;
   uint8_t *_end_memory;
   volatile uint8_t *_tail;
   volatile uint8_t *_head;
@@ -50,7 +50,7 @@ typedef struct {
   volatile uint16_t _msg_size[BUFF_MSG_LIMIT];
   volatile uint16_t _msg_head;
   volatile uint16_t _msg_tail;
-  bool _break_allow;
+  volatile bool _break_allow;
 } BUFF_t;
 
 //--------------------------------------------------------------------------------------------- API
@@ -160,7 +160,7 @@ void BUFF_Clear(BUFF_t *buff);
  * @brief Read current message as a terminated string from `heap_new`,
  *   owned by the garbage collector of the calling thread.
  * @param[in,out] buff Pointer to buffer structure
- * @return String, `NULL` if empty or the heap is full
+ * @return String, `NULL` if empty
  */
 char *BUFF_ReadString(BUFF_t *buff);
 

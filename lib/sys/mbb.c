@@ -63,7 +63,7 @@ status_t MBB_OffsetRst(MBB_t *mbb)
 {
   if(mbb->lock) return ERR;
   if(!mbb->_offset) return OK;
-  mbb->buffer = mbb->_base;
+  mbb->buffer -= mbb->_offset;
   mbb->limit += mbb->_offset;
   mbb->size += mbb->_offset;
   mbb->_offset = 0;
@@ -74,7 +74,7 @@ status_t MBB_OffsetSet(MBB_t *mbb, uint16_t offset)
 {
   if(MBB_OffsetRst(mbb)) return ERR;
   if(offset > mbb->limit) return ERR;
-  mbb->buffer = mbb->_base + offset;
+  mbb->buffer += offset;
   mbb->limit -= offset;
   mbb->size = mbb->size > offset ? mbb->size - offset : 0;
   mbb->_offset = offset;

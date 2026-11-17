@@ -3,9 +3,9 @@
 #include "crc.h"
 
 #if defined(STM32G0)
-  #include "stm32g0xx.h"
+  #include <stm32g0xx.h>
 #elif defined(STM32WB)
-  #include "stm32wbxx.h"
+  #include <stm32wbxx.h>
 #endif
 #include "pwr.h"
 

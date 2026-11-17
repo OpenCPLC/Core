@@ -1,4 +1,5 @@
 // .tests/test_buff.c
+
 // Message buffer: past `BUFF_MSG_LIMIT` the newest message goes, never an older one,
 // and every message kept reads back whole, also one that runs over the end of the ring.
 // In console mode Enter closes a line once, escape sequences and XOFF leave no byte,
