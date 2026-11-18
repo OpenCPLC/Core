@@ -5,9 +5,8 @@
 #include <stddef.h>
 #include <string.h>
 
-#if defined(BOOT_KEYS)
-  #include <monocypher-ed25519.h>
-#endif
+#include <monocypher.h>
+#include <monocypher-ed25519.h>
 
 #include "cmd.h"
 #include "crc.h"
@@ -22,6 +21,9 @@
 // Image bytes the signature hash takes between two watchdog refreshes
 #define BLD_HASH_CHUNK ((uint32_t)FLASH_PAGE_SIZE)
 
+// Bytes of one ChaCha20 keystream block, which its counter steps through
+#define BLD_CIPHER_BLOCK 64u
+
 //---------------------------------------------------------------------------------------- Internal
 
 // Open transfer
@@ -31,6 +33,11 @@ static struct {
   uint32_t offset;  // bytes taken so far, the trailer included at the end
   // Erased unless `BLD_Signature` gave one
   uint8_t signature[BLD_SIGNATURE_SIZE];
+  // XChaCha20 under `BLD_Cipher`: the subkey of the key and nonce bytes `0` to `15`,
+  // ChaCha20 under it with nonce bytes `16` to `23`.
+  uint8_t subkey[BLD_CIPHER_KEY_SIZE];
+  uint8_t nonce[8];
+  bool encrypted;
   bool active;
 } boot;
 
@@ -85,7 +92,25 @@ static status_t flush_page(uint32_t end)
   return FLASH_WritePage(page, page_buffer);
 }
 
-// Bytes behind the ones taken so far, a page programmed as soon as it fills
+// Image bytes from `offset` on, decrypted in place under `BLD_Cipher`.
+// Keystream block `n` covers bytes `64n` to `64n + 63`, so a piece may start and end anywhere.
+static void decrypt(uint8_t *data, uint32_t len, uint32_t offset)
+{
+  uint8_t stream[BLD_CIPHER_BLOCK];
+  while(len) {
+    uint32_t pos = offset % BLD_CIPHER_BLOCK;
+    uint32_t take = minv(BLD_CIPHER_BLOCK - pos, len);
+    crypto_chacha20_djb(stream, NULL, sizeof(stream), boot.subkey, boot.nonce,
+      offset / BLD_CIPHER_BLOCK);
+    for(uint32_t i = 0; i < take; i++) data[i] ^= stream[pos + i];
+    data += take;
+    offset += take;
+    len -= take;
+  }
+}
+
+// Bytes behind the ones taken so far, a page programmed as soon as it fills.
+// Under `BLD_Cipher` they decrypt in the page, so only plain bytes reach flash.
 static status_t stage(const uint8_t *data, uint32_t len)
 {
   while(len) {
@@ -93,6 +118,7 @@ static status_t stage(const uint8_t *data, uint32_t len)
     uint32_t take = minv(FLASH_PAGE_SIZE - pos, len);
     if(!pos) memset(page_buffer, 0xFF, FLASH_PAGE_SIZE);
     memcpy(page_buffer + pos, data, take);
+    if(boot.encrypted) decrypt(page_buffer + pos, take, boot.offset);
     boot.offset += take;
     data += take;
     len -= take;
@@ -320,9 +346,17 @@ static struct {
   BLD_Result_t last;
 } facts;
 
-status_t BLD_Begin(uint32_t size, uint32_t crc)
+// Transfer closed, whichever way: the subkey of `BLD_Cipher` leaves RAM with it
+static void transfer_close(void)
 {
   boot.active = false;
+  boot.encrypted = false;
+  crypto_wipe(boot.subkey, sizeof(boot.subkey));
+}
+
+status_t BLD_Begin(uint32_t size, uint32_t crc)
+{
+  transfer_close();
   if(!BOOT_SLOT_PAGES) return ERR;
   if(size <= BLD_HEADER_OFFSET + sizeof(BLD_Header_t)) return ERR;
   if(size > BLD_SLOT_SIZE - BLD_TRAILER_SIZE) return ERR;
@@ -341,11 +375,31 @@ status_t BLD_Signature(const uint8_t *signature)
   return OK;
 }
 
+status_t BLD_Cipher(const uint8_t *key)
+{
+  // The signature holds the nonce, and a byte taken before the key would stage undecrypted
+  if(!boot.active || boot.offset || erased(boot.signature, sizeof(boot.signature))) {
+    transfer_close();
+    return ERR;
+  }
+  crypto_chacha20_h(boot.subkey, key, boot.signature);
+  memcpy(boot.nonce, boot.signature + 16, sizeof(boot.nonce));
+  boot.encrypted = true;
+  return OK;
+}
+
+void BLD_CipherId(const uint8_t *key, uint8_t *id)
+{
+  uint8_t hash[64];
+  crypto_sha512(hash, key, BLD_CIPHER_KEY_SIZE);
+  memcpy(id, hash, BLD_CIPHER_ID_SIZE);
+}
+
 status_t BLD_Write(uint32_t offset, const uint8_t *data, uint16_t len)
 {
   if(!boot.active) return ERR;
   if(offset != boot.offset || len > boot.size - boot.offset || stage(data, len)) {
-    boot.active = false;
+    transfer_close();
     return ERR;
   }
   return OK;
@@ -354,7 +408,8 @@ status_t BLD_Write(uint32_t offset, const uint8_t *data, uint16_t len)
 status_t BLD_End(void)
 {
   if(!boot.active) return ERR;
-  boot.active = false;
+  // Closed before the trailer, so the trailer stages plain and the subkey is gone either way
+  transfer_close();
   if(boot.offset != boot.size) return ERR;
   // CRC32 first, then the signature, erased unless the transfer carried one
   uint8_t trailer[BLD_TRAILER_SIZE];
@@ -371,7 +426,7 @@ status_t BLD_End(void)
 
 void BLD_Abort(void)
 {
-  boot.active = false;
+  transfer_close();
 }
 
 uint32_t BLD_Offset(void)
@@ -549,7 +604,8 @@ static BLD_Result_t request_run(const BLD_Entry_t *request, floors_t *floors)
     floors_raise(floors, &header);
     result = BLD_Result_Installed;
   }
-  mailbox_append(result, page, request->crc);
+  // A result that does not land counts as a step cut before it
+  (void)mailbox_append(result, page, request->crc);
   return result;
 }
 
@@ -662,7 +718,7 @@ void BLD_Bash(char **argv, uint16_t argc)
         LOG_Error("BOOT image of " ANSI_LIME "%u" ANSI_END " bytes does not fit", size);
         return;
       }
-      if(argc == 5) BLD_Signature((const uint8_t *)argv[4]);
+      if(argc == 5) (void)BLD_Signature((const uint8_t *)argv[4]); // the transfer it needs is open
       LOG_Bash("BOOT begin size:%u crc:%08x", size, crc);
       return;
     }

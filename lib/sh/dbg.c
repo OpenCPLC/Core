@@ -122,8 +122,8 @@ void DBG_Loop(void)
       if(DbgFile->size) {
         uint8_t *batch = heap_new(DbgFile->size);
         memcpy(batch, DbgFile->buffer, DbgFile->size);
-        UART_Send(DbgUart, batch, DbgFile->size);
-        MBB_Clear(DbgFile);
+        (void)UART_Send(DbgUart, batch, DbgFile->size);
+        (void)MBB_Clear(DbgFile);
       }
       else if(DbgReset && UART_SendCompleted(DbgUart)) PWR_Reset();
     }
@@ -147,23 +147,23 @@ void DBG_Flush(void)
 {
   DBG_WaitBlock(); // a batch `DBG_Loop` sent may still be on its way
   if(!DbgFile->size) return;
-  UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
+  (void)UART_Send(DbgUart, DbgFile->buffer, DbgFile->size);
   DBG_WaitBlock();
-  MBB_Clear(DbgFile);
+  (void)MBB_Clear(DbgFile);
 }
 
 void DBG_FlushPolled(void)
 {
   // Before `DBG_Init` there is no port, and the lines stay where the printers left them
   if(!DbgUart || !DbgFile->size) return;
-  UART_SendPolled(DbgUart, DbgFile->buffer, DbgFile->size);
-  MBB_Clear(DbgFile);
+  (void)UART_SendPolled(DbgUart, DbgFile->buffer, DbgFile->size);
+  (void)MBB_Clear(DbgFile);
 }
 
 void DBG_Send(const uint8_t *data, uint16_t len)
 {
   DBG_Wait();
-  UART_Send(DbgUart, data, len);
+  (void)UART_Send(DbgUart, data, len);
   DBG_Wait();
 }
 

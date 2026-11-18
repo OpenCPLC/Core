@@ -5,6 +5,7 @@
 // byte for byte as the format lays them out, and they come back in the order of their numbers,
 // through the queries a caller pages with.
 // Init only reads, and the first record after it zeroes a slot first.
+// A base init refused takes no record, and a delete formats a base no init has found.
 // A page under a header of another kind, record size or format stays as it is,
 // and a page without a header holds nothing and is erased whole before a record goes in.
 // After a power cut at any flash cycle, wherever in it,
@@ -229,6 +230,32 @@ static void init_refuses_a_bad_config(void)
   no_wrap(1);
   pdb = layout;
   TEST_Check(PDB_Init(&pdb) == OK, "one page without the ring");
+}
+
+// A base init refused takes no record and walks nothing, a delete running past the chip
+// erases nothing, and a delete formats a base no init has found
+static void refused_base_takes_nothing(void)
+{
+  FLASH_HostBlank();
+  ring();
+  PDB_t big = layout;
+  big.record_size = PDB_RECORD_LIMIT + 8; // a record would overrun its buffer
+  TEST_Check(PDB_Init(&big) == ERR, "init");
+  entry_t record = given(1);
+  TEST_Check(PDB_Insert(&big, &record) == ERR, "record refused");
+  PDB_Iter_t iter;
+  PDB_Query_t query = { .dir = PDB_Asc };
+  PDB_IterInit(&big, &iter, &query);
+  TEST_Check(PDB_IterNext(&iter, &record) != OK, "walk empty");
+  uint32_t kept = FLASH_GetAddress(FLASH_PAGES - 1, 0);
+  TEST_Check(FLASH_Write(kept, 0x12345678, 0x9ABCDEF0) == OK, "data in the last page");
+  PDB_t past = layout;
+  past.page_start = FLASH_PAGES - 1;
+  TEST_Check(PDB_Delete(&past) == ERR, "delete past the chip");
+  TEST_Equal(FLASH_Read(kept), 0x12345678, "data kept");
+  pdb = layout;
+  TEST_Check(PDB_Delete(&pdb) == OK, "delete of a base never found");
+  TEST_Check(PDB_Insert(&pdb, &record) == OK, "record after the delete");
 }
 
 //----------------------------------------------------------------------------------------- No wrap
@@ -786,6 +813,7 @@ void TEST_Cases(void)
   TEST(ring_erases_the_oldest_page);
   TEST(queries_page_through_the_base);
   TEST(init_refuses_a_bad_config);
+  TEST(refused_base_takes_nothing);
   TEST(no_wrap_refuses_when_full);
   TEST(no_wrap_pays_a_slot_a_power_up);
   TEST(init_only_reads);

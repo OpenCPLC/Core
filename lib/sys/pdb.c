@@ -207,18 +207,24 @@ static void cursor_find(PDB_t *pdb)
   }
 }
 
+// Pages on the chip and a record size within the limits: a base its fields may stand on
+static bool config_valid(const PDB_t *pdb)
+{
+  if(pdb->page_count < (pdb->no_wrap ? 1 : 2)) return false;
+  if(pdb->page_start + pdb->page_count > FLASH_PAGES) return false;
+  return pdb->record_size >= 16 && pdb->record_size <= PDB_RECORD_LIMIT && !(pdb->record_size % 8);
+}
+
 status_t PDB_Init(PDB_t *pdb)
 {
-  if(pdb->page_count < (pdb->no_wrap ? 1 : 2)) return ERR;
-  if(pdb->page_start + pdb->page_count > FLASH_PAGES) return ERR;
-  if(pdb->record_size < 16 || pdb->record_size > PDB_RECORD_LIMIT || pdb->record_size % 8) {
-    return ERR;
-  }
+  pdb->_init = false;
+  if(!config_valid(pdb)) return ERR;
   pdb->_page = PDB_NONE;
   pdb->_slot = 0;
   pdb->_first = 1;
   pdb->_next = 1;
   pdb->_fresh = false;
+  pdb->_init = true;
   page_newest(pdb);
   if(pdb->_page == PDB_NONE) {
     PDB_LOG("Init empty");
@@ -234,6 +240,7 @@ status_t PDB_Init(PDB_t *pdb)
 
 status_t PDB_Insert(PDB_t *pdb, const void *record)
 {
+  if(!pdb->_init) return ERR; // a size `PDB_Init` refused would overrun `sealed`
   uint32_t sealed[PDB_RECORD_LIMIT / 4];
   uint16_t words = pdb->record_size / 4;
   memcpy(sealed, record, pdb->record_size);
@@ -255,13 +262,17 @@ status_t PDB_Insert(PDB_t *pdb, const void *record)
 
 status_t PDB_Delete(PDB_t *pdb)
 {
+  if(!config_valid(pdb)) return ERR; // a range running past the chip erases nothing
+  pdb->_init = false;
   pdb->_page = PDB_NONE;
   pdb->_next = 1;
   for(uint16_t page = pdb->page_start; page < pdb->page_start + pdb->page_count; page++) {
     if(FLASH_EraseFull(page)) return ERR;
   }
   PDB_LOG("Delete pages:%u-%u", pdb->page_start, pdb->page_start + pdb->page_count - 1);
-  return page_mark(pdb, pdb->page_start);
+  if(page_mark(pdb, pdb->page_start)) return ERR;
+  pdb->_init = true;
+  return OK;
 }
 
 //---------------------------------------------------------------------------------------- Iterator
@@ -308,14 +319,14 @@ static bool iter_step(PDB_Iter_t *iter)
 }
 
 // A walk down starts at the write cursor, a walk up before slot `0` of the oldest page
-status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query)
+void PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query)
 {
   iter->_pdb = pdb;
   iter->_query = *query;
   iter->count = 0;
   iter->_number = 0;
   iter->_skipped = 0;
-  iter->_done = pdb->_page == PDB_NONE;
+  iter->_done = !pdb->_init || pdb->_page == PDB_NONE;
   if(query->dir == PDB_Desc) {
     iter->_page = pdb->_page;
     iter->_first = pdb->_first;
@@ -326,7 +337,6 @@ status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query)
     iter->_slot = PDB_NONE;
     if(!iter->_done) iter->_done = !page_near(pdb, PDB_Asc, &iter->_page, &iter->_first);
   }
-  return OK;
 }
 
 status_t PDB_IterNext(PDB_Iter_t *iter, void *out)

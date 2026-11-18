@@ -20,10 +20,11 @@ static uint32_t dout_key(const DOUT_t *dout, DOUT_Field_t field)
   return hash_djb2(dout->name) * 33u + field;
 }
 
-// Field into the store, nothing without a store or a name
+// Field into the store, nothing without a store or a name.
+// A write the store refuses leaves the value it held for the next start.
 static void dout_retain(DOUT_t *dout, DOUT_Field_t field, uint32_t value)
 {
-  if(dout->eeprom && dout->name) EEPROM_Write(dout->eeprom, dout_key(dout, field), value);
+  if(dout->eeprom && dout->name) (void)EEPROM_Write(dout->eeprom, dout_key(dout, field), value);
 }
 
 // Stored value of a field into `*var`, left as it is when absent
@@ -62,7 +63,8 @@ static bool pulse_start(DOUT_t *dout, uint8_t count, uint16_t ton_ms, uint16_t t
 void DOUT_Init(DOUT_t *dout)
 {
   if(dout->eeprom && dout->name) {
-    EEPROM_Init(dout->eeprom);
+    // A store that does not start needs no path of its own, each restore keeps the value set
+    (void)EEPROM_Init(dout->eeprom);
     if(!dout->save) dout_restore(dout, DOUT_Field_Save, &dout->save);
     if(dout->save) dout_restore(dout, DOUT_Field_Value, &dout->value);
     if(dout->relay) dout_restore(dout, DOUT_Field_Cycles, &dout->cycles);

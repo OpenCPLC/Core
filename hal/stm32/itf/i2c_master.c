@@ -7,11 +7,12 @@
 
 //---------------------------------------------------------------------------------------- Handlers
 
-// Write phase done, the read of `_size` bytes follows under a repeated start
+// Write phase done, the read of `_size` bytes follows under a repeated start.
+// Its arguments passed the checks when the transfer began, so the read never refuses.
 static inline void start_read(I2C_Master_t *i2c)
 {
   i2c->_busy = false;
-  I2C_Master_Read(i2c, i2c->_addr, i2c->_rx_ptr, i2c->_size);
+  (void)I2C_Master_Read(i2c, i2c->_addr, i2c->_rx_ptr, i2c->_size);
   i2c->_size = 0;
 }
 

@@ -11,7 +11,7 @@
 static status_t get_data(MAX31865_t *rtd)
 {
   if(timeout(100, WAIT_&GPIO_In, rtd->ready)) return ERR;
-  SPI_Master_Read(rtd->spi, MAX31865_Reg_Read_RTD_MSB, rtd->_buff, 3);
+  if(SPI_Master_Read(rtd->spi, MAX31865_Reg_Read_RTD_MSB, rtd->_buff, 3)) return ERR;
   if(timeout(50, WAIT_&SPI_Master_IsFree, rtd->spi)) return ERR;
   rtd->_raw = ((uint16_t)rtd->_buff[1] << 7) | (rtd->_buff[2] >> 1);
   return OK;
@@ -21,7 +21,7 @@ static status_t set_config(MAX31865_t *rtd, uint8_t config)
 {
   rtd->_buff[0] = MAX31865_Reg_Write_Configuration;
   rtd->_buff[1] = config;
-  SPI_Master_Write(rtd->spi, rtd->_buff, 2);
+  if(SPI_Master_Write(rtd->spi, rtd->_buff, 2)) return ERR;
   if(timeout(50, WAIT_&SPI_Master_IsFree, rtd->spi)) return ERR;
   return OK;
 }

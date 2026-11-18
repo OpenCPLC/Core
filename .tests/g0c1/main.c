@@ -38,13 +38,13 @@ static void loop(void)
 
 //-------------------------------------------------------------------------------------------- main
 
-stack(stack_dbg, 256);
+stack(stack_dbg, 320); // command `boot` takes the console deeper
 stack(stack_loop, 256);
 
 int main(void)
 {
   sys_init(); // clock, systick and heap
-  RTC_Init();
+  (void)RTC_Init();
   DBG_Init(&dbg_uart); // logs and shell on this port
   DBG_Enter();
   LOG_Info("Build: %s %s", __DATE__, __TIME__);

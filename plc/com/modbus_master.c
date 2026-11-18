@@ -28,7 +28,7 @@ static MODBUS_Error_t send_read(UART_t *uart, uint8_t addr, MODBUS_Fnc_t fnc,
 {
   CRC_Append(&crc16_modbus, buffer, tx_length - 2);
   UART_Clear(uart);
-  UART_Send(uart, buffer, tx_length);
+  if(UART_Send(uart, buffer, tx_length)) return MODBUS_Error_Uart;
   uint32_t wait_ms;
   wait_ms = 2 * UART_CalcTime_ms(uart, tx_length) + 10;
   if(timeout(wait_ms, WAIT_&UART_SendCompleted, uart)) return MODBUS_Error_Sending;

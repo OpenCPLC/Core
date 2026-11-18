@@ -1,5 +1,9 @@
 // hal/host/per/rtc.c
 
+// Model of the RTC on the system clock, its calendar arithmetic the one of the chip.
+// The calendar counts on from what was set, and survives a repeated `RTC_Init` as the backup
+// domain does. An alarm fires on the second the calendar matches its unmasked fields.
+
 #include "rtc.h"
 
 #include <string.h>
@@ -10,340 +14,160 @@
   #include <sys/time.h>
 #endif
 
-//----------------------------------------------------------------------------------------- Globals
-
-bool RtcReady;
-bool RtcInit;
-
-#if(RTC_WEEKDAYS_LONGNAMES)
-  const char *RtcWeekdays[8] = { "Everyday", "Monday", "Tuesday", "Wednesday",
-    "Thursday", "Friday", "Saturday", "Sunday" };
-#else
-  const char *RtcWeekdays[8] = { "Evd", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
-#endif
+#include "../../stm32/per/rtc_calendar.c"
 
 //---------------------------------------------------------------------------------------- Internal
 
-static int64_t rtc_offset_sec; // the calendar against the system clock
-static RTC_AlarmCfg_t rtc_alarms[RTC_ALARM_COUNT];
-static bool rtc_alarm_enabled[RTC_ALARM_COUNT];
-static bool rtc_alarm_event[RTC_ALARM_COUNT];
-// Timestamp each alarm last fired at, so one match yields one event
-static uint64_t rtc_alarm_stamp[RTC_ALARM_COUNT];
-static bool rtc_wakeup_event;
+#define RTC_ALARMS 2 // slots `A` and `B`, as on the chip
 
-static uint64_t rtc_get_system_ms(void)
+// Calendar the registers of a domain reset hold, 2000-01-01 00:00:00 [ms]
+#define RTC_DOMAIN_RESET_ms 946684800000ll
+
+static bool rtc_running; // backup domain clocked: the calendar counts through `RTC_Init`
+static int64_t rtc_offset_ms; // the calendar against the system clock
+static RTC_AlarmCfg_t rtc_alarms[RTC_ALARMS];
+static bool rtc_alarm_enabled[RTC_ALARMS];
+static bool rtc_alarm_flag[RTC_ALARMS];
+// Second each alarm last fired at, so one match yields one event
+static uint64_t rtc_alarm_stamp[RTC_ALARMS];
+static bool rtc_wakeup_flag;
+
+static int64_t rtc_get_system_ms(void)
 {
   #if defined(_WIN32) || defined(_WIN64)
   FILETIME ft;
   GetSystemTimeAsFileTime(&ft);
   uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-  return (t / 10000) - 11644473600000ull; // 1601 to 1970
+  return (int64_t)(t / 10000) - 11644473600000ll; // 1601 to 1970
   #else
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+  return (int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
   #endif
 }
 
-static const uint8_t days_in_month[] = { 0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-
-static bool is_leap_year(uint16_t year)
+// Calendar the registers show from now on, the subseconds restarting as the prescaler does
+static void rtc_calendar_set(int64_t calendar_ms)
 {
-  return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+  rtc_offset_ms = calendar_ms - rtc_get_system_ms();
 }
 
-static uint8_t get_days_in_month(uint8_t month, uint16_t year)
+// The chip matches each unmasked field, the day as a weekday or as a day of the month
+static bool rtc_alarm_matches(const RTC_AlarmCfg_t *cfg, const RTC_Datetime_t *now)
 {
-  if(month == 2 && is_leap_year(year)) return 29;
-  return days_in_month[month];
-}
-
-// `tm` counts Sunday as `0`, the RTC counts Monday as `1` and Sunday as `7`
-static uint8_t tm_wday_to_rtc(int wday)
-{
-  return wday == 0 ? 7 : (uint8_t)wday;
+  if(!cfg->second_mask && cfg->second != now->second) return false;
+  if(!cfg->minute_mask && cfg->minute != now->minute) return false;
+  if(!cfg->hour_mask && cfg->hour != now->hour) return false;
+  if(cfg->day_mask) return true;
+  return cfg->day == (cfg->week ? now->week_day : now->month_day);
 }
 
 //-------------------------------------------------------------------------------------------- Init
 
 status_t RTC_Init(void)
 {
-  memset(rtc_alarms, 0, sizeof(rtc_alarms));
-  memset(rtc_alarm_enabled, 0, sizeof(rtc_alarm_enabled));
-  memset(rtc_alarm_event, 0, sizeof(rtc_alarm_event));
-  rtc_offset_sec = 0;
-  RtcInit = true;
-  RtcReady = true;
-  return OK;
-}
-
-//----------------------------------------------------------------------------------------- Convert
-
-RTC_Datetime_t RTC_UnixToDatetime(uint64_t timestamp)
-{
-  RTC_Datetime_t dt = {0};
-  time_t t = (time_t)timestamp;
-  struct tm *tm = gmtime(&t);
-  if(tm) {
-    dt.year = (uint8_t)(tm->tm_year - 100); // `tm_year` counts from 1900
-    dt.month = (uint8_t)(tm->tm_mon + 1);
-    dt.month_day = (uint8_t)tm->tm_mday;
-    dt.week_day = tm_wday_to_rtc(tm->tm_wday);
-    dt.hour = (uint8_t)tm->tm_hour;
-    dt.minute = (uint8_t)tm->tm_min;
-    dt.second = (uint8_t)tm->tm_sec;
-    dt.ms = 0;
+  if(!rtc_running) {
+    rtc_calendar_set(RTC_DOMAIN_RESET_ms);
+    memset(rtc_alarms, 0, sizeof(rtc_alarms));
+    memset(rtc_alarm_enabled, 0, sizeof(rtc_alarm_enabled));
+    rtc_running = true;
   }
-  return dt;
-}
-
-uint64_t RTC_DatetimeToUnix(const RTC_Datetime_t *date)
-{
-  struct tm tm = {0};
-  tm.tm_year = date->year + 100;
-  tm.tm_mon = date->month - 1;
-  tm.tm_mday = date->month_day;
-  tm.tm_hour = date->hour;
-  tm.tm_min = date->minute;
-  tm.tm_sec = date->second;
-  #if defined(_WIN32) || defined(_WIN64)
-  return (uint64_t)_mkgmtime(&tm);
-  #else
-  return (uint64_t)timegm(&tm);
-  #endif
-}
-
-const char *RTC_WeekDayString(void)
-{
-  RTC_Datetime_t dt = RTC_Datetime();
-  if(dt.week_day >= 1 && dt.week_day <= 7) return RtcWeekdays[dt.week_day];
-  return RtcWeekdays[0];
-}
-
-bool RTC_DatetimeIsCorrect(const RTC_Datetime_t *date, int8_t time_zone)
-{
-  unused(time_zone);
-  if(date->month < 1 || date->month > 12) return false;
-  if(date->month_day < 1
-    || date->month_day > get_days_in_month(date->month, 2000 + date->year)) return false;
-  if(date->hour > 23) return false;
-  if(date->minute > 59) return false;
-  if(date->second > 59) return false;
-  return true;
-}
-
-//----------------------------------------------------------------------------------- Convert alarm
-
-RTC_AlarmCfg_t RTC_DaystampToAlarm(uint32_t stamp)
-{
-  RTC_AlarmCfg_t alarm = {0};
-  alarm.week = false;
-  alarm.day_mask = true;
-  alarm.second = stamp % 60; stamp /= 60;
-  alarm.minute = stamp % 60; stamp /= 60;
-  alarm.hour = stamp % 24;
-  return alarm;
-}
-
-RTC_AlarmCfg_t RTC_WeekstampToAlarm(uint32_t stamp)
-{
-  RTC_AlarmCfg_t alarm = {0};
-  alarm.week = true;
-  alarm.second = stamp % 60; stamp /= 60;
-  alarm.minute = stamp % 60; stamp /= 60;
-  alarm.hour = stamp % 24; stamp /= 24;
-  alarm.day = (stamp % 7) + 1;
-  return alarm;
-}
-
-uint32_t RTC_AlarmToDaystamp(const RTC_AlarmCfg_t *alarm)
-{
-  return (uint32_t)alarm->hour * 3600 + (uint32_t)alarm->minute * 60 + alarm->second;
-}
-
-uint32_t RTC_AlarmToWeekstamp(const RTC_AlarmCfg_t *alarm)
-{
-  return ((uint32_t)(alarm->day - 1) * 86400) + RTC_AlarmToDaystamp(alarm);
+  RtcInit = true;
+  return OK;
 }
 
 //--------------------------------------------------------------------------------------------- Set
 
 status_t RTC_SetDatetime(RTC_Datetime_t *datetime)
 {
-  uint64_t target = RTC_DatetimeToUnix(datetime);
-  uint64_t now = rtc_get_system_ms() / 1000;
-  rtc_offset_sec = (int64_t)target - (int64_t)now;
+  datetime->week_day = RTC_UnixToDatetime(RTC_DatetimeToUnix(datetime)).week_day;
+  if(!rtc_running) return ERR;
+  rtc_calendar_set((int64_t)RTC_DatetimeToUnix(datetime) * 1000);
+  RtcReady = true;
   return OK;
-}
-
-status_t RTC_SetTimestamp(uint64_t timestamp)
-{
-  uint64_t now = rtc_get_system_ms() / 1000;
-  rtc_offset_sec = (int64_t)timestamp - (int64_t)now;
-  return OK;
-}
-
-void RTC_Reset(void)
-{
-  rtc_offset_sec = 0;
-  memset(rtc_alarm_enabled, 0, sizeof(rtc_alarm_enabled));
-  memset(rtc_alarm_event, 0, sizeof(rtc_alarm_event));
 }
 
 //--------------------------------------------------------------------------------------------- Get
 
 RTC_Datetime_t RTC_Datetime(void)
 {
-  uint64_t ms = rtc_get_system_ms();
-  uint64_t ts = ms / 1000 + rtc_offset_sec;
-  RTC_Datetime_t dt = RTC_UnixToDatetime(ts);
-  dt.ms = ms % 1000;
+  int64_t ms = rtc_get_system_ms() + rtc_offset_ms;
+  RTC_Datetime_t dt = RTC_UnixToDatetime((uint64_t)(ms / 1000));
+  dt.ms = (uint16_t)(ms % 1000);
   return dt;
 }
 
-uint64_t RTC_Timestamp(void)
-{
-  return rtc_get_system_ms() / 1000 + rtc_offset_sec;
-}
-
-uint64_t RTC_TimestampMs(void)
-{
-  return rtc_get_system_ms() + rtc_offset_sec * 1000;
-}
-
-uint32_t RTC_Daystamp(void)
-{
-  RTC_Datetime_t dt = RTC_Datetime();
-  return (uint32_t)dt.hour * 3600 + (uint32_t)dt.minute * 60 + dt.second;
-}
-
-uint32_t RTC_Weekstamp(void)
-{
-  RTC_Datetime_t dt = RTC_Datetime();
-  return ((uint32_t)(dt.week_day - 1) * 86400) + RTC_Daystamp();
-}
-
-//--------------------------------------------------------------------------------------- Alarm get
+//--------------------------------------------------------------------------------------- Alarm Get
 
 RTC_AlarmCfg_t RTC_Alarm(RTC_Alarm_t alarm)
 {
-  if(alarm < RTC_ALARM_COUNT) return rtc_alarms[alarm];
-  return (RTC_AlarmCfg_t){0};
+  if(alarm >= RTC_ALARMS) return (RTC_AlarmCfg_t){0};
+  return rtc_alarms[alarm];
 }
 
-uint32_t RTC_AlarmDaystamp(RTC_Alarm_t alarm)
-{
-  if(alarm < RTC_ALARM_COUNT) return RTC_AlarmToDaystamp(&rtc_alarms[alarm]);
-  return 0;
-}
-
-//----------------------------------------------------------------------------------- Alarm control
+//----------------------------------------------------------------------------------- Alarm Control
 
 bool RTC_AlarmIsEnabled(RTC_Alarm_t alarm)
 {
-  if(alarm < RTC_ALARM_COUNT) return rtc_alarm_enabled[alarm];
-  return false;
+  return alarm < RTC_ALARMS && rtc_alarm_enabled[alarm];
 }
 
 void RTC_AlarmEnable(RTC_Alarm_t alarm, const RTC_AlarmCfg_t *cfg)
 {
-  if(alarm < RTC_ALARM_COUNT) {
-    rtc_alarms[alarm] = *cfg;
-    rtc_alarm_enabled[alarm] = true;
-    rtc_alarm_event[alarm] = false;
-  }
-}
-
-void RTC_AlarmDaystampEnable(RTC_Alarm_t alarm, uint32_t stamp)
-{
-  RTC_AlarmCfg_t cfg = RTC_DaystampToAlarm(stamp);
-  RTC_AlarmEnable(alarm, &cfg);
-}
-
-void RTC_AlarmWeekstampEnable(RTC_Alarm_t alarm, uint32_t stamp)
-{
-  RTC_AlarmCfg_t cfg = RTC_WeekstampToAlarm(stamp);
-  RTC_AlarmEnable(alarm, &cfg);
-}
-
-void RTC_AlarmIntervalEnable(RTC_Alarm_t alarm, uint32_t interval_sec)
-{
-  uint32_t now = RTC_Daystamp();
-  RTC_AlarmDaystampEnable(alarm, now + interval_sec);
+  if(alarm >= RTC_ALARMS) return;
+  rtc_alarms[alarm] = *cfg;
+  rtc_alarm_enabled[alarm] = true;
 }
 
 void RTC_AlarmDisable(RTC_Alarm_t alarm)
 {
-  if(alarm < RTC_ALARM_COUNT) rtc_alarm_enabled[alarm] = false;
+  if(alarm < RTC_ALARMS) rtc_alarm_enabled[alarm] = false;
 }
 
-//------------------------------------------------------------------------------------ Wakeup timer
+//------------------------------------------------------------------------------------ Wakeup Timer
 
-// Nothing to wake off-target, only `RTC_ForceWakeupTimer` raises the event
-void RTC_WakeupTimerEnable(uint32_t sec) { unused(sec); }
+void RTC_WakeupTimerEnable(uint32_t sec)
+{
+  unused(sec);
+  rtc_wakeup_flag = false;
+}
+
 void RTC_WakeupTimerDisable(void) {}
-
-//------------------------------------------------------------------------------------------- Check
-
-bool RTC_CheckDaystamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec)
-{
-  uint32_t now = RTC_Daystamp();
-  int32_t diff = (int32_t)now - (int32_t)stamp_alarm;
-  if(diff < 0) diff += 86400; // across midnight
-  return (diff >= (int32_t)offset_min_sec && diff <= (int32_t)offset_max_sec);
-}
-
-bool RTC_CheckWeekstamp(uint32_t stamp_alarm, uint32_t offset_min_sec, uint32_t offset_max_sec)
-{
-  uint32_t now = RTC_Weekstamp();
-  int32_t diff = (int32_t)now - (int32_t)stamp_alarm;
-  if(diff < 0) diff += 604800; // across the week end
-  return (diff >= (int32_t)offset_min_sec && diff <= (int32_t)offset_max_sec);
-}
-
-bool RTC_AlarmCheck(RTC_Alarm_t alarm, uint32_t offset_min_sec, uint32_t offset_max_sec)
-{
-  if(alarm >= RTC_ALARM_COUNT || !rtc_alarm_enabled[alarm]) return false;
-  RTC_AlarmCfg_t *cfg = &rtc_alarms[alarm];
-  if(cfg->week) {
-    return RTC_CheckWeekstamp(RTC_AlarmToWeekstamp(cfg), offset_min_sec, offset_max_sec);
-  }
-  return RTC_CheckDaystamp(RTC_AlarmToDaystamp(cfg), offset_min_sec, offset_max_sec);
-}
 
 //------------------------------------------------------------------------------------------- Event
 
+// The chip latches the flag at the match, the model looks when asked
 bool RTC_Event(RTC_Alarm_t alarm)
 {
-  if(alarm >= RTC_ALARM_COUNT) return false;
-  if(rtc_alarm_enabled[alarm] && !rtc_alarm_event[alarm]) {
-    uint64_t now = RTC_Timestamp();
-    if(rtc_alarm_stamp[alarm] != now && RTC_AlarmCheck(alarm, 0, 0)) {
-      rtc_alarm_stamp[alarm] = now;
-      rtc_alarm_event[alarm] = true;
+  if(alarm >= RTC_ALARMS) return false;
+  if(rtc_alarm_enabled[alarm]) {
+    RTC_Datetime_t now = RTC_Datetime();
+    uint64_t stamp = RTC_DatetimeToUnix(&now);
+    if(rtc_alarm_stamp[alarm] != stamp && rtc_alarm_matches(&rtc_alarms[alarm], &now)) {
+      rtc_alarm_stamp[alarm] = stamp;
+      rtc_alarm_flag[alarm] = true;
     }
   }
-  bool event = rtc_alarm_event[alarm];
-  rtc_alarm_event[alarm] = false;
-  return event;
+  if(!rtc_alarm_flag[alarm]) return false;
+  rtc_alarm_flag[alarm] = false;
+  return true;
 }
 
 bool RTC_EventWakeupTimer(void)
 {
-  bool event = rtc_wakeup_event;
-  rtc_wakeup_event = false;
-  return event;
+  if(!rtc_wakeup_flag) return false;
+  rtc_wakeup_flag = false;
+  return true;
 }
 
 void RTC_Force(RTC_Alarm_t alarm)
 {
-  if(alarm < RTC_ALARM_COUNT) rtc_alarm_event[alarm] = true;
+  if(alarm < RTC_ALARMS) rtc_alarm_flag[alarm] = true;
 }
 
 void RTC_ForceWakeupTimer(void)
 {
-  rtc_wakeup_event = true;
+  rtc_wakeup_flag = true;
 }
 
 //-------------------------------------------------------------------------------------------------

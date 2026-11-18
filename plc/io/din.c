@@ -30,8 +30,9 @@ static uint32_t *DIN_TimeField(DIN_t *din, DIN_Time_t time, uint32_t *fallback)
 void DIN_Init(DIN_t *din)
 {
   if(din->eeprom && din->name) {
-    // Idempotent, but the descriptor may be shared with no output owning it
-    EEPROM_Init(din->eeprom);
+    // Idempotent, but the descriptor may be shared with no output owning it.
+    // A store that does not start needs no path of its own: each read falls back to its default.
+    (void)EEPROM_Init(din->eeprom);
     // A value set in the board configuration wins over the stored one
     for(uint8_t time = DIN_Time_Ton; time <= DIN_Time_Hold; time++) {
       uint32_t fallback;

@@ -85,6 +85,22 @@ static void reserved_keys_refused(void)
   }
 }
 
+// A store init refused takes no clear, write or read, so the pages it claims keep their data
+static void store_not_started_refuses(void)
+{
+  FLASH_HostBlank();
+  eeprom = (EEPROM_t){ .page_start = FLASH_PAGES - 3, .page_count = 3 };
+  TEST_Check(EEPROM_Init(&eeprom) == ERR, "odd page count");
+  TEST_Check(EEPROM_Write(&eeprom, 1, 10) == ERR, "write");
+  TEST_Equal(EEPROM_Read(&eeprom, 1, ABSENT), ABSENT, "read");
+  uint32_t kept = FLASH_GetAddress(FLASH_PAGES - 2, 0);
+  TEST_Check(FLASH_Write(kept, 0x12345678, 0x9ABCDEF0) == OK, "data in a page the store claims");
+  eeprom = (EEPROM_t){ .page_start = FLASH_PAGES - 2, .page_count = 4 };
+  TEST_Check(EEPROM_Init(&eeprom) == ERR, "pages past the flash");
+  TEST_Check(EEPROM_Clear(&eeprom) == ERR, "clear");
+  TEST_Equal(FLASH_Read(kept), 0x12345678, "data kept");
+}
+
 // A float comes back bit for bit, one never written as its default
 static void floats_come_back_bit_for_bit(void)
 {
@@ -450,6 +466,7 @@ void TEST_Cases(void)
   TEST(newest_value_wins);
   TEST(rewrites_keep_every_key);
   TEST(reserved_keys_refused);
+  TEST(store_not_started_refuses);
   TEST(floats_come_back_bit_for_bit);
   TEST(clear_forgets_everything);
   TEST(clear_erases_every_page_whole);

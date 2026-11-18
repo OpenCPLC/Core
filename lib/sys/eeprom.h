@@ -73,6 +73,7 @@ typedef struct {
 
 /**
  * @brief Scan both halves and recover the state, a second call is a no-op.
+ *   Until it succeeds, the store refuses every clear, write and read.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
  * @return `OK` on success, `ERR` on invalid config or a flash error
  */
@@ -81,7 +82,7 @@ status_t EEPROM_Init(EEPROM_t *eeprom);
 /**
  * @brief Erase both halves. A power loss mid-clear may leave stale data readable.
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
- * @return `OK` on success, `ERR` on a flash error
+ * @return `OK` on success, `ERR` on a flash error or before `EEPROM_Init` succeeds
  */
 status_t EEPROM_Clear(EEPROM_t *eeprom);
 
@@ -90,7 +91,7 @@ status_t EEPROM_Clear(EEPROM_t *eeprom);
  * @param[in,out] eeprom Pointer to `EEPROM_t` instance
  * @param[in] key Entry key, the reserved ones are refused
  * @param[in] value Entry value
- * @return `OK` on success, `ERR` on a flash error or a reserved key
+ * @return `OK` on success, `ERR` on a flash error, a reserved key or before `EEPROM_Init` succeeds
  */
 status_t EEPROM_Write(EEPROM_t *eeprom, uint32_t key, uint32_t value);
 
@@ -98,7 +99,7 @@ status_t EEPROM_Write(EEPROM_t *eeprom, uint32_t key, uint32_t value);
  * @brief Value under a key.
  * @param[in] eeprom Pointer to `EEPROM_t` instance
  * @param[in] key Entry key
- * @param[in] default_value Returned when the key is absent
+ * @param[in] default_value Returned when the key is absent or before `EEPROM_Init` succeeds
  * @return Stored value or `default_value`
  */
 uint32_t EEPROM_Read(EEPROM_t *eeprom, uint32_t key, uint32_t default_value);

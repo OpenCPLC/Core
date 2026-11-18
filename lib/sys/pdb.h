@@ -59,6 +59,7 @@ typedef bool (*PDB_Filter_t)(const void *record, void *ctx);
  * @param _first Number of the first record of `_page`, from its header
  * @param _next Number of the next record
  * @param _fresh First free slot of `_page` may hold a write cut at its very start
+ * @param _init Base found by `PDB_Init` or formatted by `PDB_Delete`
  */
 typedef struct {
   uint16_t page_start;
@@ -72,6 +73,7 @@ typedef struct {
   uint32_t _first;
   uint32_t _next;
   bool _fresh;
+  bool _init;
 } PDB_t;
 
 /**
@@ -131,6 +133,7 @@ typedef struct {
  * @brief Find the newest page and the next number from the page headers,
  *   then the write cursor on that page.
  *   Reads only: nothing is written or erased.
+ *   Until it succeeds, or `PDB_Delete` formats the base, inserts are refused and walks are empty.
  * @param[in,out] pdb Database
  * @return `OK` on success, `ERR` on invalid config
  */
@@ -144,15 +147,16 @@ status_t PDB_Init(PDB_t *pdb);
  *   A record that does not read back clean goes once more, same number, into the next slot.
  * @param[in,out] pdb Database
  * @param[in] record Record of `record_size` bytes, its number and CRC-32 left to PDB
- * @return `OK` on success, `ERR` on a full `no_wrap` base, no page to move on to or a flash error
+ * @return `OK` on success, `ERR` on a full `no_wrap` base, no page to move on to, a flash error,
+ *   or a base `PDB_Init` has not found
  */
 status_t PDB_Insert(PDB_t *pdb, const void *record);
 
 /**
  * @brief Erase every page of the base, under a header of another kind too,
- *   and start the numbers again from `1`.
+ *   and start the numbers again from `1`. No `PDB_Init` needed before: the base starts anew.
  * @param[in,out] pdb Database
- * @return `OK` on success, `ERR` on a flash error
+ * @return `OK` on success, `ERR` on invalid config or a flash error
  */
 status_t PDB_Delete(PDB_t *pdb);
 
@@ -161,9 +165,8 @@ status_t PDB_Delete(PDB_t *pdb);
  * @param[in] pdb Database
  * @param[out] iter Iterator, owned by the caller
  * @param[in] query Query, copied into the iterator
- * @return `OK`
  */
-status_t PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query);
+void PDB_IterInit(PDB_t *pdb, PDB_Iter_t *iter, const PDB_Query_t *query);
 
 /**
  * @brief Next matching record.

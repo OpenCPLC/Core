@@ -132,7 +132,7 @@ static void logs_drain(void)
 {
   if(!DbgFile->size) return;
   logs_take(DbgFile->buffer, DbgFile->size);
-  MBB_Clear(DbgFile);
+  (void)MBB_Clear(DbgFile);
 }
 
 static bool logs_hold(const char *text)

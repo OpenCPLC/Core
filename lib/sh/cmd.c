@@ -41,7 +41,7 @@ void CMD_AddMemBuff(MBB_t *mbb)
   cmd.mbbs_hash[cmd.mbbs_count] = hash_djb2_ci(mbb->name);
   if(!cmd.mbbs_count) CmdMbb = mbb;
   cmd.mbbs_count++;
-  MBB_FlashLoad(mbb);
+  (void)MBB_FlashLoad(mbb); // a buffer never saved starts empty
 }
 
 void CMD_AddCommand(const char *name, CMD_Handler_t handler)
@@ -111,13 +111,13 @@ static void mbb_data(uint8_t *data, uint16_t size, STREAM_t *stream)
   LOG_Bash("MBB " ANSI_CREAM "%s" ANSI_END " data pack:" ANSI_LIME "%d" ANSI_END,
     CmdMbb->name, stream->_packages);
   CmdMbb->lock = false;
-  MBB_Append(CmdMbb, data, size);
+  if(MBB_Append(CmdMbb, data, size)) LOG_Error("MBB %s full, data pack dropped", CmdMbb->name);
   if(stream->_packages) {
     CmdMbb->lock = true;
     return;
   }
   STREAM_ArgsMode(stream);
-  if(cmd.autosave) MBB_FlashSave(CmdMbb);
+  if(cmd.autosave && MBB_FlashSave(CmdMbb)) LOG_Error("MBB %s flash save fault", CmdMbb->name);
 }
 
 static MBB_t *mbb_find(const char *name)
@@ -308,8 +308,8 @@ static void cmd_rtc(char **argv, uint16_t argc)
   if(argc == 2) { // rtc rst|<timestamp>
     uint32_t hash = hash_djb2_ci(argv[1]);
     if(hash == HASH_Rst || hash == HASH_Reset) {
-      RTC_Reset();
-      LOG_Bash("RTC reset");
+      if(RTC_Reset()) LOG_Error("RTC refused write, calendar kept");
+      else LOG_Bash("RTC reset");
       return;
     }
     if(!str_is_u64(argv[1])) {

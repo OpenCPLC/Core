@@ -85,7 +85,7 @@ stack(stack_test, 512);
 int main(void)
 {
   sys_init(); // clock, systick and heap
-  RTC_Init();
+  (void)RTC_Init();
   DBG_Init(&dbg_uart); // logs and shell on this port
   DBG_Enter();
   LOG_Info("Build: %s %s", __DATE__, __TIME__);
