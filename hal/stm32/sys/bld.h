@@ -83,8 +83,10 @@
 #define BLD_HEADER_OFFSET 0x200u      // header position in an image, past every vector table
 #define BLD_TRAILER_SIZE 72u          // erased bytes behind an image: CRC32, then the signature
 #define BLD_SIGNATURE_OFFSET 8u       // signature in the trailer, a doubleword past the CRC32
-#define BLD_SIGNATURE_SIZE 64u        // Ed25519
-#define BLD_KEY_SIZE 32u              // Ed25519 public key, 64 hex digits in `BOOT_KEYS`
+#define BLD_SIGNATURE_SIZE 64u        // signature of Ed25519
+#define BLD_KEY_SIZE 32u              // public key of Ed25519, 64 hex digits in `BOOT_KEYS`
+#define BLD_CIPHER_KEY_SIZE 32u       // key of `BLD_Cipher`, for XChaCha20
+#define BLD_CIPHER_ID_SIZE 8u         // fingerprint of a cipher key, 16 hex digits
 #define BLD_MAILBOX_PAGE (BOOT_PAGES - 1)
 #define BLD_APP_PAGE BOOT_PAGES
 #define BLD_STAGING_PAGE (BOOT_PAGES + BOOT_SLOT_PAGES)
@@ -223,6 +225,26 @@ status_t BLD_Begin(uint32_t size, uint32_t crc);
  * @return `OK` with a transfer open, `ERR` otherwise
  */
 status_t BLD_Signature(const uint8_t *signature);
+
+/**
+ * @brief Give the open transfer the key its image comes encrypted with by `make dist CIPHER=`.
+ * @details XChaCha20 with the first 24 bytes of the signature as nonce.
+ *   `BLD_Write` then decrypts every piece by its offset, the trailer stays plain,
+ *   and the key leaves RAM when the transfer closes.
+ *   A wrong key leaves bytes the bootloader turns down as `crc`.
+ * @param[in] key `BLD_CIPHER_KEY_SIZE` bytes
+ * @return `OK` after `BLD_Signature` and before the first byte,
+ *   `ERR` otherwise, the transfer closes then
+ */
+status_t BLD_Cipher(const uint8_t *key);
+
+/**
+ * @brief Fingerprint of a cipher key, the one Forge shows beside its name.
+ * @details The first bytes of its SHA-512 prove the key a device holds without showing it.
+ * @param[in] key `BLD_CIPHER_KEY_SIZE` bytes
+ * @param[out] id `BLD_CIPHER_ID_SIZE` bytes, 16 hex digits printed in order
+ */
+void BLD_CipherId(const uint8_t *key, uint8_t *id);
 
 /**
  * @brief Take the next bytes of the image.

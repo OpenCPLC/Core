@@ -2,6 +2,16 @@
 
 Release history of **OpenCPLC Core**, newest first.
 
+### `0.6.6` Encryption
+
+- `BLD_Cipher` decrypts update image from `make dist CIPHER=`
+- `BLD_CipherId` gives key fingerprint Forge shows
+- `make lint` passes new `switch` and `status_t` checks
+- `RTC_Reset` returns status, `PDB_IterInit` nothing
+- Host RTC runs as chip: from 2000-01-01, `RtcReady` once set
+- Fix: Modbus master waiting out refused send, stale MAX31865 reading
+- Fix: EEPROM and PDB touching flash after refused init, I-Am lost behind own frame
+
 ### `0.6.5` Lint
 
 - `make lint` of Forge 0.5.3 passes, new `ary_*_static`, `QUEUE_NewStatic` and `MBB_InitStatic`

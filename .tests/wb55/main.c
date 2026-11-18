@@ -113,7 +113,7 @@ static void test(void)
 
 //-------------------------------------------------------------------------------------------- main
 
-stack(stack_dbg, 256);
+stack(stack_dbg, 320); // command `boot` takes the console deeper
 stack(stack_test, 512);
 
 int main(void)
@@ -124,7 +124,7 @@ int main(void)
   sys_init(); // clock, systick and heap
   rtc_status = RTC_Init();
   if(!again) {
-    RTC_SetTimestamp(KNOWN_TIME_s); // the time the run after the reset has to find
+    (void)RTC_SetTimestamp(KNOWN_TIME_s); // the time the run after the reset has to find
     PWR_Reset();
   }
   DBG_Init(&dbg_uart); // logs and shell on this port

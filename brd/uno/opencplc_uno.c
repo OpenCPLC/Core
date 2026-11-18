@@ -226,12 +226,14 @@ static MBB_t cache_file = { .name = "cache", .buffer = cache_file_buffer,
 void PLC_Init(void)
 {
   vrts_lock();
-  BOR_SetLevel(PLC_BOR_LEVEL); // the first boot may reprogram the option bytes and reset
+  // The first boot may reprogram the option bytes and reset.
+  // A refused write keeps the old level, and the next boot tries again.
+  (void)BOR_SetLevel(PLC_BOR_LEVEL);
   clock_init();
   systick_init(PLC_BASETIME);
   heap_init();
-  RTC_Init();
-  CACHE_Init(&eeprom_plc);
+  (void)RTC_Init(); // a crystal that does not start leaves `RtcInit` down
+  (void)CACHE_Init(&eeprom_plc); // a store that does not start leaves the cache refusing
   RGB_Init(&RGB);
   DIN_Init(&BTN);
   DBG_Init(&dbg_uart);
@@ -279,7 +281,7 @@ void PLC_Init(void)
   if(din_pwmi_init) PWMI_Init(&din_pwmi);
   // Analog inputs (AI)
   ADC_Init(&ain_adc);
-  ADC_Record(&ain_adc);
+  (void)ADC_Record(&ain_adc); // a fixed configuration, refused only by a wrong build
   ADC_Wait(&ain_adc);
   AIN_SetVref(&VREF);
   // RS485 ports
@@ -316,8 +318,8 @@ void PLC_Loop(void)
     // Analog inputs (AI)
     if(ADC_IsFree(&ain_adc)) {
       if(ADC_Overruns(&ain_adc)) LOG_Debug("ADC overrun");
-      else ADC_LastSamples(&ain_adc, ain_data[0], AIN_SAMPLES * sizeof(ain_channels), true);
-      ADC_Record(&ain_adc);
+      else (void)ADC_LastSamples(&ain_adc, ain_data[0], AIN_SAMPLES * sizeof(ain_channels), true);
+      (void)ADC_Record(&ain_adc);
     }
     let();
   }
@@ -363,7 +365,7 @@ void RTD_Main(void)
   SPI_Master_Init(&rtd_spi);
   MAX31865_Init(&RTD);
   while(1) {
-    MAX31865_Loop(&RTD);
+    (void)MAX31865_Loop(&RTD); // a failed round keeps the last value until it expires to `NaN`
     let();
   }
 }

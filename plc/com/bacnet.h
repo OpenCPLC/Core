@@ -105,6 +105,7 @@ typedef struct {
  * @param _service Service of the request
  * @param _peer MAC asked
  * @param _value `Present_Value` read
+ * @param _i_am An I-Am waits behind a frame of this device for room in the link
  * @param _init Initialization completed flag
  */
 typedef struct {
@@ -126,6 +127,7 @@ typedef struct {
   uint8_t _service;
   uint8_t _peer;
   float _value;
+  bool _i_am;
   bool _init;
 } BACNET_t;
 

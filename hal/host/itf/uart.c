@@ -106,9 +106,8 @@ static void console_drain(UART_t *uart)
 
 //--------------------------------------------------------------------------------------------- API
 
-status_t UART_Init(UART_t *uart)
+void UART_Init(UART_t *uart)
 {
-  if(!uart->buff) return ERR;
   if(uart->dir) {
     uart->dir->mode = GPIO_Mode_Output;
     GPIO_Init(uart->dir);
@@ -116,7 +115,6 @@ status_t UART_Init(UART_t *uart)
   BUFF_Init(uart->buff);
   console_init();
   uart->_init = true;
-  return OK;
 }
 
 void UART_DeInit(UART_t *uart)
@@ -126,10 +124,10 @@ void UART_DeInit(UART_t *uart)
   uart->_init = false;
 }
 
-status_t UART_ReInit(UART_t *uart)
+void UART_ReInit(UART_t *uart)
 {
   UART_DeInit(uart);
-  return UART_Init(uart);
+  UART_Init(uart);
 }
 
 void UART_SetTimeout(UART_t *uart, uint16_t timeout) { uart->timeout = timeout; }

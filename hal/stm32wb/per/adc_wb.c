@@ -151,6 +151,7 @@ void ADC_InitGPIO(ADC_t *adc, uint8_t *cha, uint8_t count)
         RCC_EnableGPIO(GPIOA);
         GPIOA->MODER |= (3u << (2u * (ch - ADC_IN_PA8 + 8)));
         break;
+      default: break;
     }
   }
   // Source bits change on disabled converter, as vendor library does it

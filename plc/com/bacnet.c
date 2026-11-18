@@ -242,6 +242,8 @@ static bool device_value(const BACNET_t *bacnet, uint32_t property, BACNET_Tag_O
     case BACNET_Prop_MaxInfoFrames:
       BACNET_Tag_Unsigned(out, BACNET_MAX_INFO_FRAMES);
       return true;
+    default:
+      break;
   }
   return false;
 }
@@ -281,6 +283,8 @@ static bool object_value(const BACNET_Object_t *object, uint32_t property, BACNE
       if(object->type != BACNET_Type_BinaryInput) return false;
       BACNET_Tag_Enumerated(out, 0);
       return true;
+    default:
+      break;
   }
   return false;
 }
@@ -630,8 +634,8 @@ static uint16_t max_apdu(uint8_t code)
   return code < array_len(sizes) ? sizes[code] : 0;
 }
 
-// I-Am as a global broadcast with normal priority, so routers pass it on;
-// it goes out with the next token.
+// I-Am as a global broadcast with normal priority, so routers pass it on.
+// It goes out with the next token, or waits in `_i_am` behind a frame of this device.
 static void i_am(BACNET_t *bacnet)
 {
   static const uint8_t npdu_broadcast[] = { 0x01, 0x20, 0xFF, 0xFF, 0x00, 0xFF };
@@ -644,7 +648,7 @@ static void i_am(BACNET_t *bacnet)
   BACNET_Tag_Unsigned(&out, BACNET_APDU_MAX);
   BACNET_Tag_Enumerated(&out, BACNET_SEGMENTATION);
   BACNET_Tag_Unsigned(&out, BACNET_VENDOR_ID);
-  MSTP_Send(bacnet->mstp, MSTP_BROADCAST, buffer, out.len, false);
+  bacnet->_i_am = MSTP_Send(bacnet->mstp, MSTP_BROADCAST, buffer, out.len, false) == BUSY;
 }
 
 // Limits come both or none, each `BACNET_WILDCARD` at most, else the Who-Is goes unanswered
@@ -687,7 +691,8 @@ static void confirmed(BACNET_t *bacnet, BACNET_Request_t *request, const BACNET_
     BACNET_Tag_Byte(&out, request->invoke);
     BACNET_Tag_Byte(&out, BACNET_ABORT_SEGMENTATION_NOT_SUPPORTED);
   }
-  MSTP_Reply(bacnet->mstp, buffer, out.len);
+  // Served in the pass that handed the frame over, so its reply window is still open
+  (void)MSTP_Reply(bacnet->mstp, buffer, out.len);
   heap_free(buffer);
   bacnet->requests++;
 }
@@ -740,6 +745,7 @@ void BACNET_Loop(BACNET_t *bacnet)
   }
   const MSTP_Frame_t *frame;
   while((frame = MSTP_Loop(bacnet->mstp))) serve(bacnet, frame);
+  if(bacnet->_i_am) i_am(bacnet);
 }
 
 status_t BACNET_Read(BACNET_t *bacnet, uint8_t mac, BACNET_Type_t type, uint32_t instance,

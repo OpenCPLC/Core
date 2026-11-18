@@ -132,9 +132,9 @@ typedef struct {
 
 //--------------------------------------------------------------------------------------------- API
 
-status_t UART_Init(UART_t *uart);
+void UART_Init(UART_t *uart);
 void UART_DeInit(UART_t *uart);
-status_t UART_ReInit(UART_t *uart);
+void UART_ReInit(UART_t *uart);
 void UART_SetTimeout(UART_t *uart, uint16_t timeout);
 
 bool UART_SendCompleted(UART_t *uart);

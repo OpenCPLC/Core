@@ -4,7 +4,7 @@
 // with a power cut before and halfway through every flash operation.
 // The slot may hold the old image or the new one, never half of either.
 // Built here for the `plain` bootloader and again in `test_bld_key.c` for the `key` one,
-// where every image carries the signature of one of three test keys,
+// where every image carries the signature of one of three test keys and may come encrypted,
 // and in `test_bld_key_slot.c` for a `key` one that keeps its floors in the slot, not in OTP.
 
 // A G081 under its bootloader: 128kB of flash in pages of 2kB, as Forge sets it up
@@ -786,6 +786,123 @@ static void forge_signature_starts(void)
   TEST_Check(app == APP_ADDR, "started");
 }
 
+static uint8_t encrypted_image[BLD_SLOT_SIZE];
+
+// Test image as `make dist CIPHER=` leaves it: its bytes encrypted under `FORGE_CIPHER_KEY`,
+// the first 24 bytes of the signature as nonce, the trailer plain.
+static void image_encrypt(uint8_t *out, const uint8_t *image)
+{
+  const uint8_t *signature = image + FORGE_SIZE + BLD_SIGNATURE_OFFSET;
+  crypto_chacha20_x(out, image, FORGE_SIZE, FORGE_CIPHER_KEY, signature, 0);
+  memcpy(out + FORGE_SIZE, image + FORGE_SIZE, BLD_TRAILER_SIZE);
+}
+
+// Test image sent as an application with `key` sends it, `piece` bytes at a time,
+// the signature taken from its plain trailer.
+static status_t transfer_encrypted(const uint8_t *image, uint32_t crc, const uint8_t *key,
+  uint32_t piece)
+{
+  if(BLD_Begin(FORGE_SIZE, crc)) return ERR;
+  if(BLD_Signature(image + FORGE_SIZE + BLD_SIGNATURE_OFFSET)) return ERR;
+  if(BLD_Cipher(key)) return ERR;
+  for(uint32_t at = 0; at < FORGE_SIZE; at += piece) {
+    if(BLD_Write(at, image + at, (uint16_t)minv(FORGE_SIZE - at, piece))) return ERR;
+  }
+  return BLD_End();
+}
+
+// Subkey gone from RAM, as `crypto_wipe` leaves it: zeros
+static bool subkey_wiped(void)
+{
+  for(uint32_t i = 0; i < sizeof(boot.subkey); i++) {
+    if(boot.subkey[i]) return false;
+  }
+  return !boot.encrypted;
+}
+
+// Monocypher encrypts as Forge does, and takes the same fingerprint of the key
+static void monocypher_ciphers_as_forge(void)
+{
+  image_make(new_image, FORGE_SIZE, FORGE_IMAGE_SEED);
+  image_encrypt(encrypted_image, new_image);
+  TEST_Check(CRC_Run(&crc32_iso, encrypted_image, FORGE_SIZE) == FORGE_CIPHER_CRC, "image");
+  uint8_t id[BLD_CIPHER_ID_SIZE];
+  BLD_CipherId(FORGE_CIPHER_KEY, id);
+  TEST_Check(!memcmp(id, FORGE_CIPHER_ID, sizeof(id)), "fingerprint");
+}
+
+// What Forge encrypts installs in pieces of any length, out of step with the keystream blocks,
+// and the subkey leaves RAM with the transfer.
+static void encrypted_image_installs_in_any_pieces(void)
+{
+  const uint32_t pieces[] = { 1, 63, 64, 65, 333, 1024 };
+  uint32_t crc = image_make(new_image, FORGE_SIZE, FORGE_IMAGE_SEED);
+  image_encrypt(encrypted_image, new_image);
+  for(uint32_t n = 0; n < array_len(pieces); n++) {
+    FLASH_HostBlank();
+    TEST_Check(transfer_encrypted(encrypted_image, crc, FORGE_CIPHER_KEY, pieces[n]) == OK,
+      "piece:%u staged", pieces[n]);
+    TEST_Check(subkey_wiped(), "piece:%u wiped", pieces[n]);
+    TEST_Check(start(NULL) == BLD_Result_Installed && slot_crc() == crc, "piece:%u", pieces[n]);
+  }
+}
+
+// A transfer broken off halfway takes the key again and starts over from offset `0`
+static void encrypted_transfer_starts_over(void)
+{
+  uint32_t crc = image_make(new_image, FORGE_SIZE, FORGE_IMAGE_SEED);
+  image_encrypt(encrypted_image, new_image);
+  FLASH_HostBlank();
+  TEST_Check(BLD_Begin(FORGE_SIZE, crc) == OK
+    && BLD_Signature(new_image + FORGE_SIZE + BLD_SIGNATURE_OFFSET) == OK
+    && BLD_Cipher(FORGE_CIPHER_KEY) == OK
+    && BLD_Write(0, encrypted_image, 1000) == OK, "half");
+  BLD_Abort();
+  TEST_Check(subkey_wiped(), "wiped by the abort");
+  TEST_Check(transfer_encrypted(encrypted_image, crc, FORGE_CIPHER_KEY, LINE_SIZE) == OK, "again");
+  TEST_Check(start(NULL) == BLD_Result_Installed && slot_crc() == crc, "installed");
+}
+
+// A wrong key, a plain image sent with the key and a changed byte leave bytes off their CRC32:
+// the bootloader refuses them as `crc`, and the old image runs on.
+static void wrong_cipher_reads_broken(void)
+{
+  uint32_t old_size = 9000;
+  FLASH_HostBlank();
+  uint32_t old_crc = image_make(old_image, old_size, 1);
+  slot_program(old_image, old_size, old_crc);
+  uint32_t crc = image_make(new_image, FORGE_SIZE, FORGE_IMAGE_SEED);
+  image_encrypt(encrypted_image, new_image);
+  uint8_t other_key[BLD_CIPHER_KEY_SIZE];
+  memcpy(other_key, FORGE_CIPHER_KEY, sizeof(other_key));
+  other_key[0] ^= 0x01;
+  TEST_Check(transfer_encrypted(encrypted_image, crc, other_key, LINE_SIZE) == OK
+    && start(NULL) == BLD_Result_Crc, "wrong key");
+  TEST_Check(transfer_encrypted(new_image, crc, FORGE_CIPHER_KEY, LINE_SIZE) == OK
+    && start(NULL) == BLD_Result_Crc, "plain image");
+  encrypted_image[FORGE_SIZE / 2] ^= 0x01;
+  TEST_Check(transfer_encrypted(encrypted_image, crc, FORGE_CIPHER_KEY, LINE_SIZE) == OK
+    && start(NULL) == BLD_Result_Crc, "changed byte");
+  TEST_Check(slot_crc() == old_crc, "old image runs");
+}
+
+// The key comes after the signature, whose first bytes are the nonce, and before the first byte.
+// `BLD_Cipher` refuses it otherwise and closes the transfer, so nothing stages undecrypted.
+static void cipher_takes_the_signature_and_no_bytes(void)
+{
+  uint32_t crc = image_make(new_image, FORGE_SIZE, FORGE_IMAGE_SEED);
+  const uint8_t *signature = new_image + FORGE_SIZE + BLD_SIGNATURE_OFFSET;
+  TEST_Check(BLD_Cipher(FORGE_CIPHER_KEY) == ERR, "no transfer");
+  TEST_Check(BLD_Begin(FORGE_SIZE, crc) == OK && BLD_Cipher(FORGE_CIPHER_KEY) == ERR,
+    "no signature");
+  TEST_Check(BLD_Write(0, new_image, LINE_SIZE) == ERR, "closed without a signature");
+  TEST_Check(BLD_Begin(FORGE_SIZE, crc) == OK
+    && BLD_Signature(signature) == OK
+    && BLD_Write(0, new_image, LINE_SIZE) == OK
+    && BLD_Cipher(FORGE_CIPHER_KEY) == ERR, "bytes first");
+  TEST_Check(BLD_Write(LINE_SIZE, new_image + LINE_SIZE, LINE_SIZE) == ERR, "closed after bytes");
+}
+
 #endif
 //-------------------------------------------------------------------------------------------------
 
@@ -834,5 +951,10 @@ void TEST_Cases(void)
   TEST(flashed_image_raises_the_floors);
   TEST(monocypher_signs_as_forge);
   TEST(forge_signature_starts);
+  TEST(monocypher_ciphers_as_forge);
+  TEST(encrypted_image_installs_in_any_pieces);
+  TEST(encrypted_transfer_starts_over);
+  TEST(wrong_cipher_reads_broken);
+  TEST(cipher_takes_the_signature_and_no_bytes);
   #endif
 }

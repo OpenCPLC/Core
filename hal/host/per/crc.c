@@ -65,6 +65,7 @@ uint32_t CRC_End(const CRC_t *crc)
       case 32:
         return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
       case 16: return ((uint32_t)p[0] << 8) | p[1];
+      default: break;
     }
   }
   return out;
@@ -92,6 +93,9 @@ uint16_t CRC_Append(const CRC_t *crc, uint8_t *data, uint16_t count)
       fallthrough;
     case 8:
       data[count++] = (uint8_t)code;
+      break;
+    default:
+      break;
   }
   return count;
 }
@@ -112,6 +116,9 @@ status_t CRC_Error(const CRC_t *crc, const uint8_t *data, uint16_t count)
       fallthrough;
     case 8:
       if(data[count++] != (uint8_t)code) return ERR;
+      break;
+    default:
+      break;
   }
   return OK;
 }

@@ -32,7 +32,7 @@ static void receiver(void *ctx, const uint8_t *data, uint16_t len)
 static void prefix_goes_ahead_of_every_transfer(void)
 {
   UART_t port = { .UART_9600, .buff = &rx };
-  TEST_Check(UART_Init(&port) == OK, "init");
+  UART_Init(&port);
   uint8_t sent[8];
   TEST_Check(UART_Send(&port, (const uint8_t *)"AB", 2) == OK, "send");
   TEST_Equal(UART_HostSent(&port, sent), 2, "no prefix");
@@ -51,7 +51,7 @@ static void dir_set_for_the_bytes(void)
   UART_t port = { .UART_9600, .buff = &rx, .dir = &dir, .prefix = 0x55 };
   dir.mode = GPIO_Mode_Input;
   dir.port->ODR |= 1u << dir.pin; // a pull-up holds the line high until init
-  TEST_Check(UART_Init(&port) == OK, "init");
+  UART_Init(&port);
   TEST_Check(dir.mode == GPIO_Mode_Output && !GPIO_In(&dir), "output, released after init");
   line.len = 0;
   line.idle = false;
@@ -69,7 +69,7 @@ static void receiving_counts_until_the_timeout(void)
   UART_t port = { .UART_76800, .buff = &rx };
   TEST_Check(port.baud == 76800 && port.parity == UART_Parity_None
     && port.stop_bits == UART_StopBits_1, "preset 76800 8N1");
-  TEST_Check(!UART_Init(&port), "init");
+  UART_Init(&port);
   TEST_Equal(UART_Receiving(&port), 0, "line quiet");
   BUFF_Push(&rx, 0x55);
   BUFF_Push(&rx, 0xFF);

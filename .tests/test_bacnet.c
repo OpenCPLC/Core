@@ -2,7 +2,7 @@
 
 // BACnet device over its MS/TP link, exchanges byte for byte with the boiler room of the plan:
 // the read of the plan and the ReadProperty and WriteProperty of Annex F,
-// Who-Is with and without a range answered by I-Am at the token,
+// Who-Is with and without a range answered by I-Am at the token, even behind a frame of the node,
 // every property of every object type, `Object_List` whole and by index,
 // writes of each type and each refusal, each Reject reason,
 // Abort for an answer the client cannot take whole or a request in segments,
@@ -247,6 +247,10 @@ static void examples_of_annex_f(void)
 
 //------------------------------------------------------------------------------------------ Who-Is
 
+// I-Am of the boiler room, Device 1005, as a global broadcast
+static const char i_am_1005[] =
+  "\x01\x20\xFF\xFF\x00\xFF\x10\x00\xC4\x02\x00\x03\xED\x22\x01\xE0\x91\x03\x21\x00";
+
 // Who-Is broadcast from MAC 1 as YABE sends it, normal priority to every network
 static void who_is_request(const char *apdu, uint16_t len)
 {
@@ -256,8 +260,8 @@ static void who_is_request(const char *apdu, uint16_t len)
   pass();
 }
 
-// In a ring of MAC 1, 5 and 6: I-Am goes out with the next token, ahead of passing it on
-static void who_is_answered_at_the_token(void)
+// The node in a ring of MAC 1, 5 and 6, its successor 6 found and the token passed on to it
+static void ring_of_three(void)
 {
   start();
   token();
@@ -265,8 +269,12 @@ static void who_is_answered_at_the_token(void)
   hear_frame(MSTP_Type_ReplyToPollForMaster, 5, 6, NULL, 0);
   pass();
   sent(MSTP_Type_Token, 6, NULL, 0, "token to 6");
-  static const char i_am_1005[] =
-    "\x01\x20\xFF\xFF\x00\xFF\x10\x00\xC4\x02\x00\x03\xED\x22\x01\xE0\x91\x03\x21\x00";
+}
+
+// I-Am goes out with the next token, ahead of passing it on
+static void who_is_answered_at_the_token(void)
+{
+  ring_of_three();
   static const struct {
     const char *apdu;
     uint8_t len;
@@ -292,6 +300,24 @@ static void who_is_answered_at_the_token(void)
     sent(MSTP_Type_Token, 6, NULL, 0, cases[i].what);
   }
   TEST_Equal(device.requests, 0, "Who-Is is no confirmed request");
+}
+
+// A frame of the node waiting for the token holds the I-Am back, and the next token takes it
+static void i_am_waits_behind_a_frame_of_the_node(void)
+{
+  ring_of_three();
+  static const char who_is_6[] = "\x01\x00\x10\x08"; // the node asks MAC 6 itself
+  TEST_Check(MSTP_Send(&node, 6, (const uint8_t *)who_is_6, sizeof(who_is_6) - 1, false) == OK,
+    "frame of the node waiting");
+  who_is_request(bytes_len("\x10\x08"));
+  token();
+  sent(MSTP_Type_DataNotExpectingReply, 6, bytes_len(who_is_6), "frame of the node first");
+  pass();
+  sent(MSTP_Type_Token, 6, NULL, 0, "token on");
+  token();
+  sent(MSTP_Type_DataNotExpectingReply, MSTP_BROADCAST, bytes_len(i_am_1005), "I-Am after it");
+  pass();
+  sent(MSTP_Type_Token, 6, NULL, 0, "token on again");
 }
 
 //-------------------------------------------------------------------------------------------- Read
@@ -810,6 +836,7 @@ void TEST_Cases(void)
   TEST(example_of_the_plan);
   TEST(examples_of_annex_f);
   TEST(who_is_answered_at_the_token);
+  TEST(i_am_waits_behind_a_frame_of_the_node);
   TEST(reads_device_properties);
   TEST(reads_object_properties);
   TEST(unknown_objects_and_properties);

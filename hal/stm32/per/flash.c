@@ -366,7 +366,7 @@ status_t FLASH_OptionWrite(volatile uint32_t *reg, uint32_t value)
       while(1) __DSB();
     }
   }
-  flash_finish();
+  (void)flash_finish(); // a refusal either way, the flags add nothing
   WPAN_FlashEraseActivity(false);
   return ERR;
 }

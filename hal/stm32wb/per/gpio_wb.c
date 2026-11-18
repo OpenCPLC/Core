@@ -19,6 +19,7 @@ void GPIO_BackendWakeup(GPIO_t *gpio)
       case (uint32_t)GPIOD: PWR->PUCRD |= mask; break;
       case (uint32_t)GPIOE: PWR->PUCRE |= mask; break;
       case (uint32_t)GPIOH: PWR->PUCRH |= mask; break;
+      default: break;
     }
   }
   else {
@@ -29,6 +30,7 @@ void GPIO_BackendWakeup(GPIO_t *gpio)
       case (uint32_t)GPIOD: PWR->PDCRD |= mask; break;
       case (uint32_t)GPIOE: PWR->PDCRE |= mask; break;
       case (uint32_t)GPIOH: PWR->PDCRH |= mask; break;
+      default: break;
     }
   }
 }
@@ -93,6 +95,7 @@ void EXTI_Init(EXTI_t *exti)
     case (uint32_t)GPIOD: val |= (3u << pos); break;
     case (uint32_t)GPIOE: val |= (4u << pos); break;
     case (uint32_t)GPIOH: val |= (7u << pos); break;
+    default: break;
   }
   SYSCFG->EXTICR[reg] = val;
   // Edge detection

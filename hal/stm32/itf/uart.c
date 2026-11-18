@@ -73,6 +73,7 @@ static void dma_setup(UART_t *uart)
     #ifdef LPUART2
     case (uint32_t)LPUART2: uart->_dma.mux->CCR |= DMAMUX_REQ_LPUART2_TX; break;
     #endif
+    default: break;
   }
   DMA_ClearFlags(&uart->_dma);
   uart->_dma.cha->CCR = 0;

@@ -181,9 +181,8 @@ static void _take_over(EEPROM_t *e, EEPROM_Storage_t s)
   e->_cursor = _find_cursor(e, s);
 }
 
-//--------------------------------------------------------------------------------------------- API
-
-status_t EEPROM_Clear(EEPROM_t *e)
+// `EEPROM_Clear` for a store `EEPROM_Init` is still recovering: both halves erased, `A` writing
+static status_t _EEPROM_Clear(EEPROM_t *e)
 {
   uint16_t page_count = 2 * e->_storage_pages;
   for(uint16_t i = 0; i < page_count; i++) {
@@ -194,6 +193,14 @@ status_t EEPROM_Clear(EEPROM_t *e)
   e->_generation = 0;
   e->_blank = false;
   return OK;
+}
+
+//--------------------------------------------------------------------------------------------- API
+
+status_t EEPROM_Clear(EEPROM_t *e)
+{
+  if(!e->_init) return ERR; // fields of a store not started may point past its pages
+  return _EEPROM_Clear(e);
 }
 
 // Recovery decision tree, strongest signal first: Complete, InProgress, Full, Filled, Empty
@@ -217,7 +224,7 @@ status_t EEPROM_Init(EEPROM_t *e)
   if(sa == EEPROM_State_Complete && sb == EEPROM_State_Complete) {
     int16_t diff = (int16_t)((uint16_t)(gen_a - gen_b));
     if(diff == 0) {
-      if(EEPROM_Clear(e)) return ERR; // equal generations: an anomaly
+      if(_EEPROM_Clear(e)) return ERR; // equal generations: an anomaly
     }
     else if(diff > 0) {
       e->_active = EEPROM_Storage_A;
@@ -251,7 +258,7 @@ status_t EEPROM_Init(EEPROM_t *e)
   }
   // InProgress on both cannot happen, a rewrite is never chained
   else if(sa == EEPROM_State_InProgress && sb == EEPROM_State_InProgress) {
-    if(EEPROM_Clear(e)) return ERR;
+    if(_EEPROM_Clear(e)) return ERR;
   }
   // InProgress on one: that half is the rewrite target, clear it,
   // and replay the rewrite when the source is Full.
@@ -281,7 +288,7 @@ status_t EEPROM_Init(EEPROM_t *e)
   }
   // Full/Full without a BEGIN tag is flash corruption
   else if(sa == EEPROM_State_Full && sb == EEPROM_State_Full) {
-    if(EEPROM_Clear(e)) return ERR;
+    if(_EEPROM_Clear(e)) return ERR;
   }
   // One Full: rewrite it, the other side is scratch the rewrite clears
   else if(sa == EEPROM_State_Full) {
@@ -357,13 +364,13 @@ static status_t _store_kv(EEPROM_t *e, uint32_t key, uint32_t value)
 
 status_t EEPROM_Write(EEPROM_t *e, uint32_t key, uint32_t value)
 {
-  if(key >= EEPROM_DAMAGED_KEY) return ERR;
+  if(!e->_init || key >= EEPROM_DAMAGED_KEY) return ERR;
   return _store_kv(e, key, value);
 }
 
 uint32_t EEPROM_Read(EEPROM_t *e, uint32_t key, uint32_t default_value)
 {
-  if(key >= EEPROM_DAMAGED_KEY) return default_value;
+  if(!e->_init || key >= EEPROM_DAMAGED_KEY) return default_value;
   uint32_t value;
   if(_read_key(e, key, &value)) return default_value;
   return value;

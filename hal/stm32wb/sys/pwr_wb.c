@@ -35,6 +35,7 @@ void RCC_EnableTIM(void *tim)
     case (uint32_t)TIM17:  RCC->APB2ENR  |= RCC_APB2ENR_TIM17EN; break;
     case (uint32_t)LPTIM1: RCC->APB1ENR1 |= RCC_APB1ENR1_LPTIM1EN; break;
     case (uint32_t)LPTIM2: RCC->APB1ENR2 |= RCC_APB1ENR2_LPTIM2EN; break;
+    default: break;
   }
 }
 
@@ -47,6 +48,7 @@ void RCC_EnableGPIO(void *gpio)
     case (uint32_t)GPIOD: RCC->AHB2ENR |= RCC_AHB2ENR_GPIODEN; break;
     case (uint32_t)GPIOE: RCC->AHB2ENR |= RCC_AHB2ENR_GPIOEEN; break;
     case (uint32_t)GPIOH: RCC->AHB2ENR |= RCC_AHB2ENR_GPIOHEN; break;
+    default: break;
   }
 }
 
@@ -55,6 +57,7 @@ void RCC_EnableUART(void *uart)
   switch((uint32_t)uart) {
     case (uint32_t)USART1:  RCC->APB2ENR  |= RCC_APB2ENR_USART1EN; break;
     case (uint32_t)LPUART1: RCC->APB1ENR2 |= RCC_APB1ENR2_LPUART1EN; break;
+    default: break;
   }
 }
 
@@ -63,6 +66,7 @@ void RCC_DisableUART(void *uart)
   switch((uint32_t)uart) {
     case (uint32_t)USART1:  RCC->APB2ENR  &= ~RCC_APB2ENR_USART1EN; break;
     case (uint32_t)LPUART1: RCC->APB1ENR2 &= ~RCC_APB1ENR2_LPUART1EN; break;
+    default: break;
   }
 }
 
@@ -71,6 +75,7 @@ void RCC_EnableI2C(void *i2c)
   switch((uint32_t)i2c) {
     case (uint32_t)I2C1: RCC->APB1ENR1 |= RCC_APB1ENR1_I2C1EN; break;
     case (uint32_t)I2C3: RCC->APB1ENR1 |= RCC_APB1ENR1_I2C3EN; break;
+    default: break;
   }
 }
 
@@ -79,6 +84,7 @@ void RCC_DisableI2C(void *i2c)
   switch((uint32_t)i2c) {
     case (uint32_t)I2C1: RCC->APB1ENR1 &= ~RCC_APB1ENR1_I2C1EN; break;
     case (uint32_t)I2C3: RCC->APB1ENR1 &= ~RCC_APB1ENR1_I2C3EN; break;
+    default: break;
   }
 }
 
@@ -87,6 +93,7 @@ void RCC_EnableSPI(void *spi)
   switch((uint32_t)spi) {
     case (uint32_t)SPI1: RCC->APB2ENR  |= RCC_APB2ENR_SPI1EN; break;
     case (uint32_t)SPI2: RCC->APB1ENR1 |= RCC_APB1ENR1_SPI2EN; break;
+    default: break;
   }
 }
 
@@ -95,6 +102,7 @@ void RCC_EnableDMA(void *dma)
   switch((uint32_t)dma) {
     case (uint32_t)DMA1: RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN; break;
     case (uint32_t)DMA2: RCC->AHB1ENR |= RCC_AHB1ENR_DMA2EN; break;
+    default: break;
   }
   RCC->AHB1ENR |= RCC_AHB1ENR_DMAMUX1EN;
 }

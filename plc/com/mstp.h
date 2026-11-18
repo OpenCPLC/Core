@@ -121,7 +121,7 @@ const MSTP_Frame_t *MSTP_Loop(MSTP_t *mstp);
  * @param[in,out] mstp Link
  * @param[in] data NPDU of the answer
  * @param[in] len NPDU bytes, `MSTP_DATA_MAX` at most
- * @return `OK` when sent, `ERR` with no frame to answer or an NPDU too long
+ * @return `OK`, `ERR` with no frame to answer or an NPDU too long
  */
 status_t MSTP_Reply(MSTP_t *mstp, const uint8_t *data, uint16_t len);
 

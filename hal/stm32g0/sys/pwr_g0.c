@@ -33,6 +33,7 @@ void RCC_EnableTIM(void *tim)
     case (uint32_t)TIM15: RCC->APBENR2 |= RCC_APBENR2_TIM15EN; break;
     case (uint32_t)TIM16: RCC->APBENR2 |= RCC_APBENR2_TIM16EN; break;
     case (uint32_t)TIM17: RCC->APBENR2 |= RCC_APBENR2_TIM17EN; break;
+    default: break;
   }
 }
 
@@ -44,6 +45,7 @@ void RCC_EnableGPIO(void *gpio)
     case (uint32_t)GPIOC: RCC->IOPENR |= RCC_IOPENR_GPIOCEN; break;
     case (uint32_t)GPIOD: RCC->IOPENR |= RCC_IOPENR_GPIODEN; break;
     case (uint32_t)GPIOF: RCC->IOPENR |= RCC_IOPENR_GPIOFEN; break;
+    default: break;
   }
 }
 
@@ -55,6 +57,7 @@ void RCC_EnableUART(void *uart)
     case (uint32_t)USART3:  RCC->APBENR1 |= RCC_APBENR1_USART3EN; break;
     case (uint32_t)USART4:  RCC->APBENR1 |= RCC_APBENR1_USART4EN; break;
     case (uint32_t)LPUART1: RCC->APBENR1 |= RCC_APBENR1_LPUART1EN; break;
+    default: break;
   }
 }
 
@@ -66,6 +69,7 @@ void RCC_DisableUART(void *uart)
     case (uint32_t)USART3:  RCC->APBENR1 &= ~RCC_APBENR1_USART3EN; break;
     case (uint32_t)USART4:  RCC->APBENR1 &= ~RCC_APBENR1_USART4EN; break;
     case (uint32_t)LPUART1: RCC->APBENR1 &= ~RCC_APBENR1_LPUART1EN; break;
+    default: break;
   }
 }
 
@@ -74,6 +78,7 @@ void RCC_EnableI2C(void *i2c)
   switch((uint32_t)i2c) {
     case (uint32_t)I2C1: RCC->APBENR1 |= RCC_APBENR1_I2C1EN; break;
     case (uint32_t)I2C2: RCC->APBENR1 |= RCC_APBENR1_I2C2EN; break;
+    default: break;
   }
 }
 
@@ -82,6 +87,7 @@ void RCC_DisableI2C(void *i2c)
   switch((uint32_t)i2c) {
     case (uint32_t)I2C1: RCC->APBENR1 &= ~RCC_APBENR1_I2C1EN; break;
     case (uint32_t)I2C2: RCC->APBENR1 &= ~RCC_APBENR1_I2C2EN; break;
+    default: break;
   }
 }
 
@@ -90,6 +96,7 @@ void RCC_EnableSPI(void *spi)
   switch((uint32_t)spi) {
     case (uint32_t)SPI1: RCC->APBENR2 |= RCC_APBENR2_SPI1EN; break;
     case (uint32_t)SPI2: RCC->APBENR1 |= RCC_APBENR1_SPI2EN; break;
+    default: break;
   }
 }
 
@@ -100,6 +107,7 @@ void RCC_EnableDMA(void *dma)
     #ifdef DMA2
     case (uint32_t)DMA2: RCC->AHBENR |= RCC_AHBENR_DMA2EN; break;
     #endif
+    default: break;
   }
 }
 

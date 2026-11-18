@@ -95,8 +95,9 @@ static bool line_used(MSTP_t *mstp) {
   return mstp->_event + UART_Size(mstp->uart) + UART_Receiving(mstp->uart) > MSTP_MIN_OCTETS;
 }
 
-// Frame onto the line, the next pass waits for its last bit
-static status_t send(MSTP_t *mstp, MSTP_Type_t type, uint8_t destination,
+// Frame onto the line, the next pass waits for its last bit.
+// A frame the port refuses is lost, as one the line drops would be.
+static void send(MSTP_t *mstp, MSTP_Type_t type, uint8_t destination,
   const uint8_t *data, uint16_t len)
 {
   uint16_t size = MSTP_HEAD_LEN + (len ? len + 2 : 0);
@@ -115,9 +116,8 @@ static status_t send(MSTP_t *mstp, MSTP_Type_t type, uint8_t destination,
     memcpy(&tx[MSTP_HEAD_LEN], data, len);
     CRC_Append(&crc_data, &tx[MSTP_HEAD_LEN], len);
   }
-  if(UART_Send(mstp->uart, tx, size)) return ERR;
+  if(UART_Send(mstp->uart, tx, size)) return;
   mstp->_sending = true;
-  return OK;
 }
 
 // Next message off the line once the last one is parsed, its activity noted
@@ -234,6 +234,8 @@ static const MSTP_Frame_t *idle(MSTP_t *mstp)
       case MSTP_Type_DataNotExpectingReply:
         if(!for_us && frame.destination != MSTP_BROADCAST) break;
         return hand_over(mstp, &frame, false);
+      default:
+        break;
     }
   }
   if(silence_ms(mstp) >= MSTP_NO_TOKEN_ms) {
@@ -390,6 +392,8 @@ static const MSTP_Frame_t *wait_reply(MSTP_t *mstp)
       case MSTP_Type_TestResponse:
       case MSTP_Type_ReplyPostponed:
         return NULL;
+      default:
+        break;
     }
     mstp->_state = MSTP_State_Idle;
     return NULL;
@@ -452,7 +456,8 @@ status_t MSTP_Reply(MSTP_t *mstp, const uint8_t *data, uint16_t len)
 {
   if(!mstp->_answer || len > MSTP_DATA_MAX) return ERR;
   mstp->_answer = false;
-  return send(mstp, MSTP_Type_DataNotExpectingReply, mstp->_reply_to, data, len);
+  send(mstp, MSTP_Type_DataNotExpectingReply, mstp->_reply_to, data, len);
+  return OK;
 }
 
 status_t MSTP_Send(MSTP_t *mstp, uint8_t destination, const uint8_t *data, uint16_t len,

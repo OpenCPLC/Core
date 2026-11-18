@@ -458,7 +458,7 @@ static void request_data(USBD_t *usbd)
   bool ok = len == usbd->_out_length;
   if(ok && usbd->_out_request == CDC_SET_LINE_CODING) memcpy(usbd->_line_coding, data, len);
   usbd->_out_request = 0;
-  if(ok) USB_Send(&usbd->_usb, 0, NULL, 0, false); // status stage
+  if(ok) (void)USB_Send(&usbd->_usb, 0, NULL, 0, false); // status stage
   else USB_EpStall(&usbd->_usb, 0, true);
 }
 
@@ -474,7 +474,7 @@ static void request(USBD_t *usbd, const uint8_t *setup)
   uint8_t type = req.type & USB_TYPE_MASK;
   uint16_t len = 0;
   bool ok;
-  // Whatever a previous request left unfinished is gone with the new SETUP.
+  // Whatever a previous request left unfinished is gone with the new SETUP
   usbd->_out_request = 0;
   BUFF_Clear(&usbd->_ctrl);
   switch(type) {
@@ -484,7 +484,7 @@ static void request(USBD_t *usbd, const uint8_t *setup)
     default: ok = false;
   }
   bool out_data = !(req.type & USB_DIR_IN) && req.length;
-  // Only a class request may carry data to the device, and no more than one packet.
+  // Only a class request may carry data to the device, and no more than one packet
   if(out_data && (type != USB_TYPE_CLASS || req.length > USBD_CTRL_SIZE)) ok = false;
   if(!ok) {
     USB_EpStall(&usbd->_usb, 0, true);
@@ -496,10 +496,10 @@ static void request(USBD_t *usbd, const uint8_t *setup)
   }
   else if(req.type & USB_DIR_IN) {
     if(len > req.length) len = req.length;
-    // An answer shorter than asked and ending on a packet boundary needs a zero-length packet.
-    USB_Send(&usbd->_usb, 0, usbd->_desc, len, len < req.length);
+    // An answer shorter than asked and ending on a packet boundary needs a zero-length packet
+    (void)USB_Send(&usbd->_usb, 0, usbd->_desc, len, len < req.length);
   }
-  else USB_Send(&usbd->_usb, 0, NULL, 0, false); // status stage
+  else (void)USB_Send(&usbd->_usb, 0, NULL, 0, false); // status stage
 }
 
 //-------------------------------------------------------------------------------------------- Init

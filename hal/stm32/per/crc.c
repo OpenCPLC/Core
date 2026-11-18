@@ -20,11 +20,13 @@ void CRC_Start(const CRC_t *crc)
     case 8:  CRC->CR = (2 << CRC_CR_POLYSIZE_Pos); break;
     case 16: CRC->CR = (1 << CRC_CR_POLYSIZE_Pos); break;
     case 32: CRC->CR = 0; break;
+    default: break;
   }
   switch(crc->reflect_data_in) {
     case 8:  CRC->CR |= (1 << CRC_CR_REV_IN_Pos); break;
     case 16: CRC->CR |= (2 << CRC_CR_REV_IN_Pos); break;
     case 32: CRC->CR |= (3 << CRC_CR_REV_IN_Pos); break;
+    default: break; // 0: bytes go in as they are
   }
   CRC->CR |= (crc->reflect_data_out << CRC_CR_REV_OUT_Pos) | CRC_CR_RESET;
   __DSB();
@@ -68,6 +70,9 @@ uint16_t CRC_Append(const CRC_t *crc, uint8_t *data, uint16_t count)
       fallthrough;
     case 8:
       data[count++] = (uint8_t)code;
+      break;
+    default:
+      break;
   }
   return count;
 }
@@ -88,6 +93,9 @@ status_t CRC_Error(const CRC_t *crc, const uint8_t *data, uint16_t count)
       fallthrough;
     case 8:
       if(data[count++] != (uint8_t)code) return ERR;
+      break;
+    default:
+      break;
   }
   return OK;
 }

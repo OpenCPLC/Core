@@ -47,6 +47,7 @@ static void irq_set_tim(void *tim, IRQ_Handler_t handler, void *object)
     case (uint32_t)TIM15: TIM15_Cb = handler; TIM15_CbArg = object; break;
     case (uint32_t)TIM16: TIM16_Cb = handler; TIM16_CbArg = object; break;
     case (uint32_t)TIM17: TIM17_Cb = handler; TIM17_CbArg = object; break;
+    default: break;
   }
 }
 
@@ -134,6 +135,7 @@ static void irq_set_uart(void *uart, IRQ_Handler_t handler, void *object)
     #ifdef LPUART2
     case (uint32_t)LPUART2: LPUART2_Cb = handler; LPUART2_CbArg = object; break;
     #endif
+    default: break;
   }
 }
 
@@ -182,6 +184,7 @@ static void irq_set_i2c(void *i2c, IRQ_Handler_t event, void *object)
     #ifdef I2C3
     case (uint32_t)I2C3: I2C3_Cb = event; I2C3_CbArg = object; break;
     #endif
+    default: break;
   }
 }
 
@@ -232,6 +235,7 @@ static void irq_set_spi(void *spi, IRQ_Handler_t handler, void *object)
     #ifdef SPI3
     case (uint32_t)SPI3: SPI3_Cb = handler; SPI3_CbArg = object; break;
     #endif
+    default: break;
   }
 }
 
@@ -370,6 +374,7 @@ static void irq_set_exti(uint8_t line, IRQ_Handler_t handler, void *object)
     case 13: EXTI13_Cb = handler; EXTI13_CbArg = object; break;
     case 14: EXTI14_Cb = handler; EXTI14_CbArg = object; break;
     case 15: EXTI15_Cb = handler; EXTI15_CbArg = object; break;
+    default: break;
   }
 }
 
