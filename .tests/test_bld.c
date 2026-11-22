@@ -619,7 +619,7 @@ static void missing_key_signs_nothing(void)
 #if defined(BOOT_DEV_KEY)
 
 // The bootloader of builds takes the development key for every number `BOOT_KEYS` has,
-// refuses a product key and keeps its floors in the slot, whatever `BOOT_OTP_WORDS` said.
+// refuses a sign key and keeps its floors in the slot, whatever `BOOT_OTP_WORDS` said.
 static void dev_key_stands_for_every_key(void)
 {
   uint32_t size = 9000, at = offsetof(BLD_Header_t, key);
